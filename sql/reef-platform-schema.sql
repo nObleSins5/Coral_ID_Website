@@ -424,6 +424,15 @@ CREATE TABLE coral_photos (
     snapshot_magnesium_ppm numeric,
     snapshot_nitrate_ppm   numeric,
     snapshot_phosphate_ppm numeric,
+    -- Capture context (captured at upload or lost). EXIF is opportunistic and
+    -- often stripped/absent, so it is a sparse jsonb rather than typed columns.
+    -- It records CAMERA settings, not the tank's light spectrum; the lighting
+    -- context below is the stronger reef-specific signal and feeds the
+    -- multi-lighting identification diagram.
+    capture_metadata       jsonb,   -- EXIF: white balance, exposure, ISO, color space, camera...
+    light_equipment_id     uuid REFERENCES equipment(id),        -- the light this was shot under
+    light_level_id         uuid REFERENCES equipment_levels(id), -- its Low/Med/High setpoint
+    lighting_note          text,    -- free-text fallback when gear isn't logged
     created_at             timestamptz NOT NULL DEFAULT now(),
     deleted_at             timestamptz
 );
