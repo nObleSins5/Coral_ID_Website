@@ -8,7 +8,7 @@ export default async function SignupPage({
   const { error } = await searchParams;
 
   return (
-    <div>
+    <div className="auth-shell">
       <h1>Create your account</h1>
       <form className="card" action={signup}>
         <label htmlFor="username">Username</label>

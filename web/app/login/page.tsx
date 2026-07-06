@@ -8,7 +8,7 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <div>
+    <div className="auth-shell">
       <h1>Log in</h1>
       <form className="card" action={login}>
         <label htmlFor="email">Email</label>

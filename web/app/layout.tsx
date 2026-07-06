@@ -18,6 +18,7 @@ export default function RootLayout({
             Reef Platform
           </a>
           <nav>
+            <a href="/wiki">Wiki</a>
             <a href="/dashboard">Dashboard</a>
             <a href="/login">Log in</a>
           </nav>

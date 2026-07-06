@@ -9,6 +9,17 @@ export default function Home() {
       </p>
 
       <div className="card">
+        <h2 style={{ marginTop: 0 }}>Coral wiki</h2>
+        <p className="muted">
+          Browse by genus, drill into a morph, and compare its typical
+          element colors against your own coral.
+        </p>
+        <p>
+          <a href="/wiki">Browse the coral wiki →</a>
+        </p>
+      </div>
+
+      <div className="card">
         <h2 style={{ marginTop: 0 }}>Phase 0 vertical slice</h2>
         <p className="muted">
           This early build proves the core loop end to end:
