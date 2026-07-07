@@ -57,12 +57,22 @@ export async function uploadCoralPhoto(
   };
 
   if (tankId) {
+    // Find the reading that was actually current AS OF the photo's taken_at
+    // date — not just "the latest" — so an old photo doesn't get today's
+    // parameters stamped on it. taken_at is date-only, so the cutoff is the
+    // END of that calendar day (a reading logged later the same day still
+    // counts). No qualifying reading (photo predates all logging) => no
+    // snapshot, which is the honest answer rather than a guess.
+    const cutoff = new Date(
+      `${takenAtRaw || new Date().toISOString().slice(0, 10)}T23:59:59.999Z`,
+    ).toISOString();
     const { data: reading } = await supabase
       .from("parameter_readings")
       .select(
         "id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
       )
       .eq("tank_id", tankId)
+      .lte("measured_at", cutoff)
       .order("measured_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -103,4 +113,51 @@ export async function uploadCoralPhoto(
 
   if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
   return {};
+}
+
+// Toggles a single, unambiguously-labeled "this is an accurate match" vote
+// (see docs/schema-decisions.md / docs/future-considerations.md for why this
+// is deliberately one signal, not a separate "I like this photo" — the UI
+// button copy is what keeps the vote meaning clear, not a second table).
+// vote_type is schema-ready for a future 'like' dimension without a migration.
+export async function toggleAccurateVote(
+  formData: FormData,
+): Promise<{ error?: string; voted?: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to vote." };
+
+  const photoId = String(formData.get("photo_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  const morphSlug = String(formData.get("morph_slug") ?? "");
+  if (!photoId) return { error: "Missing photo reference." };
+
+  const { data: existing } = await supabase
+    .from("coral_photo_votes")
+    .select("id")
+    .eq("coral_photo_id", photoId)
+    .eq("user_id", user.id)
+    .eq("vote_type", "accurate")
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("coral_photo_votes")
+      .delete()
+      .eq("id", existing.id);
+    if (error) return { error: error.message };
+    if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+    return { voted: false };
+  }
+
+  const { error } = await supabase.from("coral_photo_votes").insert({
+    coral_photo_id: photoId,
+    user_id: user.id,
+    vote_type: "accurate",
+  });
+  if (error) return { error: error.message };
+  if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+  return { voted: true };
 }

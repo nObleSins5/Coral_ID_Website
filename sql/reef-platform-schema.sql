@@ -440,6 +440,22 @@ CREATE INDEX idx_coral_photos_specimen ON coral_photos (specimen_id);
 CREATE INDEX idx_coral_photos_taxon ON coral_photos (taxon_node_id);
 CREATE INDEX idx_coral_photos_uploader ON coral_photos (uploader_user_id);
 
+-- Community engagement on a photo, distinct from identification voting
+-- (id_votes below judges a PROPOSED NAME; this judges the PHOTO itself).
+-- v1 ships a single, unambiguously-labeled 'accurate' vote ("this is a
+-- correct match") used to pick each taxon's hero image. vote_type is schema-
+-- ready for a future separate 'like' dimension without a migration — see
+-- docs/future-considerations.md.
+CREATE TABLE coral_photo_votes (
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    coral_photo_id uuid NOT NULL REFERENCES coral_photos(id) ON DELETE CASCADE,
+    user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    vote_type      text NOT NULL DEFAULT 'accurate' CHECK (vote_type IN ('accurate', 'like')),
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (coral_photo_id, user_id, vote_type)
+);
+CREATE INDEX idx_coral_photo_votes_photo ON coral_photo_votes (coral_photo_id, vote_type);
+
 -- =============================================================================
 -- 7. Identification: aliases, suggestions, votes
 -- =============================================================================

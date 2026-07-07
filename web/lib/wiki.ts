@@ -145,6 +145,7 @@ export async function getMorphWithGenus(
 export type WikiPhoto = {
   id: string;
   url: string;
+  uploader_user_id: string;
   taken_at: string | null;
   created_at: string;
   snapshot_measured_at: string | null;
@@ -162,12 +163,50 @@ export async function getPhotosForTaxon(taxonId: string): Promise<WikiPhoto[]> {
   const { data } = await supabase
     .from("coral_photos")
     .select(
-      "id, url, taken_at, created_at, snapshot_measured_at, snapshot_alkalinity_dkh, snapshot_calcium_ppm, snapshot_magnesium_ppm, snapshot_nitrate_ppm, snapshot_phosphate_ppm",
+      "id, url, uploader_user_id, taken_at, created_at, snapshot_measured_at, snapshot_alkalinity_dkh, snapshot_calcium_ppm, snapshot_magnesium_ppm, snapshot_nitrate_ppm, snapshot_phosphate_ppm",
     )
     .eq("taxon_node_id", taxonId)
     .eq("is_public", true)
     .order("created_at", { ascending: false });
   return (data as WikiPhoto[]) ?? [];
+}
+
+// Batched, narrow username lookup via the get_public_usernames() SECURITY
+// DEFINER function (see sql/supabase/06_public_usernames.sql) — exposes only
+// id+username, nothing else about a user.
+export async function getUsernamesFor(
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(userIds)];
+  if (unique.length === 0) return new Map();
+  const supabase = createPublicClient();
+  const { data } = await supabase.rpc("get_public_usernames", {
+    user_ids: unique,
+  });
+  const map = new Map<string, string>();
+  for (const row of (data as { id: string; username: string }[]) ?? [])
+    map.set(row.id, row.username);
+  return map;
+}
+
+// Tally of 'accurate' votes per photo, for hero-image selection and display.
+// Computed live (no cached counter, no batch job) — trivial at this scale and
+// keeps the hero image consistent the instant a vote tips the balance.
+export async function getAccurateVoteCounts(
+  photoIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (photoIds.length === 0) return counts;
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("coral_photo_votes")
+    .select("coral_photo_id")
+    .in("coral_photo_id", photoIds)
+    .eq("vote_type", "accurate");
+  for (const row of data ?? []) {
+    counts.set(row.coral_photo_id, (counts.get(row.coral_photo_id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export async function getAllGenusSlugs(): Promise<string[]> {

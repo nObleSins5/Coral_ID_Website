@@ -291,6 +291,84 @@ td {
   padding: 0.15rem 0.45rem;
   border-radius: 6px;
 }
+.photo-tile.large {
+  aspect-ratio: 16 / 10;
+}
+.photo-tile.large .freshness-badge {
+  font-size: 0.8rem;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+.photo-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.photo-card .photo-tile {
+  border: none;
+  border-radius: 0;
+  aspect-ratio: 4 / 3;
+}
+.photo-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+}
+.photo-username {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.photo-params-drawer {
+  border-top: 1px solid var(--border);
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.photo-params-drawer summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--muted);
+  list-style: none;
+}
+.photo-params-drawer summary::-webkit-details-marker {
+  display: none;
+}
+.photo-params-drawer summary::before {
+  content: "▸ ";
+}
+.photo-params-drawer[open] summary::before {
+  content: "▾ ";
+}
+.photo-params-drawer table {
+  margin-top: 0.5rem;
+}
+.photo-no-params {
+  font-size: 0.8rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.vote-button {
+  margin-top: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.78rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.vote-button.voted {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
 
 .add-photo-form label {
   margin-top: 0.5rem;

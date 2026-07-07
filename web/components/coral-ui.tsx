@@ -1,5 +1,6 @@
 // Shared, server-rendered UI for the coral wiki: the element color key (the
-// self-ID feature) plus small presentational helpers. No interactivity yet.
+// self-ID feature) plus small presentational helpers.
+import type { ComponentType } from "react";
 
 export type ColorStop = { hex: string; ordinal: number };
 export type ColorRange = {
@@ -179,18 +180,98 @@ export function formatFreshness(
   return `Params ~${Math.round(diffHr / 24)}d old`;
 }
 
-export function PhotoTile({
-  url,
-  freshness,
-}: {
+export type PhotoWithSnapshot = {
+  id: string;
   url: string;
-  freshness: string | null;
+  taken_at: string | null;
+  snapshot_measured_at: string | null;
+  snapshot_alkalinity_dkh: number | null;
+  snapshot_calcium_ppm: number | null;
+  snapshot_magnesium_ppm: number | null;
+  snapshot_nitrate_ppm: number | null;
+  snapshot_phosphate_ppm: number | null;
+};
+
+function paramCell(value: number | null, unit: string) {
+  return value == null ? "—" : `${value} ${unit}`;
+}
+
+// Image + uploader byline + an expandable parameter drawer (native <details>,
+// no client JS needed for the disclosure itself) + the vote control (a client
+// component, since it needs the viewer's auth state).
+export function PhotoCard({
+  photo,
+  username,
+  voteCount,
+  genusSlug,
+  morphName,
+  morphSlug,
+  VoteButton,
+}: {
+  photo: PhotoWithSnapshot;
+  username: string;
+  voteCount: number;
+  genusSlug: string;
+  morphName: string;
+  morphSlug: string;
+  VoteButton: ComponentType<{
+    photoId: string;
+    initialCount: number;
+    morphName: string;
+    genusSlug: string;
+    morphSlug: string;
+  }>;
 }) {
+  const freshness = formatFreshness(photo.taken_at, photo.snapshot_measured_at);
+  const hasSnapshot = photo.snapshot_measured_at != null;
+
   return (
-    <div className="photo-tile">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt="" loading="lazy" />
-      {freshness ? <span className="freshness-badge">{freshness}</span> : null}
+    <div className="photo-card">
+      <div className="photo-tile">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={photo.url} alt="" loading="lazy" />
+      </div>
+      <div className="photo-card-meta">
+        <span className="photo-username">{username}</span>
+        <VoteButton
+          photoId={photo.id}
+          initialCount={voteCount}
+          morphName={morphName}
+          genusSlug={genusSlug}
+          morphSlug={morphSlug}
+        />
+      </div>
+      {hasSnapshot ? (
+        <details className="photo-params-drawer">
+          <summary>Parameters{freshness ? ` · ${freshness}` : ""}</summary>
+          <table className="param-table">
+            <tbody>
+              <tr>
+                <td>Alkalinity</td>
+                <td>{paramCell(photo.snapshot_alkalinity_dkh, "dKH")}</td>
+              </tr>
+              <tr>
+                <td>Calcium</td>
+                <td>{paramCell(photo.snapshot_calcium_ppm, "ppm")}</td>
+              </tr>
+              <tr>
+                <td>Magnesium</td>
+                <td>{paramCell(photo.snapshot_magnesium_ppm, "ppm")}</td>
+              </tr>
+              <tr>
+                <td>Nitrate</td>
+                <td>{paramCell(photo.snapshot_nitrate_ppm, "ppm")}</td>
+              </tr>
+              <tr>
+                <td>Phosphate</td>
+                <td>{paramCell(photo.snapshot_phosphate_ppm, "ppm")}</td>
+              </tr>
+            </tbody>
+          </table>
+        </details>
+      ) : (
+        <p className="muted photo-no-params">No parameters logged for this photo.</p>
+      )}
     </div>
   );
 }

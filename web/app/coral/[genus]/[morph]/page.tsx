@@ -1,16 +1,22 @@
 import { notFound } from "next/navigation";
-import { getAllGenusMorphSlugPairs, getMorphWithGenus, getPhotosForTaxon } from "@/lib/wiki";
+import {
+  getAccurateVoteCounts,
+  getAllGenusMorphSlugPairs,
+  getMorphWithGenus,
+  getPhotosForTaxon,
+  getUsernamesFor,
+} from "@/lib/wiki";
 import {
   CARE_DIFFICULTY,
   CarePill,
   ColorTile,
   ElementColorKey,
-  formatFreshness,
   GROWTH_FORM,
   keyColors,
-  PhotoTile,
+  PhotoCard,
 } from "@/components/coral-ui";
 import { AddPhotoForm } from "@/components/add-photo-form";
+import { PhotoVoteButton } from "@/components/photo-vote-button";
 
 export async function generateStaticParams() {
   return getAllGenusMorphSlugPairs();
@@ -51,6 +57,21 @@ export default async function MorphPage({
 
   const colors = keyColors(morph.element_profiles);
   const photos = await getPhotosForTaxon(morph.id);
+  const voteCounts = await getAccurateVoteCounts(photos.map((p) => p.id));
+  const usernames = await getUsernamesFor(photos.map((p) => p.uploader_user_id));
+
+  // Hero = most-voted photo, computed live (no cached counter/batch job —
+  // trivial at this scale). photos is already newest-first, and we only
+  // replace on a STRICTLY higher count, so ties resolve to the newest photo.
+  let heroPhoto: (typeof photos)[number] | null = null;
+  let heroVotes = -1;
+  for (const p of photos) {
+    const v = voteCounts.get(p.id) ?? 0;
+    if (v > heroVotes) {
+      heroVotes = v;
+      heroPhoto = p;
+    }
+  }
 
   return (
     <div>
@@ -83,7 +104,20 @@ export default async function MorphPage({
 
       <div className="detail-grid">
         <div>
-          <ColorTile colors={colors} label="Placeholder — no photos yet" large />
+          {heroPhoto ? (
+            <div className="photo-tile large">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroPhoto.url} alt="" />
+              <span className="freshness-badge">
+                Community favorite
+                {heroVotes > 0
+                  ? ` · ${heroVotes} confirm${heroVotes === 1 ? "" : "s"}`
+                  : ""}
+              </span>
+            </div>
+          ) : (
+            <ColorTile colors={colors} label="Placeholder — no photos yet" large />
+          )}
           {morph.description ? <p>{morph.description}</p> : null}
           {morph.placement ? (
             <p className="muted">
@@ -138,12 +172,17 @@ export default async function MorphPage({
           with the water parameters running in your tank at the time.
         </p>
       ) : (
-        <div className="gallery-strip">
+        <div className="photo-grid">
           {photos.map((p) => (
-            <PhotoTile
+            <PhotoCard
               key={p.id}
-              url={p.url}
-              freshness={formatFreshness(p.taken_at, p.snapshot_measured_at)}
+              photo={p}
+              username={usernames.get(p.uploader_user_id) ?? "A hobbyist"}
+              voteCount={voteCounts.get(p.id) ?? 0}
+              genusSlug={genus.slug}
+              morphSlug={morph.slug}
+              morphName={morph.name}
+              VoteButton={PhotoVoteButton}
             />
           ))}
         </div>
