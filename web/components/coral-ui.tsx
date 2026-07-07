@@ -162,3 +162,35 @@ export function CarePill({ kind, code }: { kind: "light" | "flow"; code: string 
     </span>
   );
 }
+
+// The spec's parameter-freshness trust signal: elapsed time between a photo
+// and the parameter reading stamped on it. Smaller gap = higher confidence.
+export function formatFreshness(
+  takenAt: string | null,
+  snapshotMeasuredAt: string | null,
+): string | null {
+  if (!snapshotMeasuredAt) return null;
+  const taken = takenAt ? new Date(takenAt).getTime() : Date.now();
+  const measured = new Date(snapshotMeasuredAt).getTime();
+  const diffMin = Math.round(Math.abs(taken - measured) / 60000);
+  if (diffMin < 60) return `Params ~${diffMin || 1}m old`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 48) return `Params ~${diffHr}h old`;
+  return `Params ~${Math.round(diffHr / 24)}d old`;
+}
+
+export function PhotoTile({
+  url,
+  freshness,
+}: {
+  url: string;
+  freshness: string | null;
+}) {
+  return (
+    <div className="photo-tile">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="" loading="lazy" />
+      {freshness ? <span className="freshness-badge">{freshness}</span> : null}
+    </div>
+  );
+}

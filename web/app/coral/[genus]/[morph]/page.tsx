@@ -1,13 +1,16 @@
 import { notFound } from "next/navigation";
-import { getAllGenusMorphSlugPairs, getMorphWithGenus } from "@/lib/wiki";
+import { getAllGenusMorphSlugPairs, getMorphWithGenus, getPhotosForTaxon } from "@/lib/wiki";
 import {
   CARE_DIFFICULTY,
   CarePill,
   ColorTile,
   ElementColorKey,
+  formatFreshness,
   GROWTH_FORM,
   keyColors,
+  PhotoTile,
 } from "@/components/coral-ui";
+import { AddPhotoForm } from "@/components/add-photo-form";
 
 export async function generateStaticParams() {
   return getAllGenusMorphSlugPairs();
@@ -47,6 +50,7 @@ export default async function MorphPage({
   const { morph, genus } = result;
 
   const colors = keyColors(morph.element_profiles);
+  const photos = await getPhotosForTaxon(morph.id);
 
   return (
     <div>
@@ -128,15 +132,28 @@ export default async function MorphPage({
       </div>
 
       <h2>Community photos</h2>
-      <div className="card stub-card">
-        <p>
-          No photos yet — be the first to log one. Once photo logging ships,
-          this becomes a gallery of community submissions, each stamped with
-          the water parameters running at the time.
+      {photos.length === 0 ? (
+        <p className="muted">
+          No photos yet — be the first to log one. Each photo can be stamped
+          with the water parameters running in your tank at the time.
         </p>
-        <button type="button" disabled title="Coming soon">
-          Add photo (coming soon)
-        </button>
+      ) : (
+        <div className="gallery-strip">
+          {photos.map((p) => (
+            <PhotoTile
+              key={p.id}
+              url={p.url}
+              freshness={formatFreshness(p.taken_at, p.snapshot_measured_at)}
+            />
+          ))}
+        </div>
+      )}
+      <div className="card">
+        <AddPhotoForm
+          taxonNodeId={morph.id}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+        />
       </div>
 
       <h2>Where to find it</h2>

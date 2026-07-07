@@ -142,6 +142,34 @@ export async function getMorphWithGenus(
   return { morph, genus };
 }
 
+export type WikiPhoto = {
+  id: string;
+  url: string;
+  taken_at: string | null;
+  created_at: string;
+  snapshot_measured_at: string | null;
+  snapshot_alkalinity_dkh: number | null;
+  snapshot_calcium_ppm: number | null;
+  snapshot_magnesium_ppm: number | null;
+  snapshot_nitrate_ppm: number | null;
+  snapshot_phosphate_ppm: number | null;
+};
+
+// Public gallery for a taxon. RLS (coral_photos_public_read) already scopes
+// this to is_public rows, so no auth is required to read it.
+export async function getPhotosForTaxon(taxonId: string): Promise<WikiPhoto[]> {
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("coral_photos")
+    .select(
+      "id, url, taken_at, created_at, snapshot_measured_at, snapshot_alkalinity_dkh, snapshot_calcium_ppm, snapshot_magnesium_ppm, snapshot_nitrate_ppm, snapshot_phosphate_ppm",
+    )
+    .eq("taxon_node_id", taxonId)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+  return (data as WikiPhoto[]) ?? [];
+}
+
 export async function getAllGenusSlugs(): Promise<string[]> {
   const supabase = createPublicClient();
   const { data } = await supabase

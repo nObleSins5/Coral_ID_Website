@@ -262,9 +262,48 @@ td {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.6rem;
+  margin-bottom: 1rem;
 }
 .gallery-strip .color-tile {
   aspect-ratio: 1 / 1;
+}
+
+.photo-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.photo-tile .freshness-badge {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 0.4rem;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+}
+
+.add-photo-form label {
+  margin-top: 0.5rem;
+}
+.add-photo-form .form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
 
 .element-key {
