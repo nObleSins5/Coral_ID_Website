@@ -10,8 +10,8 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
   - URL: `https://jbfjzkhjbsrnwnmrydba.supabase.co`
   - Anon/publishable key: in `web/.env.local` on the user's machine (gitignored, not in this repo). Get it again via Supabase dashboard → Settings → API if needed.
   - Managed through the **Supabase MCP connector** in Claude sessions — it disconnects/reconnects intermittently; retry `ToolSearch` for `mcp__Supabase__*` tools if they're missing. Direct network calls to `supabase.co` from a cloud/sandboxed Claude session are blocked by the proxy; only the MCP tools reach it. A user's own machine (or Vercel) has normal network access — no such restriction, and is the reliable fallback for applying SQL Editor migrations when the MCP is down.
-- **GitHub repo**: `nObleSins5/Coral_ID_Website`, private. Working branch: `claude/repo-setup-wmc6wq`.
-- **Vercel**: not yet deployed. When deploying, set Root Directory to `web` and the two env vars above.
+- **GitHub repo**: `nObleSins5/Coral_ID_Website`, private. Working branch: `claude/repo-setup-wmc6wq`, merged (fast-forward) into `main` 2026-07-06. Vercel deploys from `main`.
+- **Vercel**: deployed and confirmed working (Root Directory `web`, the two env vars above set for Production). One gotcha hit and resolved: Vercel's env-var form scopes each variable to Production/Preview/Development independently — the first deploy failed (`supabaseUrl is required` during `generateStaticParams`) because the vars weren't checked for Production; fixed by re-adding with Production checked and redeploying.
 
 ## What's built, applied, and user-confirmed live
 
@@ -35,15 +35,16 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
 
 - **Image display sizing** — user confirmed everything works functionally, but photos render "very large" in places (likely the hero image and/or gallery cards need tighter max-height/cropping rules). Explicitly deferred by the user for a later design pass — not a functional bug, just unrefined CSS.
 
-## Immediate next steps (pick one — nothing is currently blocking)
+## Status: original roadmap complete
 
-1. **Deploy to Vercel** (Root Directory `web`, same two env vars). Nothing else is blocking this now — the core loop, wiki, and photo/voting features are all live-confirmed.
-2. **Design pass** — photo sizing above, plus general visual polish now that there's real content and interaction to look at.
-3. **Next feature**, candidates already scoped/discussed:
+Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
+
+1. **Design pass** — photo sizing above, plus general visual polish now that there's real content and interaction to look at.
+2. **Next feature**, candidates already scoped/discussed:
    - Specimen linkage (attach a photo to a specific tank specimen, not just standalone-to-taxon) — deferred from the photo-logging build.
    - "Unidentified — help me ID this" + the `id_suggestions`/`id_votes` community confirmation queue — deferred from the photo-logging build.
    - Vendor/affiliate links (attach to photos, not taxa) — see `docs/future-considerations.md` for the dead-link problem to design around before building.
-4. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
+3. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
 
 ## Deliberately deferred (not bugs, not forgotten)
 
