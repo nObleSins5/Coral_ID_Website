@@ -21,6 +21,7 @@ type Reading = {
 
 type WishlistItem = {
   id: string;
+  created_at: string;
   taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
 };
 
@@ -59,7 +60,7 @@ export default async function Dashboard() {
 
   const { data: wishlist } = await supabase
     .from("want_list")
-    .select("id, taxon_nodes ( name, slug, parent_id )")
+    .select("id, created_at, taxon_nodes ( name, slug, parent_id )")
     .order("created_at", { ascending: false });
   const wishlistList = (wishlist ?? []) as unknown as WishlistItem[];
 
@@ -72,9 +73,9 @@ export default async function Dashboard() {
   ];
   const { data: genera } =
     genusIds.length > 0
-      ? await supabase.from("taxon_nodes").select("id, slug").in("id", genusIds)
-      : { data: [] as { id: string; slug: string }[] };
-  const genusSlugById = new Map((genera ?? []).map((g) => [g.id, g.slug]));
+      ? await supabase.from("taxon_nodes").select("id, name, slug").in("id", genusIds)
+      : { data: [] as { id: string; name: string; slug: string }[] };
+  const genusById = new Map((genera ?? []).map((g) => [g.id, g]));
 
   return (
     <div>
@@ -213,27 +214,49 @@ export default async function Dashboard() {
           Nothing yet — wishlist a coral from its <a href="/wiki">wiki page</a>.
         </p>
       ) : (
-        <ul className="wishlist-list">
-          {wishlistList.map((w) => {
-            const genusSlug = w.taxon_nodes?.parent_id
-              ? genusSlugById.get(w.taxon_nodes.parent_id)
-              : undefined;
-            const morphSlug = w.taxon_nodes?.slug;
-            const href =
-              genusSlug && morphSlug ? `/coral/${genusSlug}/${morphSlug}` : "#";
-            return (
-              <li className="wishlist-row" key={w.id}>
-                <a href={href}>{w.taxon_nodes?.name ?? "Unknown coral"}</a>
-                <form action={removeFromWishlist}>
-                  <input type="hidden" name="want_list_id" value={w.id} />
-                  <button type="submit" className="btn-secondary" style={{ marginTop: 0 }}>
-                    Remove
-                  </button>
-                </form>
-              </li>
-            );
-          })}
-        </ul>
+        <table>
+          <thead>
+            <tr>
+              <th>Coral</th>
+              <th>Genus</th>
+              <th>Date added</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {wishlistList.map((w) => {
+              const genus = w.taxon_nodes?.parent_id
+                ? genusById.get(w.taxon_nodes.parent_id)
+                : undefined;
+              const morphSlug = w.taxon_nodes?.slug;
+              const href =
+                genus && morphSlug ? `/coral/${genus.slug}/${morphSlug}` : "#";
+              return (
+                <tr key={w.id}>
+                  <td>
+                    <a href={href}>{w.taxon_nodes?.name ?? "Unknown coral"}</a>
+                  </td>
+                  <td className="muted">{genus?.name ?? "—"}</td>
+                  <td className="muted">
+                    {new Date(w.created_at).toLocaleDateString()}
+                  </td>
+                  <td>
+                    <form action={removeFromWishlist}>
+                      <input type="hidden" name="want_list_id" value={w.id} />
+                      <button
+                        type="submit"
+                        className="btn-secondary"
+                        style={{ marginTop: 0 }}
+                      >
+                        Remove
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );

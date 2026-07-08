@@ -102,11 +102,6 @@ export default async function MorphPage({
             {GROWTH_FORM[morph.growth_form_code] ?? morph.growth_form_code}
           </span>
         ) : null}
-        <WishlistButton
-          taxonNodeId={morph.id}
-          genusSlug={genus.slug}
-          morphSlug={morph.slug}
-        />
       </div>
 
       <div className="detail-grid">
@@ -174,17 +169,24 @@ export default async function MorphPage({
 
       <h2>My collection</h2>
       <div className="card">
-        <AddSpecimenForm
-          taxonNodeId={morph.id}
-          taxonName={morph.name}
-          genusSlug={genus.slug}
-          morphSlug={morph.slug}
-          photos={photos.map((p) => ({
-            id: p.id,
-            url: p.url,
-            uploader_user_id: p.uploader_user_id,
-          }))}
-        />
+        <div className="collection-actions-row">
+          <AddSpecimenForm
+            taxonNodeId={morph.id}
+            taxonName={morph.name}
+            genusSlug={genus.slug}
+            morphSlug={morph.slug}
+            photos={photos.map((p) => ({
+              id: p.id,
+              url: p.url,
+              uploader_user_id: p.uploader_user_id,
+            }))}
+          />
+          <WishlistButton
+            taxonNodeId={morph.id}
+            genusSlug={genus.slug}
+            morphSlug={morph.slug}
+          />
+        </div>
       </div>
 
       <h2>Community photos</h2>

@@ -621,6 +621,17 @@ td {
   cursor: pointer;
 }
 
+.collection-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.collection-actions-row .add-photo-form,
+.collection-actions-row form {
+  flex-basis: 100%;
+}
+
 .wishlist-button {
   margin: 0;
   padding: 0.1rem 0.6rem;
@@ -637,19 +648,3 @@ td {
   border-color: var(--accent);
 }
 
-.wishlist-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.wishlist-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
-}
