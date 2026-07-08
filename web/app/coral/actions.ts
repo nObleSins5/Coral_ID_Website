@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 
-// Uploads a standalone photo attached to a taxon (Door 1). Specimen linkage
-// and the "unidentified — help me ID this" path are deferred (see
-// docs/PROGRESS.md) — this always attaches to an already-identified coral.
+// Uploads a standalone photo attached to a taxon (Door 1). The
+// "unidentified — help me ID this" path is deferred (see docs/PROGRESS.md) —
+// this always attaches to an already-identified coral. (Specimen linkage is
+// handled separately by addSpecimen below, via representative_photo_id.)
 export async function uploadCoralPhoto(
   formData: FormData,
 ): Promise<{ error?: string }> {
@@ -160,4 +161,73 @@ export async function toggleAccurateVote(
   if (error) return { error: error.message };
   if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
   return { voted: true };
+}
+
+// Adds a specimen ("+ Add to my collection") for an already-identified coral.
+// An optional representative_photo_id may point to ANY public photo of this
+// coral, not just the user's own — that's a display pick, not a provenance
+// claim. When the chosen photo IS the user's own upload, we additionally set
+// that photo's specimen_id (true provenance), since they have permission to;
+// another user's photo is left untouched.
+export async function addSpecimen(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to add to your collection." };
+
+  const taxonNodeId = String(formData.get("taxon_node_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  const morphSlug = String(formData.get("morph_slug") ?? "");
+  const tankId = String(formData.get("tank_id") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim() || null;
+  const acquiredOnRaw = String(formData.get("acquired_on") ?? "");
+  const representativePhotoId =
+    String(formData.get("representative_photo_id") ?? "") || null;
+
+  if (!taxonNodeId) return { error: "Missing coral reference." };
+  if (!tankId) return { error: "Choose which tank this is in." };
+
+  // Defensive re-check: only ever link a photo that is actually public,
+  // regardless of what the submitted form claims.
+  let photoUploaderId: string | null = null;
+  if (representativePhotoId) {
+    const { data: photo } = await supabase
+      .from("coral_photos")
+      .select("uploader_user_id, is_public")
+      .eq("id", representativePhotoId)
+      .maybeSingle();
+    if (!photo?.is_public) {
+      return { error: "That photo is no longer available." };
+    }
+    photoUploaderId = photo.uploader_user_id;
+  }
+
+  const { data: specimen, error: insertError } = await supabase
+    .from("specimens")
+    .insert({
+      user_id: user.id,
+      tank_id: tankId,
+      taxon_node_id: taxonNodeId,
+      name,
+      acquired_on: acquiredOnRaw || null,
+      representative_photo_id: representativePhotoId,
+    })
+    .select("id")
+    .single();
+  if (insertError) return { error: insertError.message };
+
+  // Own photo -> also record true provenance (this photo documents THIS
+  // specimen) on the photo itself, since the uploader has permission to.
+  if (representativePhotoId && photoUploaderId === user.id) {
+    await supabase
+      .from("coral_photos")
+      .update({ specimen_id: specimen.id })
+      .eq("id", representativePhotoId);
+  }
+
+  if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+  return {};
 }

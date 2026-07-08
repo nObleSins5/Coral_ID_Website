@@ -378,6 +378,51 @@ td {
   align-items: center;
   gap: 0.5rem;
 }
+
+.specimen-photo-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.specimen-photo-option,
+.specimen-photo-none {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  overflow: hidden;
+  padding: 0;
+  background: var(--bg);
+  cursor: pointer;
+}
+.specimen-photo-none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.specimen-photo-option img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.specimen-photo-option.selected,
+.specimen-photo-none.selected {
+  border-color: var(--accent);
+}
+.specimen-photo-tag {
+  position: absolute;
+  bottom: 0.2rem;
+  left: 0.2rem;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.6rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+}
 .btn-secondary {
   background: transparent;
   color: var(--muted);

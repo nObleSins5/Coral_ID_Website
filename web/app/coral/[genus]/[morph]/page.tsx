@@ -16,6 +16,7 @@ import {
   PhotoCard,
 } from "@/components/coral-ui";
 import { AddPhotoForm } from "@/components/add-photo-form";
+import { AddSpecimenForm } from "@/components/add-specimen-form";
 import { PhotoVoteButton } from "@/components/photo-vote-button";
 
 export async function generateStaticParams() {
@@ -165,6 +166,21 @@ export default async function MorphPage({
         </div>
       </div>
 
+      <h2>My collection</h2>
+      <div className="card">
+        <AddSpecimenForm
+          taxonNodeId={morph.id}
+          taxonName={morph.name}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+          photos={photos.map((p) => ({
+            id: p.id,
+            url: p.url,
+            uploader_user_id: p.uploader_user_id,
+          }))}
+        />
+      </div>
+
       <h2>Community photos</h2>
       {photos.length === 0 ? (
         <p className="muted">
@@ -187,7 +203,7 @@ export default async function MorphPage({
           ))}
         </div>
       )}
-      <div className="card">
+      <div className="card" id="add-photo-section">
         <AddPhotoForm
           taxonNodeId={morph.id}
           genusSlug={genus.slug}

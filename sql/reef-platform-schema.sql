@@ -381,16 +381,22 @@ CREATE INDEX idx_equipment_events_equipment_time
 
 -- One row per individual coral. taxon_node_id NULL => unidentified.
 CREATE TABLE specimens (
-    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id       uuid NOT NULL REFERENCES users(id),
-    tank_id       uuid REFERENCES tanks(id),
-    grid_slot_id  uuid REFERENCES grid_slots(id),   -- current placement (no history)
-    taxon_node_id uuid,                              -- FK -> taxon_nodes (companion)
-    name          text,                              -- owner's nickname
-    acquired_on   date,
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    updated_at    timestamptz NOT NULL DEFAULT now(),
-    deleted_at    timestamptz
+    id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id                uuid NOT NULL REFERENCES users(id),
+    tank_id                uuid REFERENCES tanks(id),
+    grid_slot_id           uuid REFERENCES grid_slots(id),   -- current placement (no history)
+    taxon_node_id          uuid,                              -- FK -> taxon_nodes (companion)
+    name                   text,                              -- owner's nickname
+    acquired_on            date,
+    -- The photo chosen to REPRESENT this collection entry — may be anyone's
+    -- public photo (a display pick), distinct from coral_photos.specimen_id
+    -- below (true provenance: "I took this photo of this exact specimen",
+    -- settable only by that photo's own uploader). FK added after coral_photos
+    -- is defined later in this file.
+    representative_photo_id uuid,
+    created_at             timestamptz NOT NULL DEFAULT now(),
+    updated_at             timestamptz NOT NULL DEFAULT now(),
+    deleted_at             timestamptz
 );
 CREATE INDEX idx_specimens_user ON specimens (user_id);
 CREATE INDEX idx_specimens_tank ON specimens (tank_id);
@@ -439,6 +445,10 @@ CREATE TABLE coral_photos (
 CREATE INDEX idx_coral_photos_specimen ON coral_photos (specimen_id);
 CREATE INDEX idx_coral_photos_taxon ON coral_photos (taxon_node_id);
 CREATE INDEX idx_coral_photos_uploader ON coral_photos (uploader_user_id);
+
+ALTER TABLE specimens
+    ADD CONSTRAINT fk_specimens_representative_photo
+    FOREIGN KEY (representative_photo_id) REFERENCES coral_photos(id);
 
 -- Community engagement on a photo, distinct from identification voting
 -- (id_votes below judges a PROPOSED NAME; this judges the PHOTO itself).
