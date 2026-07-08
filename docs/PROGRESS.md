@@ -56,16 +56,16 @@ Cleanup must happen in FK-safe order (several tables reference this taxon with n
 
 All confirmed functional; explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status: original roadmap complete, plus specimen linkage and the unidentified-ID flow
+## Status: original roadmap complete, plus specimen linkage, the unidentified-ID flow, and wishlisting
 
-Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
+Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow → wishlist button are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
 
 1. **Clean up the test taxon** — see the pending-cleanup note above.
 2. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
 3. **Next feature**, candidates already scoped/discussed:
    - Vendor/affiliate links (attach to photos, not taxa) — see `docs/future-considerations.md` for the dead-link problem to design around before building.
-   - **Wishlist button** — `want_list` table + RLS already exist (unused since the original schema build); a simple "wishlist this coral" UI on the morph page is mostly schema-free, similar to how specimen linkage only needed one new column. See `docs/future-considerations.md` for the fuller vendor-matching idea this could grow into.
    - Alias-approval / moderation queue — `coral_aliases` proposals from the ID flow now accumulate with `status='proposed'` and nothing ever reviews them; the spec's sitemap always called for a separate admin/moderator queue for this.
+   - Vendor-availability matching against wishlists — the bigger idea `want_list` was originally scoped for (spec §5.4 Door 2); see `docs/future-considerations.md` — needs real design decisions (notification model, what each side sees) before scheduling.
 4. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
 
 ## Deliberately deferred (not bugs, not forgotten)
