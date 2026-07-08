@@ -5,10 +5,18 @@
 -- (Coral category -> genus -> morph), each with care guidance and a signature
 -- element coloration, so the wiki / Door 1 features have real content.
 --
--- ⚠ PROVISIONAL DATA. Genus/morph names are real hobby names, but the hex
--- colors and care values are curated PLACEHOLDERS pending a reef domain pass or
--- a cited source (see spec §9 open decision on element-color-range provenance).
--- Refine the values; the structure is production-shaped.
+-- ⚠ PARTIALLY PROVISIONAL DATA. Genus/morph names are real hobby names, and
+-- care_difficulty/light/flow/growth_form per morph are reasoned per-morph
+-- judgments. Two things are still coarser than that:
+--   - The signature-coloration hex values below are curated PLACEHOLDERS,
+--     not verified against real photos of each named morph — a cited-source
+--     pass is still an open decision (spec §9).
+--   - Recommended parameters (bottom of file, added 2026-07-08) are
+--     genus-category generalizations (softies / LPS / SPS), not verified
+--     per exact named morph — before this pass they were entirely NULL
+--     (every wiki page's parameter table rendered as all dashes).
+-- Refine both further as real domain expertise / citations become available;
+-- the structure is production-shaped.
 --
 -- Idempotent: taxon_nodes upsert on slug; element profiles on
 -- (taxon, element); colorations are guarded by label. Safe to re-run.
@@ -147,3 +155,65 @@ SELECT public.seed_coral_color('pocillopora','base_body','Pink-brown.','solid','
 SELECT public.seed_coral_color('pavona-cactus','base_body','Folded green blades.','solid','Green',ARRAY['#6FA84B']);
 
 DROP FUNCTION public.seed_coral_color(text, text, text, text, text, text[]);
+
+-- =============================================================================
+-- Recommended parameters (seed data accuracy pass, 2026-07-08)
+-- =============================================================================
+-- Every morph above was seeded with rec_alkalinity_dkh_min/max etc. left
+-- NULL, so the wiki's "Recommended parameters" table rendered as all dashes
+-- for all 36 corals. Filled in here from standard, widely-published reef
+-- husbandry target ranges, grouped by care category (softies / LPS / SPS) —
+-- genus-level generalizations, not individually verified per exact named
+-- morph (see the file header). Plain UPDATE by slug: idempotent, safe to
+-- re-run, and safe to apply retroactively to rows the INSERT above already
+-- skipped via ON CONFLICT DO NOTHING.
+-- =============================================================================
+
+-- Softies: tolerate a wider swing; several actually want some standing
+-- nutrients rather than none.
+UPDATE taxon_nodes SET
+    rec_alkalinity_dkh_min = 7,    rec_alkalinity_dkh_max = 10,
+    rec_calcium_ppm_min    = 380,  rec_calcium_ppm_max    = 430,
+    rec_magnesium_ppm_min  = 1250, rec_magnesium_ppm_max  = 1350,
+    rec_nitrate_ppm_min    = 2,    rec_nitrate_ppm_max    = 10,
+    rec_phosphate_ppm_min  = 0.05, rec_phosphate_ppm_max  = 0.15,
+    rec_temperature_c_min  = 24,   rec_temperature_c_max  = 27
+WHERE slug IN (
+    'fire-and-ice-zoa','utter-chaos-zoa','rasta-zoa','grandis-paly',
+    'green-star-polyps','toadstool-leather','green-finger-leather',
+    'pulsing-xenia','clove-polyps','red-mushroom','og-bounce-mushroom',
+    'ricordea-yuma','ricordea-florida'
+);
+
+-- LPS: moderate, fairly stable range; most want low-to-moderate nutrients.
+UPDATE taxon_nodes SET
+    rec_alkalinity_dkh_min = 8,    rec_alkalinity_dkh_max = 11,
+    rec_calcium_ppm_min    = 400,  rec_calcium_ppm_max    = 440,
+    rec_magnesium_ppm_min  = 1300, rec_magnesium_ppm_max  = 1400,
+    rec_nitrate_ppm_min    = 1,    rec_nitrate_ppm_max    = 5,
+    rec_phosphate_ppm_min  = 0.02, rec_phosphate_ppm_max  = 0.08,
+    rec_temperature_c_min  = 24,   rec_temperature_c_max  = 26
+WHERE slug IN (
+    'gold-torch','hammer-coral','frogspawn','duncan-coral','candy-cane',
+    'sunset-micromussa','blasto-merletti','rainbow-trachy','meat-coral',
+    'war-coral','red-goniopora','yellow-scroll','plate-coral',
+    -- Rainbow Acan is the schema's own worked example (coral_trait_schema.sql
+    -- §6), not part of the 36 morphs seeded above, but it's the same
+    -- Micromussa/Acan-type LPS profile as sunset-micromussa and shipped live
+    -- with the same NULL recommended-parameters gap.
+    'rainbow-acan'
+);
+
+-- SPS: narrower, more stable range; low nutrients, but not zero.
+UPDATE taxon_nodes SET
+    rec_alkalinity_dkh_min = 8,    rec_alkalinity_dkh_max = 9.5,
+    rec_calcium_ppm_min    = 420,  rec_calcium_ppm_max    = 450,
+    rec_magnesium_ppm_min  = 1300, rec_magnesium_ppm_max  = 1400,
+    rec_nitrate_ppm_min    = 0.5,  rec_nitrate_ppm_max    = 3,
+    rec_phosphate_ppm_min  = 0.03, rec_phosphate_ppm_max  = 0.07,
+    rec_temperature_c_min  = 25,   rec_temperature_c_max  = 27
+WHERE slug IN (
+    'red-cap-montipora','green-digitata','sunset-montipora',
+    'walt-disney-acropora','green-slimer','tricolor-valida','birds-nest',
+    'milka-stylophora','pocillopora','pavona-cactus'
+);
