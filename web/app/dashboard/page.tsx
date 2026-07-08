@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createTank, logParameters } from "./actions";
+import { createTank, logParameters, removeFromWishlist } from "./actions";
 
 type Tank = {
   id: string;
@@ -17,6 +17,11 @@ type Reading = {
   magnesium_ppm: number | null;
   nitrate_ppm: number | null;
   phosphate_ppm: number | null;
+};
+
+type WishlistItem = {
+  id: string;
+  taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
 };
 
 export default async function Dashboard() {
@@ -51,6 +56,25 @@ export default async function Dashboard() {
   }
 
   const tankList = (tanks ?? []) as Tank[];
+
+  const { data: wishlist } = await supabase
+    .from("want_list")
+    .select("id, taxon_nodes ( name, slug, parent_id )")
+    .order("created_at", { ascending: false });
+  const wishlistList = (wishlist ?? []) as unknown as WishlistItem[];
+
+  const genusIds = [
+    ...new Set(
+      wishlistList
+        .map((w) => w.taxon_nodes?.parent_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+  const { data: genera } =
+    genusIds.length > 0
+      ? await supabase.from("taxon_nodes").select("id, slug").in("id", genusIds)
+      : { data: [] as { id: string; slug: string }[] };
+  const genusSlugById = new Map((genera ?? []).map((g) => [g.id, g.slug]));
 
   return (
     <div>
@@ -182,6 +206,35 @@ export default async function Dashboard() {
         </div>
         <button type="submit">Create tank</button>
       </form>
+
+      <h2>My wishlist</h2>
+      {wishlistList.length === 0 ? (
+        <p className="muted">
+          Nothing yet — wishlist a coral from its <a href="/wiki">wiki page</a>.
+        </p>
+      ) : (
+        <ul className="wishlist-list">
+          {wishlistList.map((w) => {
+            const genusSlug = w.taxon_nodes?.parent_id
+              ? genusSlugById.get(w.taxon_nodes.parent_id)
+              : undefined;
+            const morphSlug = w.taxon_nodes?.slug;
+            const href =
+              genusSlug && morphSlug ? `/coral/${genusSlug}/${morphSlug}` : "#";
+            return (
+              <li className="wishlist-row" key={w.id}>
+                <a href={href}>{w.taxon_nodes?.name ?? "Unknown coral"}</a>
+                <form action={removeFromWishlist}>
+                  <input type="hidden" name="want_list_id" value={w.id} />
+                  <button type="submit" className="btn-secondary" style={{ marginTop: 0 }}>
+                    Remove
+                  </button>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

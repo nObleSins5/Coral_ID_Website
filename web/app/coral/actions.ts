@@ -172,3 +172,46 @@ export async function addSpecimen(
   if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
   return {};
 }
+
+// Toggles a coral on/off the user's want_list (a private bookmark — RLS on
+// want_list already restricts it to the owner; there is no public "who wants
+// this" view yet, see docs/future-considerations.md for the fuller
+// vendor-matching idea this could grow into).
+export async function toggleWishlist(
+  formData: FormData,
+): Promise<{ error?: string; wishlisted?: boolean }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to use your wishlist." };
+
+  const taxonNodeId = String(formData.get("taxon_node_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  const morphSlug = String(formData.get("morph_slug") ?? "");
+  if (!taxonNodeId) return { error: "Missing coral reference." };
+
+  const { data: existing } = await supabase
+    .from("want_list")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("taxon_node_id", taxonNodeId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase.from("want_list").delete().eq("id", existing.id);
+    if (error) return { error: error.message };
+    if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+    revalidatePath("/dashboard");
+    return { wishlisted: false };
+  }
+
+  const { error } = await supabase.from("want_list").insert({
+    user_id: user.id,
+    taxon_node_id: taxonNodeId,
+  });
+  if (error) return { error: error.message };
+  if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+  revalidatePath("/dashboard");
+  return { wishlisted: true };
+}

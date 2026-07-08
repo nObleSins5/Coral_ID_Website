@@ -18,6 +18,7 @@ import {
 import { AddPhotoForm } from "@/components/add-photo-form";
 import { AddSpecimenForm } from "@/components/add-specimen-form";
 import { PhotoVoteButton } from "@/components/photo-vote-button";
+import { WishlistButton } from "@/components/wishlist-button";
 
 export async function generateStaticParams() {
   return getAllGenusMorphSlugPairs();
@@ -101,6 +102,11 @@ export default async function MorphPage({
             {GROWTH_FORM[morph.growth_form_code] ?? morph.growth_form_code}
           </span>
         ) : null}
+        <WishlistButton
+          taxonNodeId={morph.id}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+        />
       </div>
 
       <div className="detail-grid">

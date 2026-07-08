@@ -55,3 +55,21 @@ export async function logParameters(formData: FormData) {
 
   revalidatePath("/dashboard");
 }
+
+// Removes one entry from the current user's wishlist. RLS (want_list_owner_all)
+// already restricts deletes to the caller's own rows.
+export async function removeFromWishlist(formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("want_list")
+    .delete()
+    .eq("id", String(formData.get("want_list_id") ?? ""))
+    .eq("user_id", user.id);
+
+  revalidatePath("/dashboard");
+}
