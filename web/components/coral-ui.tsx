@@ -165,6 +165,18 @@ export function CarePill({ kind, code }: { kind: "light" | "flow"; code: string 
   );
 }
 
+// Easy -> expert escalation across the supporting palette (calm lime through
+// to hot pink) — the one badge in the UI meant to stand out in color, since
+// it's the single most useful at-a-glance signal on a browse list.
+export function CareDifficultyPill({ code }: { code: string | null }) {
+  if (!code) return null;
+  return (
+    <span className={`pill pill-difficulty pill-difficulty-${code}`}>
+      {CARE_DIFFICULTY[code] ?? code}
+    </span>
+  );
+}
+
 // The spec's parameter-freshness trust signal: elapsed time between a photo
 // and the parameter reading stamped on it. Smaller gap = higher confidence.
 export function formatFreshness(

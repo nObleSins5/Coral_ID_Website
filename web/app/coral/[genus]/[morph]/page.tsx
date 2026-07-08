@@ -8,7 +8,7 @@ import {
   getUsernamesFor,
 } from "@/lib/wiki";
 import {
-  CARE_DIFFICULTY,
+  CareDifficultyPill,
   CarePill,
   ColorTile,
   ElementColorKey,
@@ -98,11 +98,7 @@ export default async function MorphPage({
       ) : null}
 
       <div className="morph-row-pills" style={{ marginBottom: "1.25rem" }}>
-        {morph.care_difficulty_code ? (
-          <span className="pill">
-            {CARE_DIFFICULTY[morph.care_difficulty_code] ?? morph.care_difficulty_code}
-          </span>
-        ) : null}
+        <CareDifficultyPill code={morph.care_difficulty_code} />
         <CarePill kind="light" code={morph.light_level_code} />
         <CarePill kind="flow" code={morph.flow_level_code} />
         {morph.growth_form_code ? (

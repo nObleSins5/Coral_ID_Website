@@ -5,7 +5,7 @@ import {
   getMorphsForGenus,
 } from "@/lib/wiki";
 import {
-  CARE_DIFFICULTY,
+  CareDifficultyPill,
   CarePill,
   CompactColorKey,
   ColorTile,
@@ -73,11 +73,7 @@ export default async function GenusPage({
                 <CompactColorKey elements={m.element_profiles} />
               </div>
               <div className="morph-row-pills">
-                {m.care_difficulty_code ? (
-                  <span className="pill">
-                    {CARE_DIFFICULTY[m.care_difficulty_code] ?? m.care_difficulty_code}
-                  </span>
-                ) : null}
+                <CareDifficultyPill code={m.care_difficulty_code} />
                 <CarePill kind="light" code={m.light_level_code} />
                 <CarePill kind="flow" code={m.flow_level_code} />
               </div>
