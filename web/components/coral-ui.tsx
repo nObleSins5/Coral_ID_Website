@@ -1,6 +1,7 @@
 // Shared, server-rendered UI for the coral wiki: the element color key (the
 // self-ID feature) plus small presentational helpers.
 import type { ComponentType } from "react";
+import { AffiliateLinkManager } from "@/components/affiliate-link-manager";
 
 export type ColorStop = { hex: string; ordinal: number };
 export type ColorRange = {
@@ -183,6 +184,7 @@ export function formatFreshness(
 export type PhotoWithSnapshot = {
   id: string;
   url: string;
+  uploader_user_id: string;
   taken_at: string | null;
   snapshot_measured_at: string | null;
   snapshot_alkalinity_dkh: number | null;
@@ -272,6 +274,12 @@ export function PhotoCard({
       ) : (
         <p className="muted photo-no-params">No parameters logged for this photo.</p>
       )}
+      <AffiliateLinkManager
+        photoId={photo.id}
+        uploaderUserId={photo.uploader_user_id}
+        genusSlug={genusSlug}
+        morphSlug={morphSlug}
+      />
     </div>
   );
 }

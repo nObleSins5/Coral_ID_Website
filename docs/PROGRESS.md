@@ -32,20 +32,26 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
    - New `/tank/[id]` page: visual grid (one sub-grid per tier), occupied cells link to the specimen, plus a list of unplaced specimens in that tank each with a slot-picker to place them (`components/place-specimen-control.tsx`).
    - New `/specimen/[id]` page: place/move (slot dropdown) and a **"Remove from tank"** button (`components/remove-from-tank-button.tsx`) that clears `grid_slot_id` without deleting the specimen. Also adds **specimen editing** — nickname, acquired date, and representative photo are now editable after creation (`app/specimen/actions.ts` `updateSpecimen`), reusing `specimens.representative_photo_id` rather than a new column. The photo-picker grid was extracted to `components/photo-picker.tsx`, shared by both the add-specimen and edit-specimen forms.
    - Dashboard tank names now link to `/tank/[id]`.
-5. **Web app** (`web/`, Next.js 16 App Router + `@supabase/ssr`), all confirmed working against the live DB by the user:
+5. **Affiliate/vendor links** — code complete, **migration not yet applied to the live DB** (same MCP-unavailability blocker as item 4; see pending-migration note below). `sql/supabase/11_affiliate_links.sql` (mirrored into `reef-platform-schema.sql` §10, `02_rls_policies.sql`), executing on the design in `docs/future-considerations.md`'s "Affiliate links: preventing dead links" note:
+   - **No separate vendor account tier** — any authenticated user can attach a link to a photo *they uploaded* (`affiliate_links_owner_write` RLS, scoped via `coral_photos.uploader_user_id`), reusing the existing photo-logging feature rather than a new vendor flow (future-considerations idea 6a).
+   - **`link_type`** (`wysiwyg` vs `representative`, future-considerations idea 1) — an explicit trust signal shown in the UI ("exact specimen pictured, may already be sold" vs "this morph, typical example").
+   - **Community "report dead link" flagging** (idea 3) — `affiliate_link_reports` (one per user per link) + a trigger (`handle_affiliate_link_report`) that auto-deactivates a link once distinct reports cross `app_settings.affiliate_dead_link_report_threshold` (default 3). Automated health checks and TTLs (ideas 4-5) are still not built.
+   - Outbound clicks are never linked to directly — `/go/[id]` (`app/go/[id]/route.ts`) logs a hashed-IP click (`affiliate_clicks`, RLS insert-only) then redirects, re-validating the URL scheme before doing so.
+   - **`AffiliateLinkManager`** (`components/affiliate-link-manager.tsx`) renders inside each photo card, but only shows anything to that photo's own uploader (add a link / deactivate their own). Everyone else sees the public list on the morph page's **"Where to find it"** section (was a stub card; now real, with a **Report dead link** button per listing).
+6. **Web app** (`web/`, Next.js 16 App Router + `@supabase/ssr`), all confirmed working against the live DB by the user:
    - **Phase 0 vertical slice** — signup → create tank → log parameters.
    - **Coral wiki** — `/wiki` → `/coral/[genus]` → `/coral/[genus]/[morph]`. Genus→Morph browse tree, care guidance, recommended parameters, full element color key (hex swatches per part). Static-generated for SEO.
    - **Photo logging** — upload a photo attached to a taxon (`app/coral/actions.ts` `uploadCoralPhoto`), optionally stamped with a tank's parameter reading that was actually current **as of the photo's `taken_at` date** (not just "latest" — an old photo gets the reading that was real back then, or `null` if none qualifies).
    - **Photo social layer** — each photo card shows the uploader's username and an expandable `<details>` drawer with the real parameter values; a single, clearly-labeled **"✓ Confirm match"** vote (deliberately not a generic like button — see `docs/future-considerations.md` for why); the taxon's hero image is the **most-voted photo**, computed live (no batch job), falling back to newest-photo-with-zero-votes, then to the gradient color placeholder when no photos exist.
    - **Unidentified-ID flow** (`/identify`) — Door 1's actual primary entry point. Upload a photo with no taxon, propose an identification (match existing / match-plus-alias-proposal / brand-new-morph), vote, and an asymmetric trigger (`handle_id_vote_change`) resolves it: cheap immediate rejection (`net ≤ -3`) vs. a three-part confirm bar (24h age + 10-vote quorum measured per-suggestion + net ≥ 3) that writes the photo's taxon and can create a whole new `taxon_nodes` row. **User-tested live** with temporarily-lowered thresholds: confirmed the photo correctly disappeared from the unidentified queue, and that a new taxon row really was created — see the pending cleanup note below.
 
-## ⚠️ Pending: apply the tank-grid migration
+## ⚠️ Pending: apply two migrations (tank grid + affiliate links)
 
-`sql/supabase/10_tank_grid.sql` (item 4 above) has **not been applied to the live DB yet** — the Supabase MCP connector wasn't available this session (it disconnects/reconnects intermittently; see Live infrastructure above). Until it's applied, `/tank/[id]` and `/specimen/[id]` will error on `grid_columns`/`grid_rows`/`uq_specimens_grid_slot` not existing. To apply it:
-1. Retry `ToolSearch` for `mcp__Supabase__*` tools in a fresh session, or
-2. Paste `sql/supabase/10_tank_grid.sql` into the Supabase SQL Editor from the user's own machine (reliable fallback — no proxy restriction there).
+Neither has been applied to the live DB yet — the Supabase MCP connector wasn't available this session (`enabledInChat: false` for this chat specifically, per `ListConnectors` — it's authenticated at the org level, just toggled off here; see Live infrastructure above). Enable it in this chat's connector settings, then either retry `ToolSearch` for `mcp__Supabase__*` tools, or paste the files below into the Supabase SQL Editor from the user's own machine (reliable fallback — no proxy restriction there):
+1. `sql/supabase/10_tank_grid.sql` — until applied, `/tank/[id]` and `/specimen/[id]` will error on `grid_columns`/`grid_rows`/`uq_specimens_grid_slot` not existing.
+2. `sql/supabase/11_affiliate_links.sql` — until applied, adding/reporting an affiliate link, and the `/go/[id]` click-log redirect, will error on `link_type`/`affiliate_link_reports`/the new RLS policies not existing. Apply *after* #1 isn't required (independent), but both are needed before smoke-testing either feature.
 
-It's idempotent (`ADD COLUMN IF NOT EXISTS` / `CREATE UNIQUE INDEX IF NOT EXISTS`), safe to run more than once.
+Both are idempotent (`ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS` / `DROP POLICY IF EXISTS` before `CREATE POLICY`), safe to run more than once.
 
 ## ⚠️ Pending cleanup: test taxon in production data
 
@@ -71,22 +77,22 @@ Cleanup must happen in FK-safe order (several tables reference this taxon with n
 
 All confirmed functional; explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status: original roadmap complete, plus specimen linkage, the unidentified-ID flow, wishlisting, and the tank grid
+## Status: original roadmap complete, plus specimen linkage, the unidentified-ID flow, wishlisting, the tank grid, and affiliate links
 
-Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow → wishlist button → tank grid + specimen editing are all built. Everything except the tank grid is live and user-confirmed; the tank grid is code-complete but **needs its migration applied and a live smoke test** (see the pending-migration note above) before it can be marked confirmed. Pick any of the following to keep going — nothing else is blocking:
+Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow → wishlist button → tank grid + specimen editing → affiliate/vendor links are all built. Everything except the tank grid and affiliate links is live and user-confirmed; those two are code-complete but **need their migrations applied and a live smoke test** (see the pending-migration note above) before they can be marked confirmed. Pick any of the following to keep going — nothing else is blocking:
 
-1. **Apply the tank-grid migration and smoke-test it live** — see the pending-migration note above: create a tank with a grid, place/move/remove a specimen, edit its representative photo.
+1. **Enable the Supabase connector for this chat, then apply both pending migrations and smoke-test live** — see the pending-migration note above: (tank grid) create a tank with a grid, place/move/remove a specimen, edit its representative photo; (affiliate links) upload a photo, attach a link to it as `wysiwyg` and as `representative`, visit it through `/go/[id]` and confirm a row lands in `affiliate_clicks`, then report it dead from a second account enough times to confirm it auto-deactivates.
 2. **Clean up the test taxon** — see the pending-cleanup note above.
 3. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
 4. **Next feature**, candidates already scoped/discussed:
-   - Vendor/affiliate links (attach to photos, not taxa) — see `docs/future-considerations.md` for the dead-link problem to design around before building.
    - Alias-approval / moderation queue — `coral_aliases` proposals from the ID flow now accumulate with `status='proposed'` and nothing ever reviews them; the spec's sitemap always called for a separate admin/moderator queue for this.
    - Vendor-availability matching against wishlists — the bigger idea `want_list` was originally scoped for (spec §5.4 Door 2); see `docs/future-considerations.md` — needs real design decisions (notification model, what each side sees) before scheduling.
+   - Automated affiliate-link health checks / WYSIWYG TTL-expiration — future-considerations.md ideas 4-5, not built; the vendor-uploaded-photo flow and report-flagging (ideas 6a, 3) are.
 5. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
 
 ## Deliberately deferred (not bugs, not forgotten)
 
-- Vendor/affiliate links, wishlist UI, alias moderation — see above.
+- Wishlist-to-vendor-availability matching, alias moderation — see above.
 - **Messaging, inquiries, local trade discovery** — schema-stubbed, Phase 4 per the spec.
 - **`scripts/draw_diagrams.py` / `normalize_reef.py`** — reframed (see README) into a future data-driven identification diagram + multi-lighting reference approach; not built.
 - Search page, business/retail flows — later phases per spec §4.

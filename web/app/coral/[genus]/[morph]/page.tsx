@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import {
   getAccurateVoteCounts,
+  getAffiliateLinksForTaxon,
   getAllGenusMorphSlugPairs,
   getMorphWithGenus,
   getPhotosForTaxon,
@@ -19,6 +20,12 @@ import { AddPhotoForm } from "@/components/add-photo-form";
 import { AddSpecimenForm } from "@/components/add-specimen-form";
 import { PhotoVoteButton } from "@/components/photo-vote-button";
 import { WishlistButton } from "@/components/wishlist-button";
+import { ReportDeadLinkButton } from "@/components/report-dead-link-button";
+
+const LINK_TYPE_LABEL: Record<string, string> = {
+  wysiwyg: "Exact specimen pictured — may already be sold",
+  representative: "This morph, typical example",
+};
 
 export async function generateStaticParams() {
   return getAllGenusMorphSlugPairs();
@@ -61,6 +68,7 @@ export default async function MorphPage({
   const photos = await getPhotosForTaxon(morph.id);
   const voteCounts = await getAccurateVoteCounts(photos.map((p) => p.id));
   const usernames = await getUsernamesFor(photos.map((p) => p.uploader_user_id));
+  const affiliateLinks = await getAffiliateLinksForTaxon(morph.id);
 
   // Hero = most-voted photo, computed live (no cached counter/batch job —
   // trivial at this scale). photos is already newest-first, and we only
@@ -220,12 +228,35 @@ export default async function MorphPage({
       </div>
 
       <h2>Where to find it</h2>
-      <div className="card stub-card">
-        <p>
-          No vendor links yet. Vendors who showcase this morph in their own
-          photos will appear here once affiliate links go live.
-        </p>
-      </div>
+      {affiliateLinks.length === 0 ? (
+        <div className="card stub-card">
+          <p>
+            No vendor links yet. Vendors who showcase this morph in their own
+            photos will appear here once they add one.
+          </p>
+        </div>
+      ) : (
+        <div className="affiliate-link-grid">
+          {affiliateLinks.map((link) => (
+            <div className="card affiliate-link-card" key={link.id}>
+              <p style={{ marginTop: 0, fontWeight: 600 }}>{link.vendor_name}</p>
+              <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
+                {LINK_TYPE_LABEL[link.link_type] ?? link.link_type}
+              </p>
+              <div className="affiliate-link-actions">
+                <a href={`/go/${link.id}`} target="_blank" rel="noopener nofollow sponsored">
+                  Visit vendor →
+                </a>
+                <ReportDeadLinkButton
+                  linkId={link.id}
+                  genusSlug={genus.slug}
+                  morphSlug={morph.slug}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

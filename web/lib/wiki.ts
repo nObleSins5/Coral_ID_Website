@@ -209,6 +209,32 @@ export async function getAccurateVoteCounts(
   return counts;
 }
 
+export type AffiliateLink = {
+  id: string;
+  vendor_name: string;
+  url: string;
+  link_type: string;
+  coral_photo_id: string;
+};
+
+// Public vendor links across every public photo of a taxon (RLS already
+// scopes affiliate_links to is_active rows — affiliate_links_public_read).
+export async function getAffiliateLinksForTaxon(
+  taxonId: string,
+): Promise<AffiliateLink[]> {
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("affiliate_links")
+    .select(
+      "id, vendor_name, url, link_type, coral_photo_id, coral_photos!inner(taxon_node_id, is_public, deleted_at)",
+    )
+    .eq("coral_photos.taxon_node_id", taxonId)
+    .eq("coral_photos.is_public", true)
+    .is("coral_photos.deleted_at", null)
+    .order("created_at", { ascending: false });
+  return (data as unknown as AffiliateLink[]) ?? [];
+}
+
 export async function getAllGenusSlugs(): Promise<string[]> {
   const supabase = createPublicClient();
   const { data } = await supabase

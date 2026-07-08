@@ -160,9 +160,29 @@ CREATE POLICY husbandry_products_auth_insert ON public.husbandry_products
 CREATE POLICY coral_aliases_auth_insert ON public.coral_aliases
     FOR INSERT TO authenticated WITH CHECK (proposed_by_user_id = auth.uid());
 
+-- Affiliate links: owner-write, scoped via the underlying photo (only the
+-- photo's own uploader manages links on it — see 11_affiliate_links.sql).
+-- Public read of active links is granted above (affiliate_links_public_read);
+-- this is a second, independent policy so the owner can also see/manage
+-- their own inactive (deactivated / reported-off) links.
+CREATE POLICY affiliate_links_owner_write ON public.affiliate_links
+    FOR ALL TO authenticated
+    USING (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()))
+    WITH CHECK (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()));
+
+CREATE POLICY affiliate_link_reports_insert ON public.affiliate_link_reports
+    FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY affiliate_link_reports_select_own ON public.affiliate_link_reports
+    FOR SELECT TO authenticated USING (user_id = auth.uid());
+
+-- Click-log insert (append-only; no SELECT policy — reconciliation is a
+-- service-role/admin concern, not exposed to the app).
+CREATE POLICY affiliate_clicks_insert ON public.affiliate_clicks
+    FOR INSERT TO anon, authenticated WITH CHECK (user_id IS NULL OR user_id = auth.uid());
+
 -- =============================================================================
 -- Intentionally left RLS-on with NO policy (service-role only until built):
---   app_settings, businesses, business_members, inquiries, affiliate_clicks,
+--   app_settings, businesses, business_members, inquiries,
 --   conversations, conversation_participants, messages.
 -- Add reviewed policies when those features are implemented.
 -- =============================================================================

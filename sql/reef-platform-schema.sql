@@ -742,6 +742,11 @@ CREATE TABLE affiliate_links (
     business_id    uuid REFERENCES businesses(id),
     vendor_name    text NOT NULL,
     url            text NOT NULL,
+    -- 'wysiwyg' = points at the exact specimen pictured (dies when it sells);
+    -- 'representative' = the vendor's general page for this morph (longer
+    -- shelf life, weaker trust). See docs/future-considerations.md.
+    link_type      text NOT NULL DEFAULT 'representative'
+                       CHECK (link_type IN ('wysiwyg', 'representative')),
     referral_code  text,
     is_active      boolean NOT NULL DEFAULT true,
     created_at     timestamptz NOT NULL DEFAULT now(),
@@ -749,6 +754,18 @@ CREATE TABLE affiliate_links (
     deleted_at     timestamptz
 );
 CREATE INDEX idx_affiliate_links_photo ON affiliate_links (coral_photo_id);
+
+-- Community "report dead link" flagging (docs/future-considerations.md idea
+-- 3): one report per user per link; handle_affiliate_link_report() below
+-- auto-deactivates the link once enough distinct users have flagged it.
+CREATE TABLE affiliate_link_reports (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    affiliate_link_id uuid NOT NULL REFERENCES affiliate_links(id) ON DELETE CASCADE,
+    user_id           uuid NOT NULL REFERENCES users(id),
+    reported_at       timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (affiliate_link_id, user_id)
+);
+CREATE INDEX idx_affiliate_link_reports_link ON affiliate_link_reports (affiliate_link_id);
 
 -- Lightweight outbound-click log for commission reconciliation and ranking.
 -- Privacy-conscious: hashed IP only, no raw PII.
@@ -762,6 +779,36 @@ CREATE TABLE affiliate_clicks (
 );
 CREATE INDEX idx_affiliate_clicks_link_time
     ON affiliate_clicks (affiliate_link_id, clicked_at DESC);
+
+INSERT INTO app_settings (key, value, description) VALUES
+    ('affiliate_dead_link_report_threshold', '3'::jsonb,
+     'Number of distinct-user "report dead link" flags before a link auto-deactivates (is_active = false).');
+
+CREATE OR REPLACE FUNCTION handle_affiliate_link_report() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_link_id   uuid := NEW.affiliate_link_id;
+    v_count     integer;
+    v_threshold integer;
+BEGIN
+    SELECT COUNT(*) INTO v_count
+        FROM affiliate_link_reports WHERE affiliate_link_id = v_link_id;
+    SELECT (value #>> '{}')::integer INTO v_threshold
+        FROM app_settings WHERE key = 'affiliate_dead_link_report_threshold';
+
+    IF v_count >= v_threshold THEN
+        UPDATE affiliate_links SET is_active = false WHERE id = v_link_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_affiliate_link_reports_check
+    AFTER INSERT ON affiliate_link_reports
+    FOR EACH ROW EXECUTE FUNCTION handle_affiliate_link_report();
 
 CREATE TABLE notifications (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

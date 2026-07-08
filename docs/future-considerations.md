@@ -4,7 +4,7 @@
 
 ---
 
-## Affiliate links: preventing dead links (raised 2026-07-06)
+## Affiliate links: preventing dead links (raised 2026-07-06, built 2026-07-08)
 
 Affiliate links attach to a `coral_photos` row, not a taxon (see `docs/schema-decisions.md` §10) — a vendor showcases *their* photo of a coral to compete with other vendors selling the "same" morph. That design creates a real staleness problem worth solving before the feature ships, not after.
 
@@ -19,18 +19,18 @@ Right now the schema doesn't distinguish these two cases at all — `affiliate_l
 
 ### Ideas for keeping links alive / honest (unordered, unevaluated)
 
-1. **Tag the link type explicitly** (`wysiwyg` vs `representative`) so the UI can set the right expectation ("this exact specimen" vs "this morph, typical example") and apply different staleness rules to each.
-2. **Vendor self-service marking** — the fastest, most accurate signal, but requires the vendor to have an account and actually bother to update it. Probably necessary regardless of what else is built, since nothing else catches "sold 10 minutes ago" reliably.
-3. **Community "report dead link" flagging** — cheap, crowdsourced, fits the platform's existing moderation pattern (parallel to ID suggestions/aliases). Doesn't require vendor cooperation, but is reactive (link is already dead by the time it's flagged).
-4. **Automated link health checks** — periodically request each URL and look for obvious failure signals (404, redirect to homepage). Weak on its own: most storefronts return 200 with a "sold out" banner rather than an actual error, so this alone won't catch WYSIWYG staleness. Could still catch outright broken/removed pages cheaply.
-5. **TTL / expiration on WYSIWYG links specifically** — auto-expire (or auto-hide) a specific-listing link after N days unless the vendor actively renews it. Forces staleness to resolve itself rather than accumulate silently. Representative links wouldn't need this, or would use a much longer TTL.
-6. **Make link submission fast enough that vendors actually maintain it.** The whole idea dies if updating a link is annoying. Directions worth exploring:
-   - A vendor uploads *their own listing photo* directly as a `coral_photos` row with the link attached — this reuses the photo-logging feature being built now rather than inventing a separate vendor flow.
-   - A minimal vendor-side quick-add (paste URL + pick/confirm the coral) rather than a full dashboard.
-   - Possibly auto-suggest which taxon a vendor's photo matches using the same element/color data the wiki already renders, cutting a step out of submission.
+1. ~~**Tag the link type explicitly** (`wysiwyg` vs `representative`)~~ **Built** — `affiliate_links.link_type`, surfaced in the UI as "this exact specimen" vs "this morph, typical example" (`sql/supabase/11_affiliate_links.sql`).
+2. **Vendor self-service marking** — still not built beyond deactivating a link entirely (`deactivateAffiliateLink`); there's no "mark as sold" distinct from "remove the link."
+3. ~~**Community "report dead link" flagging**~~ **Built** — `affiliate_link_reports` + `handle_affiliate_link_report()` auto-deactivates a link once distinct reports cross a threshold (`app_settings.affiliate_dead_link_report_threshold`, default 3). Still reactive by nature, as noted below.
+4. **Automated link health checks** — not built. Weak on its own (most storefronts 200 with a "sold out" banner), but could still catch outright broken/removed pages cheaply.
+5. **TTL / expiration on WYSIWYG links specifically** — not built. Representative links wouldn't need this, or would use a much longer TTL.
+6. **Make link submission fast enough that vendors actually maintain it.**
+   - ~~A vendor uploads *their own listing photo* directly as a `coral_photos` row with the link attached~~ **Built** — any authenticated user can attach a link to a photo they uploaded (`affiliate_links_owner_write` RLS scoped via `coral_photos.uploader_user_id`); no separate vendor account tier required for v1.
+   - A minimal vendor-side quick-add (paste URL + pick/confirm the coral) rather than a full dashboard — not built; today it's per-photo, from the morph page.
+   - Auto-suggesting which taxon a vendor's photo matches — not built.
 
 ### Not deciding now
-This needs a real design pass (schema fields, moderation workload, whether vendors need their own account tier beyond what `businesses` already models) once affiliate links are actually being scheduled — currently still a Phase 2 item with the program specifics themselves an open decision (spec §9). Recording it here so the dead-link problem gets designed in from the start rather than retrofitted.
+Ideas 1, 3, and 6a are built (2026-07-08; see `docs/PROGRESS.md`). Vendor account tiers beyond "you uploaded this photo," automated health checks, and WYSIWYG TTLs are still open — pick up if/when affiliate links get real usage and the dead-link problem needs more than reactive reporting.
 
 ---
 
