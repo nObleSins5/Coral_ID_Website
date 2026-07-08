@@ -9,6 +9,17 @@ export default function Home() {
       </p>
 
       <div className="card">
+        <h2 style={{ marginTop: 0 }}>What is this coral?</h2>
+        <p className="muted">
+          Upload a photo and the community will help identify it — or vote
+          on someone else&apos;s.
+        </p>
+        <p>
+          <a href="/identify">Identify a coral →</a>
+        </p>
+      </div>
+
+      <div className="card">
         <h2 style={{ marginTop: 0 }}>Coral wiki</h2>
         <p className="muted">
           Browse by genus, drill into a morph, and compare its typical

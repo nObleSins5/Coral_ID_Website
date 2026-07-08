@@ -237,3 +237,150 @@ export async function getAllGenusMorphSlugPairs(): Promise<
     .filter((m) => m.parent_id && genusById.has(m.parent_id))
     .map((m) => ({ genus: genusById.get(m.parent_id!)!, morph: m.slug }));
 }
+
+// ---------------------------------------------------------------------------
+// Unidentified-ID flow (Door 1's primary entry point — /identify)
+// ---------------------------------------------------------------------------
+
+export type SearchableMorph = {
+  id: string;
+  name: string;
+  slug: string;
+  genusName: string;
+};
+
+// The whole 37-coral list, fetched once and filtered client-side (type-to-
+// filter) — no need for server-side search infrastructure at this scale.
+export async function getAllMorphsForSearch(): Promise<SearchableMorph[]> {
+  const supabase = createPublicClient();
+  const { data: morphs } = await supabase
+    .from("taxon_nodes")
+    .select("id, name, slug, parent_id")
+    .eq("rank_code", "morph")
+    .order("name");
+  const { data: genera } = await supabase
+    .from("taxon_nodes")
+    .select("id, name")
+    .eq("rank_code", "genus");
+  const genusNameById = new Map((genera ?? []).map((g) => [g.id, g.name]));
+  return (morphs ?? []).map((m) => ({
+    id: m.id,
+    name: m.name,
+    slug: m.slug,
+    genusName: (m.parent_id && genusNameById.get(m.parent_id)) || "",
+  }));
+}
+
+export type UnidentifiedPhoto = {
+  id: string;
+  url: string;
+  uploader_user_id: string;
+  taken_at: string | null;
+  created_at: string;
+};
+
+export type PendingSuggestion = {
+  id: string;
+  coral_photo_id: string;
+  proposed_taxon_id: string | null;
+  proposed_taxon_name: string | null; // resolved "Name (Genus)" label, if targeting an existing taxon
+  proposed_name: string | null; // an alias claim (alongside proposed_taxon_id) or a brand-new morph name
+  suggested_by_user_id: string;
+  suggested_by_username: string;
+  net_votes: number;
+  created_at: string;
+};
+
+export type UnidentifiedQueueItem = {
+  photo: UnidentifiedPhoto;
+  suggestions: PendingSuggestion[];
+};
+
+// Photos with no taxon yet, each with its still-open (pending) suggestions —
+// one card per photo, matching the agreed queue design. Resolved
+// (confirmed/rejected/superseded) suggestions are never shown here.
+export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
+  const supabase = createPublicClient();
+
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, uploader_user_id, taken_at, created_at")
+    .is("taxon_node_id", null)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+
+  const photoList = (photos as UnidentifiedPhoto[]) ?? [];
+  if (photoList.length === 0) return [];
+
+  const photoIds = photoList.map((p) => p.id);
+  const { data: suggestions } = await supabase
+    .from("id_suggestions")
+    .select(
+      "id, coral_photo_id, proposed_taxon_id, proposed_name, suggested_by_user_id, net_votes, created_at",
+    )
+    .in("coral_photo_id", photoIds)
+    .eq("status_code", "pending")
+    .order("net_votes", { ascending: false });
+
+  const suggestionList = suggestions ?? [];
+
+  // Resolve proposed_taxon_id -> "Name (Genus)" display labels, batched.
+  const taxonIds = [
+    ...new Set(
+      suggestionList
+        .map((s) => s.proposed_taxon_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+  const taxonLabels = new Map<string, string>();
+  if (taxonIds.length > 0) {
+    const { data: taxa } = await supabase
+      .from("taxon_nodes")
+      .select("id, name, parent_id")
+      .in("id", taxonIds);
+    const genusIds = [
+      ...new Set(
+        (taxa ?? []).map((t) => t.parent_id).filter((x): x is string => !!x),
+      ),
+    ];
+    const { data: genera } =
+      genusIds.length > 0
+        ? await supabase.from("taxon_nodes").select("id, name").in("id", genusIds)
+        : { data: [] as { id: string; name: string }[] };
+    const genusNameById = new Map((genera ?? []).map((g) => [g.id, g.name]));
+    for (const t of taxa ?? []) {
+      const genusName = t.parent_id ? genusNameById.get(t.parent_id) : undefined;
+      taxonLabels.set(t.id, genusName ? `${t.name} (${genusName})` : t.name);
+    }
+  }
+
+  const usernames = await getUsernamesFor(
+    suggestionList.map((s) => s.suggested_by_user_id),
+  );
+
+  const byPhoto = new Map<string, PendingSuggestion[]>();
+  for (const s of suggestionList) {
+    const entry: PendingSuggestion = {
+      id: s.id,
+      coral_photo_id: s.coral_photo_id,
+      proposed_taxon_id: s.proposed_taxon_id,
+      proposed_taxon_name: s.proposed_taxon_id
+        ? (taxonLabels.get(s.proposed_taxon_id) ?? null)
+        : null,
+      proposed_name: s.proposed_name,
+      suggested_by_user_id: s.suggested_by_user_id,
+      suggested_by_username:
+        usernames.get(s.suggested_by_user_id) ?? "A hobbyist",
+      net_votes: s.net_votes,
+      created_at: s.created_at,
+    };
+    const list = byPhoto.get(s.coral_photo_id) ?? [];
+    list.push(entry);
+    byPhoto.set(s.coral_photo_id, list);
+  }
+
+  return photoList.map((photo) => ({
+    photo,
+    suggestions: byPhoto.get(photo.id) ?? [],
+  }));
+}

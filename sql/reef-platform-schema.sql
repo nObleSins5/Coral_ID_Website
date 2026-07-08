@@ -67,9 +67,10 @@ CREATE TABLE id_statuses (
     label text NOT NULL
 );
 INSERT INTO id_statuses (code, label) VALUES
-    ('pending',   'Pending'),
-    ('confirmed', 'Confirmed'),
-    ('rejected',  'Rejected');
+    ('pending',    'Pending'),
+    ('confirmed',  'Confirmed'),
+    ('rejected',   'Rejected'),
+    ('superseded', 'Superseded by another confirmed suggestion');
 
 CREATE TABLE inquiry_statuses (
     code  text PRIMARY KEY,
@@ -119,9 +120,18 @@ CREATE TABLE app_settings (
     description text,
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
+-- Confirmation requires ALL THREE: age, quorum, and net agreement (asymmetric
+-- with rejection, which needs only net_votes <= -threshold — rejection has no
+-- real side effects and is fully reversible via re-proposing, so it doesn't
+-- need the same cautious bar as confirmation, which writes taxon_node_id onto
+-- a photo and can create a brand-new taxon_node).
 INSERT INTO app_settings (key, value, description) VALUES
     ('id_confirmation_threshold', '3'::jsonb,
-     'Net upvotes at which an id_suggestion flips to confirmed.');
+     'Net votes (sum of +1/-1) a single suggestion needs, in either direction, to confirm (>=) or reject (<=-N). Rejection needs only this; confirmation also needs the two settings below.'),
+    ('id_confirmation_min_hours', '24'::jsonb,
+     'Minimum age (hours) of a suggestion before it can auto-confirm — prevents a fast pile-on before the wider community has seen it.'),
+    ('id_confirmation_min_votes', '10'::jsonb,
+     'Minimum TOTAL votes cast on a single suggestion (not net, not pooled across a photo''s other competing suggestions) before it can auto-confirm — a quorum floor, distinct from net agreement.');
 
 -- =============================================================================
 -- 2. Users, external profiles, businesses
@@ -490,20 +500,33 @@ CREATE INDEX idx_coral_aliases_norm ON coral_aliases (alias_name_normalized);
 CREATE INDEX idx_coral_aliases_trgm
     ON coral_aliases USING gin (alias_name_normalized gin_trgm_ops);
 
--- A suggestion targets a taxon node at ANY level, or proposes a not-yet-existing
--- name. net_votes is materialized; status flips per app_settings threshold.
+-- A suggestion targets a taxon node at ANY level, proposes a not-yet-existing
+-- name against an existing node (an alias claim — see coral_aliases insert in
+-- the app layer, deliberately NOT auto-approved by this table's own vote: an
+-- alias is a distinct claim from "this photo shows that coral", so it needs
+-- its own separate review, not a side effect of this vote), or proposes a
+-- brand-new morph (proposed_taxon_id null, proposed_name + proposed_genus_id
+-- set — confirming this CREATES a new taxon_node, see handle_id_vote_change
+-- below). net_votes is materialized by that trigger; status flips per the
+-- app_settings thresholds (asymmetric — see those rows' descriptions).
 CREATE TABLE id_suggestions (
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     coral_photo_id      uuid NOT NULL REFERENCES coral_photos(id) ON DELETE CASCADE,
     proposed_taxon_id   uuid,                    -- FK -> taxon_nodes (companion)
-    proposed_name       text,                    -- for names with no node yet
+    proposed_name       text,                    -- new name: alias OR brand-new morph
+    proposed_genus_id   uuid,                    -- FK -> taxon_nodes (companion); required for a brand-new morph
     suggested_by_user_id uuid NOT NULL REFERENCES users(id),
     status_code         text NOT NULL DEFAULT 'pending' REFERENCES id_statuses(code),
     net_votes           integer NOT NULL DEFAULT 0,
     resolved_at         timestamptz,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
-    CHECK (proposed_taxon_id IS NOT NULL OR proposed_name IS NOT NULL)
+    CHECK (proposed_taxon_id IS NOT NULL OR proposed_name IS NOT NULL),
+    -- Defensive: a brand-new-morph proposal (no existing taxon matched) must
+    -- carry a genus now, not discover it's missing when the trigger tries to
+    -- INSERT the new taxon_node at confirm time, possibly days later.
+    CONSTRAINT id_suggestions_new_morph_needs_genus
+        CHECK (proposed_taxon_id IS NOT NULL OR proposed_genus_id IS NOT NULL)
 );
 CREATE INDEX idx_id_suggestions_photo ON id_suggestions (coral_photo_id);
 CREATE INDEX idx_id_suggestions_status ON id_suggestions (status_code);
@@ -518,6 +541,116 @@ CREATE TABLE id_votes (
     updated_at       timestamptz NOT NULL DEFAULT now(),
     UNIQUE (id_suggestion_id, user_id)
 );
+
+-- Recomputes net_votes on every vote change and, once a suggestion clears its
+-- resolution bar, applies the real side effects: rejection is cheap and
+-- reversible (net_votes <= -threshold, no floors — see app_settings), so it
+-- just flips status. Confirmation has real, harder-to-undo side effects (sets
+-- coral_photos.taxon_node_id, may CREATE a new taxon_node), so it requires
+-- ALL THREE of: minimum age, a total-vote quorum measured on THIS suggestion
+-- alone (never pooled across a photo's other competing suggestions), and net
+-- agreement. Runs SECURITY DEFINER because an ordinary voter otherwise has no
+-- privilege to insert into taxon_nodes or update another user's coral_photos
+-- row — the same justification as handle_new_user() elsewhere in this file.
+-- Timing note: since this only runs when a vote is cast (no scheduled job by
+-- design — see docs/schema-decisions.md's live-computation preference), a
+-- suggestion that clears the age floor while voting has gone quiet won't flip
+-- until the NEXT vote arrives. Accepted trade-off; exact-timing would need a
+-- real scheduled job (e.g. pg_cron), not introduced here.
+CREATE OR REPLACE FUNCTION handle_id_vote_change() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_suggestion_id uuid := COALESCE(NEW.id_suggestion_id, OLD.id_suggestion_id);
+    v_photo_id      uuid;
+    v_proposed_taxon uuid;
+    v_proposed_name  text;
+    v_proposed_genus uuid;
+    v_status         text;
+    v_created        timestamptz;
+    v_net            integer;
+    v_total          integer;
+    v_threshold      integer;
+    v_min_hours      numeric;
+    v_min_votes      integer;
+    v_final_taxon    uuid;
+    v_base_slug      text;
+    v_slug           text;
+    v_suffix         integer := 1;
+BEGIN
+    SELECT coral_photo_id, proposed_taxon_id, proposed_name, proposed_genus_id,
+           status_code, created_at
+        INTO v_photo_id, v_proposed_taxon, v_proposed_name, v_proposed_genus,
+             v_status, v_created
+        FROM id_suggestions WHERE id = v_suggestion_id FOR UPDATE;
+
+    SELECT COALESCE(SUM(value), 0), COUNT(*) INTO v_net, v_total
+        FROM id_votes WHERE id_suggestion_id = v_suggestion_id;
+    UPDATE id_suggestions SET net_votes = v_net WHERE id = v_suggestion_id;
+
+    -- Already resolved: net_votes stays cosmetically in sync (above), but no
+    -- further action — status doesn't change once confirmed/rejected/superseded.
+    IF v_status <> 'pending' THEN
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    -- value is a scalar jsonb (e.g. 3, not [3]) — #>>'{}' extracts a scalar as
+    -- text regardless of its JSON type; ->>0 would be for a JSON array.
+    SELECT (value #>> '{}')::integer INTO v_threshold
+        FROM app_settings WHERE key = 'id_confirmation_threshold';
+    SELECT (value #>> '{}')::numeric INTO v_min_hours
+        FROM app_settings WHERE key = 'id_confirmation_min_hours';
+    SELECT (value #>> '{}')::integer INTO v_min_votes
+        FROM app_settings WHERE key = 'id_confirmation_min_votes';
+
+    IF v_net <= -v_threshold THEN
+        UPDATE id_suggestions SET status_code = 'rejected', resolved_at = now()
+            WHERE id = v_suggestion_id;
+        RETURN COALESCE(NEW, OLD);
+    END IF;
+
+    IF v_total >= v_min_votes
+       AND v_net >= v_threshold
+       AND EXTRACT(EPOCH FROM (now() - v_created)) / 3600 >= v_min_hours
+    THEN
+        IF v_proposed_taxon IS NOT NULL THEN
+            v_final_taxon := v_proposed_taxon;
+        ELSE
+            v_base_slug := trim(both '-' from
+                regexp_replace(lower(trim(v_proposed_name)), '[^a-z0-9]+', '-', 'g'));
+            v_slug := v_base_slug;
+            WHILE EXISTS (SELECT 1 FROM taxon_nodes WHERE slug = v_slug) LOOP
+                v_suffix := v_suffix + 1;
+                v_slug := v_base_slug || '-' || v_suffix;
+            END LOOP;
+            INSERT INTO taxon_nodes (parent_id, rank_code, name, slug)
+                VALUES (v_proposed_genus, 'morph', v_proposed_name, v_slug)
+                RETURNING id INTO v_final_taxon;
+        END IF;
+
+        UPDATE coral_photos SET taxon_node_id = v_final_taxon WHERE id = v_photo_id;
+        UPDATE id_suggestions
+            SET status_code = 'confirmed', resolved_at = now(), proposed_taxon_id = v_final_taxon
+            WHERE id = v_suggestion_id;
+
+        -- This photo now has an answer — stop asking for votes on its other
+        -- competing (still-pending) proposed names.
+        UPDATE id_suggestions SET status_code = 'superseded', resolved_at = now()
+            WHERE coral_photo_id = v_photo_id
+              AND id <> v_suggestion_id
+              AND status_code = 'pending';
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_id_votes_recompute ON id_votes;
+CREATE TRIGGER trg_id_votes_recompute
+    AFTER INSERT OR UPDATE OR DELETE ON id_votes
+    FOR EACH ROW EXECUTE FUNCTION handle_id_vote_change();
 
 -- =============================================================================
 -- 8. Provenance (protected, private by default)
@@ -719,6 +852,10 @@ ALTER TABLE coral_aliases
 ALTER TABLE id_suggestions
     ADD CONSTRAINT fk_id_suggestions_taxon
     FOREIGN KEY (proposed_taxon_id) REFERENCES taxon_nodes(id);
+
+ALTER TABLE id_suggestions
+    ADD CONSTRAINT fk_id_suggestions_genus
+    FOREIGN KEY (proposed_genus_id) REFERENCES taxon_nodes(id);
 
 ALTER TABLE want_list
     ADD CONSTRAINT fk_want_list_taxon

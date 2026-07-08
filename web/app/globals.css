@@ -494,3 +494,129 @@ td {
   color: var(--muted);
   width: 40%;
 }
+
+/* --- Identify (/identify) --- */
+
+.identify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.identify-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+@media (max-width: 600px) {
+  .identify-card {
+    grid-template-columns: 1fr;
+  }
+}
+.identify-card-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.identify-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.suggestion-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.suggestion-name {
+  font-weight: 600;
+}
+.suggestion-by {
+  font-size: 0.78rem;
+  margin-left: auto;
+}
+.suggestion-votes {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.suggestion-net {
+  font-size: 0.85rem;
+  min-width: 1.2rem;
+  text-align: center;
+}
+
+.identify-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.propose-form {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  margin-top: 0.4rem;
+}
+.taxon-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.taxon-result {
+  text-align: left;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+  padding: 0.45rem 0.6rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.taxon-result:hover {
+  background: var(--panel);
+}
+.alias-toggle {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+.alias-toggle input[type="text"],
+.alias-toggle input:not([type="checkbox"]) {
+  margin-top: 0.4rem;
+}
+.propose-switch {
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: inherit;
+  cursor: pointer;
+}
