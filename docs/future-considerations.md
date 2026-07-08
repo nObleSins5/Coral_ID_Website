@@ -51,3 +51,30 @@ Rough shape, not decided:
 
 ### Not deciding now
 The wishlist button is cheap and could be picked up any time. The vendor-matching half needs real product decisions (notification model, what vendors/hobbyists each see about each other, whether this lives inside `businesses` or needs its own lighter vendor concept) before writing schema for it.
+
+---
+
+## Photo color-cast correction via an in-frame reference (raised 2026-07-08)
+
+Raw hex values sampled from a coral photo are only as good as the photo's white balance. Reef lighting (actinic/blue-shifted LEDs) casts every photo differently depending on fixture spectrum, camera white-balance setting, and sensor — so an uncorrected pixel sample isn't really "the coral's color," it's "the coral's color as distorted by whatever light and camera happened to be used." This is the substance behind the still-open **"real color-range provenance"** decision (spec §9; `docs/schema-decisions.md` §13) — the seeded hex values are still labeled provisional precisely because of this gap.
+
+### The idea
+Ask the uploader to tag one point in the photo as a known reference object, then compute a simple correction (a per-channel scale from expected-vs-observed at that point) and apply it to the coral's own sampled pixels before storing a hex value. This is the hobbyist-accessible substitute for a proper color-checker card, which nobody is going to actually buy and carry to the tank.
+
+### Not every candidate reference is trustworthy
+Candidates raised: a pure black background, sand, purple coralline algae, a white frag plug.
+- **White frag plug — best candidate.** Ubiquitous in specimen photos and the closest thing to a materially-consistent "known" color across the hobby, though not perfectly standardized (manufacturer variation, coralline overgrowth reducing the visible white area as the specimen ages).
+- **Black background — partial help only.** Useful for exposure/black-point correction, but weak for correcting the *hue* cast itself, since a black reference carries no gain information — it can't reveal how much the mid-tones and highlights have shifted.
+- **Sand and purple coralline — reject as calibration anchors.** Their real-world color isn't actually fixed or known: sand ranges white-to-tan by brand/substrate/staining, and coralline ranges pink-to-purple-to-red by species and is itself lighting-sensitive. Calibrating against an unknown reference launders error into the "corrected" value instead of removing it — worse than doing nothing, since it produces a confidently wrong number rather than an honestly uncorrected one.
+
+### Mechanism sketch (not implemented)
+- At upload (or as a later edit step), the uploader taps a point in the photo and tags what it is: white frag plug / black background / "I have an actual white-balance or gray card in frame."
+- Compute a per-channel scale (and, for a black-background tag, an offset) from the expected vs. observed value at that point.
+- Apply the correction to the coral's own sampled pixels before writing a hex value — keep the raw, uncorrected sample alongside it (audit trail, and lets the correction logic improve later without re-uploading).
+- Only meaningfully improves things when a trustworthy reference is actually tagged. If nothing reliable is visible, the honest move is to keep the raw hex flagged as uncorrected rather than guessing with an untrustworthy anchor.
+
+### Known limits, even done well
+This is single-point white balance, not full colorimetric calibration — it corrects a per-channel gain/offset, not a full color transform, so it won't handle non-linear sensor response, lens/vignetting falloff, or channel crosstalk. It also can't fix **fluorescence**: much of what makes SPS coloration striking under actinic lighting is fluorescent emission, not reflected light, and fluorescence doesn't behave like a reflective-color correction at all — a "corrected" fluorescent color under a different assumed light spectrum is a different number, not a truer one. Frame this as "meaningfully better than an uncorrected raw hex," not "the coral's true color."
+
+### Not deciding now
+Needs real product decisions before scheduling: whether correction happens at upload time or as an editable later step; whether uncorrected hexes get flagged or excluded from the wiki's "typical color range" aggregation; whether reference-tagging is required or optional; and how (or whether) to eventually nudge hobbyists toward a real, cheap, standardized reference (e.g. a small white/gray sticker sold for exactly this purpose) instead of relying on opportunistic in-frame objects. This doesn't resolve the "real color-range provenance" open decision (spec §9 / schema-decisions.md §13) — it gives that decision a concrete mechanism to evaluate against.
