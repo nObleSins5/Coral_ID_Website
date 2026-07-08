@@ -31,24 +31,27 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
    - **Photo logging** — upload a photo attached to a taxon (`app/coral/actions.ts` `uploadCoralPhoto`), optionally stamped with a tank's parameter reading that was actually current **as of the photo's `taken_at` date** (not just "latest" — an old photo gets the reading that was real back then, or `null` if none qualifies).
    - **Photo social layer** — each photo card shows the uploader's username and an expandable `<details>` drawer with the real parameter values; a single, clearly-labeled **"✓ Confirm match"** vote (deliberately not a generic like button — see `docs/future-considerations.md` for why); the taxon's hero image is the **most-voted photo**, computed live (no batch job), falling back to newest-photo-with-zero-votes, then to the gradient color placeholder when no photos exist.
 
-## Known, deferred polish (not urgent)
+## Known, deferred polish (not urgent) — a UI pass backlog
 
-- **Image display sizing** — user confirmed everything works functionally, but photos render "very large" in places (likely the hero image and/or gallery cards need tighter max-height/cropping rules). Explicitly deferred by the user for a later design pass — not a functional bug, just unrefined CSS.
+- **Image display sizing** — photos render "very large" in places (hero image and/or gallery cards need tighter max-height/cropping rules).
+- **Specimen photo picker (`add-specimen-form.tsx`)** — functionally confirmed (picking your own photo correctly sets `specimen_id`), but the UI needs work: clicking a thumbnail doesn't clearly show it got selected (the `.selected` border is too subtle), thumbnails render at inconsistent sizes (no forced aspect-ratio/object-fit crop like the other photo grids have), and the "Yours" tag styling is rough.
 
-## Status: original roadmap complete
+All confirmed functional; explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
+## Status: original roadmap complete, plus specimen linkage
 
-1. **Design pass** — photo sizing above, plus general visual polish now that there's real content and interaction to look at.
+Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage ("+ Add to my collection") are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
+
+1. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
 2. **Next feature**, candidates already scoped/discussed:
-   - Specimen linkage (attach a photo to a specific tank specimen, not just standalone-to-taxon) — deferred from the photo-logging build.
    - "Unidentified — help me ID this" + the `id_suggestions`/`id_votes` community confirmation queue — deferred from the photo-logging build.
    - Vendor/affiliate links (attach to photos, not taxa) — see `docs/future-considerations.md` for the dead-link problem to design around before building.
+   - **Wishlist button** — `want_list` table + RLS already exist (unused since the original schema build); a simple "wishlist this coral" UI on the morph page is mostly schema-free, similar to how specimen linkage only needed one new column. See `docs/future-considerations.md` for the fuller vendor-matching idea this could grow into.
 3. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
 
 ## Deliberately deferred (not bugs, not forgotten)
 
-- Specimen linkage, unidentified-ID flow, vendor/affiliate links — see above.
+- Unidentified-ID flow, vendor/affiliate links, wishlist UI — see above.
 - **Messaging, inquiries, local trade discovery** — schema-stubbed, Phase 4 per the spec.
 - **`scripts/draw_diagrams.py` / `normalize_reef.py`** — reframed (see README) into a future data-driven identification diagram + multi-lighting reference approach; not built.
 - Search page, business/retail flows — later phases per spec §4.

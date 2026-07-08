@@ -31,3 +31,23 @@ Right now the schema doesn't distinguish these two cases at all — `affiliate_l
 
 ### Not deciding now
 This needs a real design pass (schema fields, moderation workload, whether vendors need their own account tier beyond what `businesses` already models) once affiliate links are actually being scheduled — currently still a Phase 2 item with the program specifics themselves an open decision (spec §9). Recording it here so the dead-link problem gets designed in from the start rather than retrofitted.
+
+---
+
+## Wishlist → vendor-availability matching (raised 2026-07-06)
+
+Two related but separably-sized ideas, surfaced while scoping specimen linkage.
+
+### The cheap part: a wishlist button (mostly already built)
+`want_list` (user_id, taxon_node_id, note) and its owner-scoped RLS have existed since the original schema build (spec §5.4, Door 2 foundation) but have **zero UI** — nothing on the morph page lets a user actually wishlist a coral yet. Adding a simple "☆ Wishlist this" button is close to a pure UI feature, the same shape as specimen linkage turned out to be (schema already there, just needs a button + a query). Low effort whenever it's wanted.
+
+### The bigger part: connecting wishlists to vendor availability
+The idea: a **vendor-only view listing every coral in the wiki with a simple checkbox** — "do you currently have this in stock?" — and using that to connect vendors to the hobbyists who have that coral on their want list. Lighter-weight than the retail machinery already stubbed for later (grid/QR/inquiries): this isn't per-listing inventory, just a coarse per-vendor-per-coral availability flag.
+
+Rough shape, not decided:
+- A new table, something like `business_coral_availability (business_id, taxon_node_id, is_available, updated_at)` — one row per vendor per coral they stock, toggled by a checkbox in a vendor dashboard view.
+- **The matching/notification question is the real design work**: when a vendor flags a coral available, do want-listers get notified (the existing `notifications` table could carry this)? Does the vendor see *how many* people want it (an aggregate demand count — safe, no personal data exposed) or nothing at all until someone acts? Does the hobbyist see *which* vendors have it, or does the vendor reach out first?
+- This is squarely a business/retail-tier feature (needs the `businesses` account type, not just any user), so it's naturally Phase 4+ alongside the other retail features already stubbed — recording the idea now so it's designed in when that phase gets picked up, rather than bolted on.
+
+### Not deciding now
+The wishlist button is cheap and could be picked up any time. The vendor-matching half needs real product decisions (notification model, what vendors/hobbyists each see about each other, whether this lives inside `businesses` or needs its own lighter vendor concept) before writing schema for it.
