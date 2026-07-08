@@ -1,0 +1,168 @@
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { ConfigureGridForm } from "@/components/configure-grid-form";
+import { PlaceSpecimenControl } from "@/components/place-specimen-control";
+
+type Tank = {
+  id: string;
+  name: string;
+  tank_type: string | null;
+  volume: number | null;
+  tier_count: number;
+  grid_columns: number | null;
+  grid_rows: number | null;
+};
+type GridSlot = { id: string; x: number; y: number; z: number; label: string };
+type Specimen = {
+  id: string;
+  name: string | null;
+  grid_slot_id: string | null;
+  taxon_node_id: string | null;
+  taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
+};
+
+export default async function TankPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: tank } = await supabase
+    .from("tanks")
+    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!tank) notFound();
+  const tankRow = tank as Tank;
+
+  const { data: slots } = await supabase
+    .from("grid_slots")
+    .select("id, x, y, z, label")
+    .eq("tank_id", id)
+    .order("z", { ascending: true })
+    .order("y", { ascending: true })
+    .order("x", { ascending: true });
+  const slotList = (slots ?? []) as GridSlot[];
+
+  const { data: specimens } = await supabase
+    .from("specimens")
+    .select("id, name, grid_slot_id, taxon_node_id, taxon_nodes ( name, slug, parent_id )")
+    .eq("tank_id", id)
+    .is("deleted_at", null);
+  const specimenList = (specimens ?? []) as unknown as Specimen[];
+
+  const genusIds = [
+    ...new Set(
+      specimenList
+        .map((s) => s.taxon_nodes?.parent_id)
+        .filter((x): x is string => !!x),
+    ),
+  ];
+  const { data: genera } =
+    genusIds.length > 0
+      ? await supabase.from("taxon_nodes").select("id, slug").in("id", genusIds)
+      : { data: [] as { id: string; slug: string }[] };
+  const genusSlugById = new Map((genera ?? []).map((g) => [g.id, g.slug]));
+
+  const specimenBySlot = new Map(
+    specimenList.filter((s) => s.grid_slot_id).map((s) => [s.grid_slot_id as string, s]),
+  );
+  const unplaced = specimenList.filter((s) => !s.grid_slot_id);
+  const emptySlots = slotList
+    .filter((s) => !specimenBySlot.has(s.id))
+    .map((s) => ({ id: s.id, label: s.label }));
+
+  function taxonHref(s: Specimen) {
+    const genusSlug = s.taxon_nodes?.parent_id
+      ? genusSlugById.get(s.taxon_nodes.parent_id)
+      : null;
+    return genusSlug && s.taxon_nodes ? `/coral/${genusSlug}/${s.taxon_nodes.slug}` : null;
+  }
+
+  const tiers = tankRow.tier_count ?? 1;
+  const columns = tankRow.grid_columns;
+  const rows = tankRow.grid_rows;
+
+  return (
+    <div>
+      <p className="breadcrumb">
+        <a href="/dashboard">Your tanks</a> / {tankRow.name}
+      </p>
+      <h1 style={{ marginBottom: "0.15rem" }}>{tankRow.name}</h1>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {tankRow.tank_type ? `${tankRow.tank_type} · ` : ""}
+        {tankRow.volume ? `${tankRow.volume} gal` : ""}
+      </p>
+
+      {!columns || !rows ? (
+        <ConfigureGridForm tankId={tankRow.id} />
+      ) : (
+        <>
+          {Array.from({ length: tiers }, (_, i) => i + 1).map((z) => (
+            <div className="tank-grid-tier" key={z}>
+              {tiers > 1 ? <h3>Tier L{z}</h3> : null}
+              <div
+                className="tank-grid"
+                style={{ gridTemplateColumns: `repeat(${columns}, minmax(70px, 1fr))` }}
+              >
+                {slotList
+                  .filter((slot) => slot.z === z)
+                  .map((slot) => {
+                    const specimen = specimenBySlot.get(slot.id);
+                    return (
+                      <div
+                        key={slot.id}
+                        className={`tank-grid-cell ${specimen ? "occupied" : "empty"}`}
+                      >
+                        <span className="slot-label">{slot.label}</span>
+                        {specimen ? (
+                          <a href={`/specimen/${specimen.id}`}>
+                            {specimen.name || specimen.taxon_nodes?.name || "Specimen"}
+                          </a>
+                        ) : (
+                          <span>Empty</span>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          ))}
+
+          <h2>Unplaced specimens</h2>
+          {unplaced.length === 0 ? (
+            <p className="muted">Everything in this tank is placed in the grid.</p>
+          ) : (
+            <div className="card">
+              {unplaced.map((s) => {
+                const href = taxonHref(s);
+                const label = s.name || s.taxon_nodes?.name || "Specimen";
+                return (
+                  <div className="unplaced-specimen-row" key={s.id}>
+                    <div>
+                      <a href={`/specimen/${s.id}`}>{label}</a>
+                      {s.name && href ? (
+                        <span className="muted">
+                          {" "}
+                          · <a href={href}>{s.taxon_nodes?.name}</a>
+                        </span>
+                      ) : null}
+                    </div>
+                    <PlaceSpecimenControl specimenId={s.id} emptySlots={emptySlots} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

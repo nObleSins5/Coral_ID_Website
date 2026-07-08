@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { addSpecimen } from "@/app/coral/actions";
+import { PhotoPicker, type PickablePhoto } from "@/components/photo-picker";
 
 type Tank = { id: string; name: string };
-type PickablePhoto = { id: string; url: string; uploader_user_id: string };
 
 export function AddSpecimenForm({
   taxonNodeId,
@@ -133,30 +133,12 @@ export function AddSpecimenForm({
           collection and attach a photo later.
         </p>
       ) : (
-        <div className="specimen-photo-picker">
-          <button
-            type="button"
-            className={`specimen-photo-none${selectedPhotoId === null ? " selected" : ""}`}
-            onClick={() => setManualPhotoId(null)}
-          >
-            None
-          </button>
-          {photos.map((p) => (
-            <button
-              type="button"
-              key={p.id}
-              className={`specimen-photo-option${selectedPhotoId === p.id ? " selected" : ""}`}
-              onClick={() => setManualPhotoId(p.id)}
-              title={p.uploader_user_id === userId ? "Your photo" : "Community photo"}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt="" />
-              {p.uploader_user_id === userId ? (
-                <span className="specimen-photo-tag">Yours</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
+        <PhotoPicker
+          photos={photos}
+          userId={userId}
+          selectedId={selectedPhotoId}
+          onSelect={setManualPhotoId}
+        />
       )}
 
       <div className="form-actions">

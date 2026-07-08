@@ -648,3 +648,48 @@ td {
   border-color: var(--accent);
 }
 
+/* --- Tank grid --- */
+
+.tank-grid-tier {
+  margin-bottom: 1.5rem;
+}
+.tank-grid {
+  display: grid;
+  gap: 0.4rem;
+}
+.tank-grid-cell {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem;
+  min-height: 3.5rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.2rem;
+}
+.tank-grid-cell.empty {
+  color: var(--muted);
+  background: var(--bg);
+}
+.tank-grid-cell.occupied {
+  background: var(--card-bg, var(--bg));
+  border-color: var(--accent);
+}
+.tank-grid-cell .slot-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+.tank-grid-cell a {
+  font-weight: 600;
+}
+.unplaced-specimen-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+

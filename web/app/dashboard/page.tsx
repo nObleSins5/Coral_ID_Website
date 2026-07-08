@@ -106,7 +106,7 @@ export default async function Dashboard() {
           return (
             <div className="card" key={tank.id}>
               <h2 style={{ marginTop: 0 }}>
-                {tank.name}{" "}
+                <a href={`/tank/${tank.id}`}>{tank.name}</a>{" "}
                 <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>
                   {tank.tank_type ? `· ${tank.tank_type}` : ""}
                   {tank.volume ? ` · ${tank.volume} gal` : ""}
@@ -203,6 +203,24 @@ export default async function Dashboard() {
           <div>
             <label htmlFor="height">Height (in)</label>
             <input id="height" name="height" type="number" step="0.1" inputMode="decimal" />
+          </div>
+        </div>
+
+        <p className="muted" style={{ marginBottom: "0.25rem" }}>
+          Grid layout (optional — you can set this up later from the tank page)
+        </p>
+        <div className="row">
+          <div>
+            <label htmlFor="grid_columns">Columns</label>
+            <input id="grid_columns" name="grid_columns" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label htmlFor="grid_rows">Rows</label>
+            <input id="grid_rows" name="grid_rows" type="number" min="1" step="1" />
+          </div>
+          <div>
+            <label htmlFor="tier_count">Tiers (height)</label>
+            <input id="tier_count" name="tier_count" type="number" min="1" step="1" defaultValue={1} />
           </div>
         </div>
         <button type="submit">Create tank</button>

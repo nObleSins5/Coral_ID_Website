@@ -238,6 +238,9 @@ CREATE TABLE tanks (
     height         numeric,
     dimension_unit text DEFAULT 'in',
     tier_count     integer NOT NULL DEFAULT 1,   -- 1 => single-tier frag tank; hide Z
+    -- Chosen grid layout, recorded once generated (NULL => not yet configured).
+    grid_columns   integer,
+    grid_rows      integer,
     created_at     timestamptz NOT NULL DEFAULT now(),
     updated_at     timestamptz NOT NULL DEFAULT now(),
     deleted_at     timestamptz
@@ -411,6 +414,12 @@ CREATE TABLE specimens (
 CREATE INDEX idx_specimens_user ON specimens (user_id);
 CREATE INDEX idx_specimens_tank ON specimens (tank_id);
 CREATE INDEX idx_specimens_taxon ON specimens (taxon_node_id);
+-- One specimen per slot; NULL (unplaced) is unrestricted. A move is a single
+-- UPDATE of grid_slot_id, so the old slot is vacated automatically — no
+-- occupancy-history table (see schema-decisions.md §4).
+CREATE UNIQUE INDEX uq_specimens_grid_slot
+    ON specimens (grid_slot_id)
+    WHERE grid_slot_id IS NOT NULL AND deleted_at IS NULL;
 
 -- Append-only; public by default. Each photo carries an IMMUTABLE denormalized
 -- copy of the tank's most recent parameter snapshot (plus a FK to it), so

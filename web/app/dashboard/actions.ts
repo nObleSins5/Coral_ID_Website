@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { buildGridSlots, MAX_GRID_SLOTS } from "@/lib/grid";
 
 // Create a tank (spec workflow 5.1). RLS ensures the row is owned by the caller.
+// Grid columns/rows/tiers are optional at this step — a tank with no layout
+// yet can be configured later from its /tank/[id] page (configureGrid).
 export async function createTank(formData: FormData) {
   const supabase = await createClient();
   const {
@@ -16,16 +19,34 @@ export async function createTank(formData: FormData) {
     return v === "" ? null : Number(v);
   };
 
-  await supabase.from("tanks").insert({
-    user_id: user.id,
-    name: String(formData.get("name") ?? "").trim(),
-    tank_type: String(formData.get("tank_type") ?? "").trim() || null,
-    volume: num("volume"),
-    length: num("length"),
-    width: num("width"),
-    height: num("height"),
-    established_on: String(formData.get("established_on") ?? "") || null,
-  });
+  const columns = num("grid_columns");
+  const rows = num("grid_rows");
+  const tiers = num("tier_count") ?? 1;
+
+  const { data: tank, error } = await supabase
+    .from("tanks")
+    .insert({
+      user_id: user.id,
+      name: String(formData.get("name") ?? "").trim(),
+      tank_type: String(formData.get("tank_type") ?? "").trim() || null,
+      volume: num("volume"),
+      length: num("length"),
+      width: num("width"),
+      height: num("height"),
+      established_on: String(formData.get("established_on") ?? "") || null,
+      tier_count: tiers,
+      grid_columns: columns && columns > 0 ? columns : null,
+      grid_rows: rows && rows > 0 ? rows : null,
+    })
+    .select("id")
+    .single();
+
+  if (!error && tank && columns && rows && columns > 0 && rows > 0) {
+    const slots = buildGridSlots(tank.id, columns, rows, tiers);
+    if (slots.length <= MAX_GRID_SLOTS) {
+      await supabase.from("grid_slots").insert(slots);
+    }
+  }
 
   revalidatePath("/dashboard");
 }
