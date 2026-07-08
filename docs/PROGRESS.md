@@ -30,6 +30,24 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
    - **Coral wiki** — `/wiki` → `/coral/[genus]` → `/coral/[genus]/[morph]`. Genus→Morph browse tree, care guidance, recommended parameters, full element color key (hex swatches per part). Static-generated for SEO.
    - **Photo logging** — upload a photo attached to a taxon (`app/coral/actions.ts` `uploadCoralPhoto`), optionally stamped with a tank's parameter reading that was actually current **as of the photo's `taken_at` date** (not just "latest" — an old photo gets the reading that was real back then, or `null` if none qualifies).
    - **Photo social layer** — each photo card shows the uploader's username and an expandable `<details>` drawer with the real parameter values; a single, clearly-labeled **"✓ Confirm match"** vote (deliberately not a generic like button — see `docs/future-considerations.md` for why); the taxon's hero image is the **most-voted photo**, computed live (no batch job), falling back to newest-photo-with-zero-votes, then to the gradient color placeholder when no photos exist.
+   - **Unidentified-ID flow** (`/identify`) — Door 1's actual primary entry point. Upload a photo with no taxon, propose an identification (match existing / match-plus-alias-proposal / brand-new-morph), vote, and an asymmetric trigger (`handle_id_vote_change`) resolves it: cheap immediate rejection (`net ≤ -3`) vs. a three-part confirm bar (24h age + 10-vote quorum measured per-suggestion + net ≥ 3) that writes the photo's taxon and can create a whole new `taxon_nodes` row. **User-tested live** with temporarily-lowered thresholds: confirmed the photo correctly disappeared from the unidentified queue, and that a new taxon row really was created — see the pending cleanup note below.
+
+## ⚠️ Pending cleanup: test taxon in production data
+
+While live-testing the unidentified-ID flow's "propose a new morph" path with temporarily-lowered thresholds, a **real `taxon_nodes` row was created from test data** (the trigger's confirm step genuinely inserts a new coral into the taxonomy — that's the feature working correctly, but it means a fake/test coral is now sitting in the live wiki). Not yet cleaned up — user was on mobile and asked to be reminded.
+
+To find it:
+```sql
+select s.id as suggestion_id, s.proposed_name, s.resolved_at,
+       cp.id as photo_id, cp.url as photo_url,
+       tn.id as taxon_id, tn.name as new_coral_name, tn.slug, tn.parent_id as genus_id
+from id_suggestions s
+join coral_photos cp on cp.id = s.coral_photo_id
+join taxon_nodes tn on tn.id = s.proposed_taxon_id
+where s.status_code = 'confirmed'
+order by s.resolved_at desc limit 5;
+```
+Cleanup must happen in FK-safe order (several tables reference this taxon with no cascade — the photo, the suggestion, possibly `id_votes` via cascade from the suggestion): delete the `id_suggestions` row first (cascades to its `id_votes`), then the `coral_photos` row (also remove the underlying object from the `coral-photos` storage bucket if you want to fully clean up), then finally the `taxon_nodes` row itself.
 
 ## Known, deferred polish (not urgent) — a UI pass backlog
 
@@ -38,20 +56,21 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
 
 All confirmed functional; explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status: original roadmap complete, plus specimen linkage
+## Status: original roadmap complete, plus specimen linkage and the unidentified-ID flow
 
-Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage ("+ Add to my collection") are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
+Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow are all live and user-confirmed. Pick any of the following to keep going — nothing is blocking:
 
-1. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
-2. **Next feature**, candidates already scoped/discussed:
-   - "Unidentified — help me ID this" + the `id_suggestions`/`id_votes` community confirmation queue — deferred from the photo-logging build.
+1. **Clean up the test taxon** — see the pending-cleanup note above.
+2. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
+3. **Next feature**, candidates already scoped/discussed:
    - Vendor/affiliate links (attach to photos, not taxa) — see `docs/future-considerations.md` for the dead-link problem to design around before building.
    - **Wishlist button** — `want_list` table + RLS already exist (unused since the original schema build); a simple "wishlist this coral" UI on the morph page is mostly schema-free, similar to how specimen linkage only needed one new column. See `docs/future-considerations.md` for the fuller vendor-matching idea this could grow into.
-3. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
+   - Alias-approval / moderation queue — `coral_aliases` proposals from the ID flow now accumulate with `status='proposed'` and nothing ever reviews them; the spec's sitemap always called for a separate admin/moderator queue for this.
+4. **Seed data accuracy pass** — the 37 corals' colors/care values are still provisional placeholders.
 
 ## Deliberately deferred (not bugs, not forgotten)
 
-- Unidentified-ID flow, vendor/affiliate links, wishlist UI — see above.
+- Vendor/affiliate links, wishlist UI, alias moderation — see above.
 - **Messaging, inquiries, local trade discovery** — schema-stubbed, Phase 4 per the spec.
 - **`scripts/draw_diagrams.py` / `normalize_reef.py`** — reframed (see README) into a future data-driven identification diagram + multi-lighting reference approach; not built.
 - Search page, business/retail flows — later phases per spec §4.
