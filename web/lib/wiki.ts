@@ -209,6 +209,41 @@ export async function getAccurateVoteCounts(
   return counts;
 }
 
+// Hero photo (most-voted, ties to newest) per taxon, batched across every
+// morph on a genus page in two queries total instead of two-per-morph. Same
+// selection rule as the morph detail page's own hero logic.
+export async function getHeroPhotoUrlsForTaxa(
+  taxonIds: string[],
+): Promise<Map<string, string>> {
+  const heroUrlByTaxon = new Map<string, string>();
+  if (taxonIds.length === 0) return heroUrlByTaxon;
+
+  const supabase = createPublicClient();
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, taxon_node_id, created_at")
+    .in("taxon_node_id", taxonIds)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+
+  const photoList = (photos ?? []).filter((p) => p.url && p.taxon_node_id);
+  if (photoList.length === 0) return heroUrlByTaxon;
+
+  const voteCounts = await getAccurateVoteCounts(photoList.map((p) => p.id));
+
+  const heroVotesByTaxon = new Map<string, number>();
+  for (const p of photoList) {
+    const taxonId = p.taxon_node_id as string;
+    const v = voteCounts.get(p.id) ?? 0;
+    const currentBest = heroVotesByTaxon.get(taxonId) ?? -1;
+    if (v > currentBest) {
+      heroVotesByTaxon.set(taxonId, v);
+      heroUrlByTaxon.set(taxonId, p.url as string);
+    }
+  }
+  return heroUrlByTaxon;
+}
+
 export type AffiliateLink = {
   id: string;
   vendor_name: string;
