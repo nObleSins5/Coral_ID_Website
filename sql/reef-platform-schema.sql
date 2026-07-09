@@ -147,6 +147,11 @@ CREATE TABLE users (
     auth_provider       text,
     external_auth_id    text,
     account_type_code   text NOT NULL REFERENCES account_types(code),
+    -- Grants access to /admin moderation queues (currently: coral_aliases).
+    -- No self-serve UI to flip this — set directly in the database. Separate
+    -- from account_type_code since a moderator can be either a hobbyist or a
+    -- business account.
+    is_moderator         boolean NOT NULL DEFAULT false,
     display_name        text,
     region              text,
     state               text,

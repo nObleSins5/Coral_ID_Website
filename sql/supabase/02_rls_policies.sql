@@ -160,6 +160,15 @@ CREATE POLICY husbandry_products_auth_insert ON public.husbandry_products
 CREATE POLICY coral_aliases_auth_insert ON public.coral_aliases
     FOR INSERT TO authenticated WITH CHECK (proposed_by_user_id = auth.uid());
 
+-- Moderator queue: full access to every coral_aliases row (proposed rows are
+-- otherwise invisible — coral_aliases_public_read only shows 'approved') so
+-- a moderator can review and flip moderation_status_code. Gated on
+-- users.is_moderator, not account_type_code — see sql/reef-platform-schema.sql.
+CREATE POLICY coral_aliases_moderator_all ON public.coral_aliases
+    FOR ALL TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+
 -- Affiliate links: owner-write, scoped via the underlying photo (only the
 -- photo's own uploader manages links on it — see 11_affiliate_links.sql) AND
 -- restricted to business-tier accounts (12_business_listings.sql, 2026-07 —
