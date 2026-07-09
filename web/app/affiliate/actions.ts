@@ -73,6 +73,7 @@ export async function addAffiliateLink(
   if (error) return { error: error.message };
 
   revalidateMorph(formData);
+  revalidatePath("/business");
   return {};
 }
 

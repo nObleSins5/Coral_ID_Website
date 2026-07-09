@@ -82,6 +82,16 @@ export async function proposeIdentification(
     return { error: "Choose which genus this new coral belongs to." };
   }
 
+  // A photo escalated here from a private, local-only specimen (see
+  // app/tank/actions.ts quickAddLocal) needs to become public — the
+  // community can't vote on something it can't see. No-op for photos that
+  // were already public (the normal /identify path).
+  await supabase
+    .from("coral_photos")
+    .update({ is_public: true })
+    .eq("id", photoId)
+    .eq("uploader_user_id", user.id);
+
   const { error: insertError } = await supabase.from("id_suggestions").insert({
     coral_photo_id: photoId,
     proposed_taxon_id: existingTaxonId,

@@ -640,6 +640,15 @@ BEGIN
         END IF;
 
         UPDATE coral_photos SET taxon_node_id = v_final_taxon WHERE id = v_photo_id;
+
+        -- Route the confirmed ID back to any specimen this photo is attached
+        -- to (a private/nicknamed specimen whose photo just got identified),
+        -- so it stops being stranded. Nickname (specimens.name) is left
+        -- alone — the user keeps it alongside the now-real coral link.
+        UPDATE specimens SET taxon_node_id = v_final_taxon
+            WHERE id = (SELECT specimen_id FROM coral_photos WHERE id = v_photo_id)
+              AND taxon_node_id IS NULL;
+
         UPDATE id_suggestions
             SET status_code = 'confirmed', resolved_at = now(), proposed_taxon_id = v_final_taxon
             WHERE id = v_suggestion_id;

@@ -1,9 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPhotosForTaxon } from "@/lib/wiki";
+import { getAllMorphsForSearch, getGenera, getPhotosForTaxon } from "@/lib/wiki";
 import { EditSpecimenForm } from "@/components/edit-specimen-form";
 import { PlaceSpecimenControl } from "@/components/place-specimen-control";
 import { RemoveFromTankButton } from "@/components/remove-from-tank-button";
+import { SpecimenProposeControl } from "@/components/specimen-propose-control";
 
 type SpecimenRow = {
   id: string;
@@ -54,9 +55,17 @@ export default async function SpecimenPage({
     genusSlug && row.taxon_nodes ? `/coral/${genusSlug}/${row.taxon_nodes.slug}` : null;
 
   const photos = row.taxon_node_id ? await getPhotosForTaxon(row.taxon_node_id) : [];
-  const representativePhoto = row.representative_photo_id
-    ? photos.find((p) => p.id === row.representative_photo_id)
-    : null;
+  // Looked up directly by id (not via getPhotosForTaxon, which is empty for a
+  // taxon-less specimen) so a private/local representative photo still shows.
+  const { data: representativePhoto } = row.representative_photo_id
+    ? await supabase
+        .from("coral_photos")
+        .select("id, url")
+        .eq("id", row.representative_photo_id)
+        .maybeSingle()
+    : { data: null };
+
+  const [morphs, genera] = await Promise.all([getAllMorphsForSearch(), getGenera()]);
 
   let currentSlotLabel: string | null = null;
   let emptySlots: { id: string; label: string }[] = [];
@@ -105,12 +114,26 @@ export default async function SpecimenPage({
       ) : null}
 
       {representativePhoto ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={representativePhoto.url}
-          alt={`${label} — representative photo`}
-          style={{ width: "100%", maxHeight: "320px", objectFit: "cover", borderRadius: "10px" }}
-        />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={representativePhoto.url}
+            alt={`${label} — representative photo`}
+            style={{ width: "100%", maxHeight: "320px", objectFit: "cover", borderRadius: "10px" }}
+          />
+          {!row.taxon_node_id ? (
+            <p style={{ marginTop: "0.6rem" }}>
+              <span className="muted" style={{ fontSize: "0.85rem" }}>
+                Just a local label right now — not on the wiki.{" "}
+              </span>
+              <SpecimenProposeControl
+                photoId={row.representative_photo_id as string}
+                morphs={morphs}
+                genera={genera}
+              />
+            </p>
+          ) : null}
+        </>
       ) : (
         <p className="muted">
           No representative photo chosen yet — pick one below.

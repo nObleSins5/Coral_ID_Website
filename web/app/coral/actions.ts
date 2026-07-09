@@ -7,8 +7,12 @@ import { computeParameterSnapshot, uploadPhotoFile } from "@/lib/photo-upload";
 // Uploads a standalone photo attached to a taxon (Door 1). The
 // "unidentified — help me ID this" path lives separately in
 // app/identify/actions.ts (uploadUnidentifiedPhoto) — this always attaches to
-// an already-identified coral. (Specimen linkage is handled separately by
-// addSpecimen below, via representative_photo_id.)
+// an already-identified coral. Choosing a tank stamps the parameter snapshot
+// AND auto-adds this coral to that tank's collection (a new specimen, this
+// photo as its representative) — logging a photo of your own tank's coral
+// means you have it, no separate "add to my collection" click required.
+// (addSpecimen below still exists for adding an ALREADY-existing community
+// photo to your collection without uploading a new one of your own.)
 export async function uploadCoralPhoto(
   formData: FormData,
 ): Promise<{ error?: string }> {
@@ -31,26 +35,41 @@ export async function uploadCoralPhoto(
 
   const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
 
-  const { error: insertError } = await supabase.from("coral_photos").insert({
-    uploader_user_id: user.id,
-    taxon_node_id: taxonNodeId,
-    tank_id: tankId,
-    is_public: true,
-    taken_at: takenAtRaw
-      ? new Date(takenAtRaw).toISOString()
-      : new Date().toISOString(),
-    storage_provider: "supabase",
-    storage_key: uploaded.path,
-    url: uploaded.publicUrl,
-    mime: uploaded.mime,
-    bytes: uploaded.bytes,
-    ...snapshot,
-  });
+  const { data: photo, error: insertError } = await supabase
+    .from("coral_photos")
+    .insert({
+      uploader_user_id: user.id,
+      taxon_node_id: taxonNodeId,
+      tank_id: tankId,
+      is_public: true,
+      taken_at: takenAtRaw
+        ? new Date(takenAtRaw).toISOString()
+        : new Date().toISOString(),
+      storage_provider: "supabase",
+      storage_key: uploaded.path,
+      url: uploaded.publicUrl,
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+      ...snapshot,
+    })
+    .select("id")
+    .single();
 
-  if (insertError) {
+  if (insertError || !photo) {
     // Best-effort cleanup so a failed insert doesn't leave an orphaned object.
     await supabase.storage.from("coral-photos").remove([uploaded.path]);
-    return { error: `Could not save photo: ${insertError.message}` };
+    return { error: `Could not save photo: ${insertError?.message ?? "unknown error"}` };
+  }
+
+  if (tankId) {
+    await supabase.from("specimens").insert({
+      user_id: user.id,
+      tank_id: tankId,
+      taxon_node_id: taxonNodeId,
+      representative_photo_id: photo.id,
+    });
+    revalidatePath(`/tank/${tankId}`);
+    revalidatePath("/dashboard");
   }
 
   if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);

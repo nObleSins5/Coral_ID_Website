@@ -1,25 +1,20 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { BusinessListingRow, type BusinessListing } from "@/components/business-listing-row";
+import { BusinessPhotoRow, type BusinessLink, type BusinessPhoto } from "@/components/business-photo-row";
 
-type Row = {
+type PhotoRow = {
   id: string;
-  vendor_name: string;
   url: string;
-  link_type: string;
-  is_active: boolean;
-  for_sale_or_trade: boolean;
-  price: number | null;
-  hidden_by_owner: boolean;
-  coral_photos: {
-    url: string;
-    taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
-  } | null;
+  taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
 };
 
-// A business account's managed view of every affiliate link it has
-// submitted — for-sale/price/hide controls in one place, rather than having
-// to visit each morph page's photo individually. Business-tier only (see
+type LinkRow = BusinessLink & { coral_photo_id: string };
+
+// A business account's managed view of every photo it's posted of a
+// confirmed community morph — one row per photo (not per affiliate link, so
+// a photo posted but not yet listed for sale still shows up), with inline
+// for-sale/price/hide controls on any existing listing, or an "add a
+// listing" form when there isn't one yet. Business-tier only (see
 // sql/supabase/12_business_listings.sql); hobbyist-to-hobbyist trade
 // flagging is a separate, not-yet-built feature.
 export default async function BusinessDashboard() {
@@ -48,18 +43,18 @@ export default async function BusinessDashboard() {
     );
   }
 
-  const { data: listings } = await supabase
-    .from("affiliate_links")
-    .select(
-      "id, vendor_name, url, link_type, is_active, for_sale_or_trade, price, hidden_by_owner, coral_photos!inner(url, uploader_user_id, taxon_nodes(name, slug, parent_id))",
-    )
-    .eq("coral_photos.uploader_user_id", user.id)
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, taxon_nodes ( name, slug, parent_id )")
+    .eq("uploader_user_id", user.id)
+    .not("taxon_node_id", "is", null)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
-  const rows = (listings ?? []) as unknown as Row[];
+  const photoRows = (photos ?? []) as unknown as PhotoRow[];
 
   const genusIds = [
     ...new Set(
-      rows.map((r) => r.coral_photos?.taxon_nodes?.parent_id).filter((x): x is string => !!x),
+      photoRows.map((p) => p.taxon_nodes?.parent_id).filter((x): x is string => !!x),
     ),
   ];
   const { data: genera } =
@@ -68,21 +63,35 @@ export default async function BusinessDashboard() {
       : { data: [] as { id: string; slug: string }[] };
   const genusSlugById = new Map((genera ?? []).map((g) => [g.id, g.slug]));
 
-  const business: BusinessListing[] = rows.map((r) => {
-    const taxon = r.coral_photos?.taxon_nodes ?? null;
-    const genusSlug = taxon?.parent_id ? genusSlugById.get(taxon.parent_id) : null;
+  const photoIds = photoRows.map((p) => p.id);
+  const { data: links } =
+    photoIds.length > 0
+      ? await supabase
+          .from("affiliate_links")
+          .select(
+            "id, vendor_name, url, link_type, is_active, for_sale_or_trade, price, hidden_by_owner, coral_photo_id",
+          )
+          .in("coral_photo_id", photoIds)
+          .order("created_at", { ascending: false })
+      : { data: [] as LinkRow[] };
+  const linksByPhoto = new Map<string, LinkRow[]>();
+  for (const l of (links ?? []) as LinkRow[]) {
+    const list = linksByPhoto.get(l.coral_photo_id) ?? [];
+    list.push(l);
+    linksByPhoto.set(l.coral_photo_id, list);
+  }
+
+  const businessPhotos: BusinessPhoto[] = photoRows.map((p) => {
+    const taxon = p.taxon_nodes;
+    const genusSlug = taxon?.parent_id ? genusSlugById.get(taxon.parent_id) ?? null : null;
     return {
-      id: r.id,
-      vendor_name: r.vendor_name,
-      url: r.url,
-      link_type: r.link_type,
-      is_active: r.is_active,
-      for_sale_or_trade: r.for_sale_or_trade,
-      price: r.price,
-      hidden_by_owner: r.hidden_by_owner,
-      photoUrl: r.coral_photos?.url ?? "",
+      photoId: p.id,
+      photoUrl: p.url,
       morphName: taxon?.name ?? "Unknown morph",
       morphHref: genusSlug && taxon ? `/coral/${genusSlug}/${taxon.slug}` : null,
+      genusSlug,
+      morphSlug: taxon?.slug ?? null,
+      links: linksByPhoto.get(p.id) ?? [],
     };
   });
 
@@ -90,17 +99,33 @@ export default async function BusinessDashboard() {
     <div>
       <h1>Business dashboard</h1>
       <p className="muted" style={{ marginTop: 0 }}>
-        Every affiliate link you&apos;ve submitted, in one place. Add new
-        links from a photo&apos;s card on that morph&apos;s wiki page.
+        Every photo you&apos;ve posted of a confirmed coral, in one place —
+        list it for sale/trade, set a price, or hide it, without hunting
+        through the wiki.
       </p>
 
-      {business.length === 0 ? (
+      {businessPhotos.length === 0 ? (
         <p className="muted">
-          No submissions yet — add a link from any of your photos&apos; cards
-          on the coral wiki.
+          No photos yet — post one from any coral&apos;s wiki page to get
+          started.
         </p>
       ) : (
-        business.map((listing) => <BusinessListingRow key={listing.id} listing={listing} />)
+        <div style={{ overflowX: "auto" }}>
+          <table className="business-photo-table">
+            <thead>
+              <tr>
+                <th>Coral</th>
+                <th>Photo</th>
+                <th>Listing</th>
+              </tr>
+            </thead>
+            <tbody>
+              {businessPhotos.map((photo) => (
+                <BusinessPhotoRow key={photo.photoId} photo={photo} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

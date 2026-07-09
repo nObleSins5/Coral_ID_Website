@@ -3,6 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { buildGridSlots, MAX_GRID_SLOTS } from "@/lib/grid";
+import { computeParameterSnapshot, uploadPhotoFile } from "@/lib/photo-upload";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getOwnedTank(supabase: any, tankId: string, userId: string) {
+  const { data } = await supabase
+    .from("tanks")
+    .select("id")
+    .eq("id", tankId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data;
+}
 
 // Generates a tank's grid once (columns x rows x tiers). Only for tanks that
 // don't have one yet — reconfiguring in place would orphan any specimens
@@ -28,12 +40,7 @@ export async function configureGrid(
     return { error: `That's ${columns * rows * tiers} slots — max is ${MAX_GRID_SLOTS}.` };
   }
 
-  const { data: tank } = await supabase
-    .from("tanks")
-    .select("id, user_id")
-    .eq("id", tankId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const tank = await getOwnedTank(supabase, tankId, user.id);
   if (!tank) return { error: "Tank not found." };
 
   const { count } = await supabase
@@ -68,12 +75,7 @@ export async function resetGrid(formData: FormData): Promise<{ error?: string }>
   if (!user) return { error: "You must be logged in." };
 
   const tankId = String(formData.get("tank_id") ?? "");
-  const { data: tank } = await supabase
-    .from("tanks")
-    .select("id")
-    .eq("id", tankId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const tank = await getOwnedTank(supabase, tankId, user.id);
   if (!tank) return { error: "Tank not found." };
 
   const { error: unplaceError } = await supabase
@@ -95,5 +97,252 @@ export async function resetGrid(formData: FormData): Promise<{ error?: string }>
   if (clearError) return { error: clearError.message };
 
   revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
+// --- Quick-add (tank grid page: search the wiki, add, place — no navigating
+// away). Three branches sharing the same shape (create a specimen, optionally
+// a photo, optionally straight into a grid slot) but differing in what the
+// specimen/photo mean:
+//   quickAddExisting     -> a real wiki coral, found via search.
+//   quickAddLocal        -> "just label this slot" — private, no community.
+//   quickAddUnidentified -> "propose as new" — public, kicks off /identify.
+// -----------------------------------------------------------------------
+
+// A coral that's already in the wiki. Optionally attaches a fresh photo of
+// your own (public, votable, appears on that morph's page — same as
+// uploading from the morph page itself) and/or places straight into a slot.
+export async function quickAddExisting(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const taxonNodeId = String(formData.get("taxon_node_id") ?? "");
+  const gridSlotId = String(formData.get("grid_slot_id") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim() || null;
+  const takenAtRaw = String(formData.get("taken_at") ?? "");
+  if (!taxonNodeId) return { error: "Choose a coral." };
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const { data: specimen, error: specimenError } = await supabase
+    .from("specimens")
+    .insert({
+      user_id: user.id,
+      tank_id: tankId,
+      grid_slot_id: gridSlotId,
+      taxon_node_id: taxonNodeId,
+      name,
+    })
+    .select("id")
+    .single();
+  if (specimenError || !specimen) {
+    return { error: specimenError?.message ?? "Could not create specimen." };
+  }
+
+  const photoFile = formData.get("photo");
+  if (photoFile instanceof File && photoFile.size > 0) {
+    const uploaded = await uploadPhotoFile(supabase, user.id, photoFile);
+    if ("error" in uploaded) return uploaded;
+    const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
+    const { data: photo, error: photoError } = await supabase
+      .from("coral_photos")
+      .insert({
+        uploader_user_id: user.id,
+        taxon_node_id: taxonNodeId,
+        specimen_id: specimen.id,
+        tank_id: tankId,
+        is_public: true,
+        taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+        storage_provider: "supabase",
+        storage_key: uploaded.path,
+        url: uploaded.publicUrl,
+        mime: uploaded.mime,
+        bytes: uploaded.bytes,
+        ...snapshot,
+      })
+      .select("id")
+      .single();
+    if (photoError || !photo) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      return { error: `Could not save photo: ${photoError?.message ?? "unknown error"}` };
+    }
+    await supabase
+      .from("specimens")
+      .update({ representative_photo_id: photo.id })
+      .eq("id", specimen.id);
+  }
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
+// "Just label this slot" — a private, local-only specimen: no taxon match,
+// no community involvement. A photo here is visible only to its owner (RLS
+// coral_photos_owner_write covers this regardless of is_public) and never
+// shown on any wiki page. See ProposeIdentificationForm on /specimen/[id] for
+// the separate, higher-friction escalation into the community pipeline,
+// which reuses this same photo rather than requiring a re-upload.
+export async function quickAddLocal(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const gridSlotId = String(formData.get("grid_slot_id") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim();
+  const takenAtRaw = String(formData.get("taken_at") ?? "");
+  if (!name) return { error: "Give it a label." };
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const { data: specimen, error: specimenError } = await supabase
+    .from("specimens")
+    .insert({
+      user_id: user.id,
+      tank_id: tankId,
+      grid_slot_id: gridSlotId,
+      taxon_node_id: null,
+      name,
+    })
+    .select("id")
+    .single();
+  if (specimenError || !specimen) {
+    return { error: specimenError?.message ?? "Could not create specimen." };
+  }
+
+  const photoFile = formData.get("photo");
+  if (photoFile instanceof File && photoFile.size > 0) {
+    const uploaded = await uploadPhotoFile(supabase, user.id, photoFile);
+    if ("error" in uploaded) return uploaded;
+    const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
+    const { data: photo, error: photoError } = await supabase
+      .from("coral_photos")
+      .insert({
+        uploader_user_id: user.id,
+        taxon_node_id: null,
+        specimen_id: specimen.id,
+        tank_id: tankId,
+        is_public: false,
+        taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+        storage_provider: "supabase",
+        storage_key: uploaded.path,
+        url: uploaded.publicUrl,
+        mime: uploaded.mime,
+        bytes: uploaded.bytes,
+        ...snapshot,
+      })
+      .select("id")
+      .single();
+    if (photoError || !photo) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      return { error: `Could not save photo: ${photoError?.message ?? "unknown error"}` };
+    }
+    await supabase
+      .from("specimens")
+      .update({ representative_photo_id: photo.id })
+      .eq("id", specimen.id);
+  }
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
+// "Propose as a new coral for the wiki" — kicks off the community
+// identification pipeline immediately (same shape as
+// app/identify/actions.ts's uploadUnidentifiedPhoto + proposeIdentification,
+// combined here since this starts fresh from the grid page). Requires a
+// photo and a genus — the community pipeline is inherently photo-driven,
+// there's nothing to vote on otherwise.
+export async function quickAddUnidentified(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const gridSlotId = String(formData.get("grid_slot_id") ?? "") || null;
+  const name = String(formData.get("name") ?? "").trim();
+  const genusId = String(formData.get("genus_id") ?? "") || null;
+  const takenAtRaw = String(formData.get("taken_at") ?? "");
+  if (!name) return { error: "Name this coral." };
+  if (!genusId) return { error: "Choose which genus this belongs to." };
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
+  if ("error" in uploaded) return uploaded;
+
+  const { data: specimen, error: specimenError } = await supabase
+    .from("specimens")
+    .insert({
+      user_id: user.id,
+      tank_id: tankId,
+      grid_slot_id: gridSlotId,
+      taxon_node_id: null,
+      name,
+    })
+    .select("id")
+    .single();
+  if (specimenError || !specimen) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    return { error: specimenError?.message ?? "Could not create specimen." };
+  }
+
+  const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
+  const { data: photo, error: photoError } = await supabase
+    .from("coral_photos")
+    .insert({
+      uploader_user_id: user.id,
+      taxon_node_id: null,
+      specimen_id: specimen.id,
+      tank_id: tankId,
+      is_public: true,
+      taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+      storage_provider: "supabase",
+      storage_key: uploaded.path,
+      url: uploaded.publicUrl,
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+      ...snapshot,
+    })
+    .select("id")
+    .single();
+  if (photoError || !photo) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    return { error: `Could not save photo: ${photoError?.message ?? "unknown error"}` };
+  }
+
+  await supabase
+    .from("specimens")
+    .update({ representative_photo_id: photo.id })
+    .eq("id", specimen.id);
+
+  const { error: suggestionError } = await supabase.from("id_suggestions").insert({
+    coral_photo_id: photo.id,
+    proposed_taxon_id: null,
+    proposed_name: name,
+    proposed_genus_id: genusId,
+    suggested_by_user_id: user.id,
+  });
+  if (suggestionError) return { error: suggestionError.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  revalidatePath("/identify");
   return {};
 }

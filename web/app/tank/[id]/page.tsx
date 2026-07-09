@@ -2,9 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ConfigureGridForm } from "@/components/configure-grid-form";
 import { PlaceSpecimenControl } from "@/components/place-specimen-control";
+import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridView } from "@/components/tank-grid-view";
 import { columnLabel } from "@/lib/grid";
+import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 
 type Tank = {
   id: string;
@@ -85,6 +87,8 @@ export default async function TankPage({
       ? await supabase.from("coral_photos").select("id, url").in("id", photoIds)
       : { data: [] as { id: string; url: string }[] };
   const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
+
+  const [allMorphs, allGenera] = await Promise.all([getAllMorphsForSearch(), getGenera()]);
 
   const specimenBySlot = new Map(
     specimenList.filter((s) => s.grid_slot_id).map((s) => [s.grid_slot_id as string, s]),
@@ -169,6 +173,14 @@ export default async function TankPage({
           </p>
 
           <h2>Unplaced specimens</h2>
+          <div style={{ marginBottom: "1rem" }}>
+            <QuickAddSpecimen
+              tankId={tankRow.id}
+              emptySlots={emptySlots}
+              morphs={allMorphs}
+              genera={allGenera}
+            />
+          </div>
           {unplaced.length === 0 ? (
             <p className="muted">Everything in this tank is placed in the grid.</p>
           ) : (
