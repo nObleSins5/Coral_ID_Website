@@ -100,7 +100,9 @@ Big feature round, all shipped and typecheck/build-verified; live-smoke-tested (
 
 ## ✅ Applied (2026-07-09): alias moderation queue (`/admin/aliases`)
 
-Picked this up as the top "Next feature" candidate from the Status section below (moderation queue was explicitly called out as scoped-and-ready, unlike the vendor-matching idea which still needs design decisions). The Supabase MCP connector *was* reachable this session (confirmed via `list_projects`), but applying a migration plus flipping `is_moderator` on a real account is a production-DB change, so it was intentionally left for explicit user confirmation rather than applied unilaterally — see below.
+Picked this up as the top "Next feature" candidate from the Status section below (moderation queue was explicitly called out as scoped-and-ready, unlike the vendor-matching idea which still needs design decisions).
+
+**Applied to the live project** (`jbfjzkhjbsrnwnmrydba`) via the Supabase MCP connector, with explicit user confirmation first (a production schema/RLS change): `sql/supabase/14_alias_moderation.sql` ran clean, and `is_moderator = true` was set on the user's own account (`clay.ks88@gmail.com`, username `TestUser1`) so they can use the queue.
 
 - **`sql/supabase/14_alias_moderation.sql`** (mirrored into `reef-platform-schema.sql`'s `users` table and `02_rls_policies.sql` for from-scratch installs) — adds `users.is_moderator boolean DEFAULT false` and an RLS policy (`coral_aliases_moderator_all`) granting full access to `coral_aliases` for moderators, since public read only shows `moderation_status_code = 'approved'` and proposed rows were otherwise invisible to everyone (not even the proposer could see their own pending status, and nothing could ever flip it — RLS had no UPDATE policy on that table at all until now).
   - **Deliberately a boolean flag, not a new role/entity table** — mirrors the precedent set by the business-tier gate (`account_type_code`), and is intentionally independent of it: a moderator can be either a hobbyist or a business account. No self-serve UI to grant it; it's set directly in the database. Only one moderation surface exists so far, so a heavier roles system would be premature.
@@ -109,7 +111,7 @@ Picked this up as the top "Next feature" candidate from the Status section below
 - **`components/alias-moderation-row.tsx`** — one table row per pending alias with Approve/Reject buttons; resolves in place (no page reload) once acted on.
 - **Not done**: no admin nav link was added (mirrors `/business`, which also isn't in the header nav — both are unlisted, direct-URL-only surfaces for now). Rejected aliases aren't deleted, just marked `rejected` and no longer shown in the queue or anywhere public — there's no "re-propose" flow if that's ever needed.
 
-**Next session must**: apply `sql/supabase/14_alias_moderation.sql` to the live project (`jbfjzkhjbsrnwnmrydba`) via the Supabase MCP connector, flip `is_moderator = true` for at least one real account (e.g. via `execute_sql`, matching how test data has been managed all along), then smoke-test the actual queue — propose an alias through `/identify`'s alias-claim path, confirm it shows up at `/admin/aliases`, approve it, and confirm it becomes visible/searchable on the morph page.
+**Not yet done — needs a browser session with real network access to the live app** (this sandbox's proxy blocks direct calls to `supabase.co`, so the dev server here can't reach the live DB even with the anon key): visit `/admin/aliases` as the now-moderator account and confirm the empty-state renders (no pending aliases exist yet), then propose an alias through `/identify`'s alias-claim path, confirm it appears in the queue, approve it, and confirm it becomes visible/searchable on the morph page.
 
 ## Known, deferred polish (not urgent) — a UI pass backlog
 
@@ -126,7 +128,7 @@ Schema → seed data → vertical slice → coral wiki → photo logging & votin
 2. **Clean up the test taxon** — see the pending-cleanup note above.
 3. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
 4. **Next feature**, candidates already scoped/discussed:
-   - ~~Alias-approval / moderation queue~~ — **built 2026-07-09**, see the "✅ Applied" section above (`/admin/aliases`); code-complete, not yet applied to the live DB or smoke-tested.
+   - ~~Alias-approval / moderation queue~~ — **built and applied live 2026-07-09**, see the "✅ Applied" section above (`/admin/aliases`); not yet smoke-tested in a real browser session.
    - Vendor-availability matching against wishlists — the bigger idea `want_list` was originally scoped for (spec §5.4 Door 2); see `docs/future-considerations.md` — needs real design decisions (notification model, what each side sees) before scheduling.
    - Automated affiliate-link health checks / WYSIWYG TTL-expiration — future-considerations.md ideas 4-5, not built; the vendor-uploaded-photo flow and report-flagging (ideas 6a, 3) are.
 5. **Further seed data accuracy** — the 37 corals' hex colors are still provisional placeholders (recommended parameters are no longer part of this gap, see item 3 above under "What's built").
