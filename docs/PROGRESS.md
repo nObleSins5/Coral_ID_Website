@@ -51,31 +51,18 @@ Read `README.md` and `docs/reef-platform-spec.md` first for product context; `do
    - **Verified, not just eyeballed**: ran the actual dev server and screenshotted `/`, `/login`, `/wiki` with Playwright (chromium, pre-installed) — confirmed light theme + Roboto render correctly and degrade gracefully with no data (this sandbox can't reach the live DB, so wiki/coral pages showed empty states, not real content). Separately built a static preview page against the real `globals.css` to verify the harder-to-reach pieces that need live data to render for real (care-difficulty scale, vote/wishlist active states, tank-grid cells, affiliate-link card) — all confirmed legible. Screenshots sent to the user for review.
    - **Not done in this pass**: the hex colors weren't applied to header/nav branding or the coral element-color-key swatches (those are legitimately coral-colored data, not brand chrome — left untouched on purpose). No dark-mode variant was built (user chose light-only). The pre-existing deferred-polish backlog below is **partially addressed** (see that section).
 
-## ⚠️ Pending: apply three things to the live DB (2 migrations + 1 seed update)
+## ✅ Applied (2026-07-08, later session): the three pending items + test-taxon cleanup
 
-None of these have been applied yet — the Supabase MCP connector wasn't available this session (`enabledInChat: false` for this chat specifically, per `ListConnectors` — it's authenticated at the org level, just toggled off here; see Live infrastructure above). Enable it in this chat's connector settings, then either retry `ToolSearch` for `mcp__Supabase__*` tools, or paste the files below into the Supabase SQL Editor from the user's own machine (reliable fallback — no proxy restriction there). All are independent of each other and can be applied in any order:
-1. `sql/supabase/10_tank_grid.sql` — until applied, `/tank/[id]` and `/specimen/[id]` will error on `grid_columns`/`grid_rows`/`uq_specimens_grid_slot` not existing.
-2. `sql/supabase/11_affiliate_links.sql` — until applied, adding/reporting an affiliate link, and the `/go/[id]` click-log redirect, will error on `link_type`/`affiliate_link_reports`/the new RLS policies not existing.
-3. `sql/seed/phase0_corals.sql` (just the new tail section, or the whole file — it's safe to re-run entirely) — populates the recommended-parameters columns that are currently NULL for all 37 live corals. Lowest risk of the three: pure data `UPDATE`s on existing columns, no schema/RLS change. **Already verified this session** by running the full schema + this seed file against a scratch local Postgres — all 37 morphs end up with non-null ranges, re-running is idempotent.
+The Supabase MCP connector was available this session, so all three previously-pending items were applied directly to the live project (`jbfjzkhjbsrnwnmrydba`) and spot-checked with a follow-up query:
+1. `sql/supabase/10_tank_grid.sql` — applied. `tanks.grid_columns`/`grid_rows` and `uq_specimens_grid_slot` confirmed present.
+2. `sql/supabase/11_affiliate_links.sql` — applied. `affiliate_links.link_type` and `affiliate_link_reports` confirmed present.
+3. `sql/seed/phase0_corals.sql` recommended-parameters tail — applied. `taxon_nodes` rows with non-null `rec_alkalinity_dkh_min` confirmed present (38, including `rainbow-acan` and the now-deleted test taxon before cleanup).
 
-#1 and #2 are idempotent (`ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS` / `DROP POLICY IF EXISTS` before `CREATE POLICY`); #3 is a plain `UPDATE`, inherently idempotent. All safe to run more than once.
+**Not yet smoke-tested live in the browser** — the app should now be exercised for real: create a tank with a grid, place/move/remove a specimen; attach an affiliate link and test `/go/[id]` + dead-link reporting; reload a morph page and confirm the parameter table is no longer all dashes.
 
-## ⚠️ Pending cleanup: test taxon in production data
+Also resolved the test-taxon cleanup noted below: found and deleted the "Red dragon" test taxon (`slug: red-dragon`, suggestion `7252f298-eaa4-43f2-8b76-a657615f3d23`, confirmed 2026-07-08 14:50 UTC) in FK-safe order — `id_suggestions` row, then `coral_photos` row, then `taxon_nodes` row. All three confirmed gone via follow-up query.
 
-While live-testing the unidentified-ID flow's "propose a new morph" path with temporarily-lowered thresholds, a **real `taxon_nodes` row was created from test data** (the trigger's confirm step genuinely inserts a new coral into the taxonomy — that's the feature working correctly, but it means a fake/test coral is now sitting in the live wiki). Not yet cleaned up — user was on mobile and asked to be reminded.
-
-To find it:
-```sql
-select s.id as suggestion_id, s.proposed_name, s.resolved_at,
-       cp.id as photo_id, cp.url as photo_url,
-       tn.id as taxon_id, tn.name as new_coral_name, tn.slug, tn.parent_id as genus_id
-from id_suggestions s
-join coral_photos cp on cp.id = s.coral_photo_id
-join taxon_nodes tn on tn.id = s.proposed_taxon_id
-where s.status_code = 'confirmed'
-order by s.resolved_at desc limit 5;
-```
-Cleanup must happen in FK-safe order (several tables reference this taxon with no cascade — the photo, the suggestion, possibly `id_votes` via cascade from the suggestion): delete the `id_suggestions` row first (cascades to its `id_votes`), then the `coral_photos` row (also remove the underlying object from the `coral-photos` storage bucket if you want to fully clean up), then finally the `taxon_nodes` row itself.
+**One manual step still outstanding**: the underlying storage object for that test photo was never deleted (no Storage-delete tool available in this session) — remove `2bc805b9-ea6c-4135-b8d1-19815942d6ee/ad3fab4d-15b7-4a9b-bff0-328a4ebe6e04.webp` from the `coral-photos` bucket via the Supabase dashboard (Storage → coral-photos) or CLI to fully finish the cleanup. It's an orphaned file, not referenced by any row, so there's no rush — just disk usage.
 
 ## Known, deferred polish (not urgent) — a UI pass backlog
 
