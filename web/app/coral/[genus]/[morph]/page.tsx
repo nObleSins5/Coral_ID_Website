@@ -239,6 +239,13 @@ export default async function MorphPage({
               <p className="muted" style={{ marginTop: 0, fontSize: "0.8rem" }}>
                 {LINK_TYPE_LABEL[link.link_type] ?? link.link_type}
               </p>
+              <p style={{ marginTop: 0, fontSize: "0.85rem" }}>
+                {link.for_sale_or_trade
+                  ? link.price != null
+                    ? `$${link.price.toFixed(2)}`
+                    : "For sale/trade"
+                  : "Not currently for sale"}
+              </p>
               <div className="affiliate-link-actions">
                 <a href={`/go/${link.id}`} target="_blank" rel="noopener nofollow sponsored">
                   Visit vendor →

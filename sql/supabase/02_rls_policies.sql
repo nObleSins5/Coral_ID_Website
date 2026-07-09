@@ -68,7 +68,7 @@ CREATE POLICY husbandry_products_public_read ON public.husbandry_products
 
 CREATE POLICY affiliate_links_public_read ON public.affiliate_links
     FOR SELECT TO anon, authenticated
-    USING (is_active AND deleted_at IS NULL);
+    USING (is_active AND deleted_at IS NULL AND NOT hidden_by_owner);
 
 -- External profiles are meant to be shown ("Find me on: ..."); public read.
 CREATE POLICY user_external_profiles_public_read ON public.user_external_profiles
@@ -161,14 +161,23 @@ CREATE POLICY coral_aliases_auth_insert ON public.coral_aliases
     FOR INSERT TO authenticated WITH CHECK (proposed_by_user_id = auth.uid());
 
 -- Affiliate links: owner-write, scoped via the underlying photo (only the
--- photo's own uploader manages links on it — see 11_affiliate_links.sql).
--- Public read of active links is granted above (affiliate_links_public_read);
--- this is a second, independent policy so the owner can also see/manage
--- their own inactive (deactivated / reported-off) links.
+-- photo's own uploader manages links on it — see 11_affiliate_links.sql) AND
+-- restricted to business-tier accounts (12_business_listings.sql, 2026-07 —
+-- affiliate links became a business-only feature; hobbyist-to-hobbyist trade
+-- flagging is a separate, not-yet-built feature). Public read of active,
+-- non-hidden links is granted above (affiliate_links_public_read); this is a
+-- second, independent policy so the owner can also see/manage their own
+-- inactive (deactivated / reported-off) or hidden links.
 CREATE POLICY affiliate_links_owner_write ON public.affiliate_links
     FOR ALL TO authenticated
-    USING (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()))
-    WITH CHECK (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()));
+    USING (
+        coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid())
+        AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND account_type_code = 'business')
+    )
+    WITH CHECK (
+        coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid())
+        AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND account_type_code = 'business')
+    );
 
 CREATE POLICY affiliate_link_reports_insert ON public.affiliate_link_reports
     FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());

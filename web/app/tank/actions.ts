@@ -54,3 +54,46 @@ export async function configureGrid(
   revalidatePath(`/tank/${tankId}`);
   return {};
 }
+
+// Unwinds a configured grid entirely: unplaces every specimen (back to the
+// "unplaced specimens" bucket) and deletes the slot layout, so the tank goes
+// back through ConfigureGridForm. The one-shot-at-creation design (see
+// configureGrid above) still holds — this is a deliberate reset, not a
+// resize, and the client-side confirm warns the user before calling it.
+export async function resetGrid(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const { data: tank } = await supabase
+    .from("tanks")
+    .select("id")
+    .eq("id", tankId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!tank) return { error: "Tank not found." };
+
+  const { error: unplaceError } = await supabase
+    .from("specimens")
+    .update({ grid_slot_id: null })
+    .eq("tank_id", tankId);
+  if (unplaceError) return { error: unplaceError.message };
+
+  const { error: deleteError } = await supabase
+    .from("grid_slots")
+    .delete()
+    .eq("tank_id", tankId);
+  if (deleteError) return { error: deleteError.message };
+
+  const { error: clearError } = await supabase
+    .from("tanks")
+    .update({ grid_columns: null, grid_rows: null })
+    .eq("id", tankId);
+  if (clearError) return { error: clearError.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}

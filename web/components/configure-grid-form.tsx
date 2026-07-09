@@ -22,8 +22,10 @@ export function ConfigureGridForm({ tankId }: { tankId: string }) {
     <form className="card" action={handleSubmit}>
       <input type="hidden" name="tank_id" value={tankId} />
       <p className="muted" style={{ marginTop: 0 }}>
-        This tank doesn&apos;t have a grid yet. Choose a layout — this can
-        only be set once, so pick enough room to grow into.
+        This tank doesn&apos;t have a grid yet. Choose a layout — pick enough
+        room to grow into. You can reset it later, but that unplaces every
+        specimen back into the unplaced list, so it&apos;s not something to
+        do casually.
       </p>
       <div className="row">
         <div>

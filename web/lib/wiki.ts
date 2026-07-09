@@ -215,10 +215,13 @@ export type AffiliateLink = {
   url: string;
   link_type: string;
   coral_photo_id: string;
+  for_sale_or_trade: boolean;
+  price: number | null;
 };
 
 // Public vendor links across every public photo of a taxon (RLS already
-// scopes affiliate_links to is_active rows — affiliate_links_public_read).
+// scopes affiliate_links to is_active, non-hidden rows —
+// affiliate_links_public_read).
 export async function getAffiliateLinksForTaxon(
   taxonId: string,
 ): Promise<AffiliateLink[]> {
@@ -226,7 +229,7 @@ export async function getAffiliateLinksForTaxon(
   const { data } = await supabase
     .from("affiliate_links")
     .select(
-      "id, vendor_name, url, link_type, coral_photo_id, coral_photos!inner(taxon_node_id, is_public, deleted_at)",
+      "id, vendor_name, url, link_type, coral_photo_id, for_sale_or_trade, price, coral_photos!inner(taxon_node_id, is_public, deleted_at)",
     )
     .eq("coral_photos.taxon_node_id", taxonId)
     .eq("coral_photos.is_public", true)

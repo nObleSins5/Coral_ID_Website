@@ -54,6 +54,9 @@ export default async function SpecimenPage({
     genusSlug && row.taxon_nodes ? `/coral/${genusSlug}/${row.taxon_nodes.slug}` : null;
 
   const photos = row.taxon_node_id ? await getPhotosForTaxon(row.taxon_node_id) : [];
+  const representativePhoto = row.representative_photo_id
+    ? photos.find((p) => p.id === row.representative_photo_id)
+    : null;
 
   let currentSlotLabel: string | null = null;
   let emptySlots: { id: string; label: string }[] = [];
@@ -100,6 +103,19 @@ export default async function SpecimenPage({
           {taxonHref ? <a href={taxonHref}>{row.taxon_nodes.name}</a> : row.taxon_nodes.name}
         </p>
       ) : null}
+
+      {representativePhoto ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={representativePhoto.url}
+          alt={`${label} — representative photo`}
+          style={{ width: "100%", maxHeight: "320px", objectFit: "cover", borderRadius: "10px" }}
+        />
+      ) : (
+        <p className="muted">
+          No representative photo chosen yet — pick one below.
+        </p>
+      )}
 
       <h2>Placement</h2>
       <div className="card">

@@ -2,6 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ConfigureGridForm } from "@/components/configure-grid-form";
 import { PlaceSpecimenControl } from "@/components/place-specimen-control";
+import { ResetGridButton } from "@/components/reset-grid-button";
+import { TankGridView } from "@/components/tank-grid-view";
+import { columnLabel } from "@/lib/grid";
 
 type Tank = {
   id: string;
@@ -18,6 +21,7 @@ type Specimen = {
   name: string | null;
   grid_slot_id: string | null;
   taxon_node_id: string | null;
+  representative_photo_id: string | null;
   taxon_nodes: { name: string; slug: string; parent_id: string | null } | null;
 };
 
@@ -53,7 +57,9 @@ export default async function TankPage({
 
   const { data: specimens } = await supabase
     .from("specimens")
-    .select("id, name, grid_slot_id, taxon_node_id, taxon_nodes ( name, slug, parent_id )")
+    .select(
+      "id, name, grid_slot_id, taxon_node_id, representative_photo_id, taxon_nodes ( name, slug, parent_id )",
+    )
     .eq("tank_id", id)
     .is("deleted_at", null);
   const specimenList = (specimens ?? []) as unknown as Specimen[];
@@ -70,6 +76,15 @@ export default async function TankPage({
       ? await supabase.from("taxon_nodes").select("id, slug").in("id", genusIds)
       : { data: [] as { id: string; slug: string }[] };
   const genusSlugById = new Map((genera ?? []).map((g) => [g.id, g.slug]));
+
+  const photoIds = [
+    ...new Set(specimenList.map((s) => s.representative_photo_id).filter((x): x is string => !!x)),
+  ];
+  const { data: photos } =
+    photoIds.length > 0
+      ? await supabase.from("coral_photos").select("id, url").in("id", photoIds)
+      : { data: [] as { id: string; url: string }[] };
+  const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
 
   const specimenBySlot = new Map(
     specimenList.filter((s) => s.grid_slot_id).map((s) => [s.grid_slot_id as string, s]),
@@ -90,6 +105,48 @@ export default async function TankPage({
   const columns = tankRow.grid_columns;
   const rows = tankRow.grid_rows;
 
+  const tierGrids = Array.from({ length: tiers }, (_, i) => i + 1).map((z) => (
+    <div className="tank-grid-tier" key={z}>
+      <div
+        className="tank-grid"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(70px, 1fr))` }}
+      >
+        {slotList
+          .filter((slot) => slot.z === z)
+          .map((slot) => {
+            const specimen = specimenBySlot.get(slot.id);
+            const photoUrl = specimen?.representative_photo_id
+              ? photoUrlById.get(specimen.representative_photo_id)
+              : null;
+            return (
+              <div
+                key={slot.id}
+                className={`tank-grid-cell ${specimen ? "occupied" : "empty"}`}
+              >
+                <span className="slot-label">
+                  {columnLabel(slot.x)}
+                  {slot.y}
+                </span>
+                {specimen ? (
+                  <>
+                    {photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoUrl} alt="" className="tank-grid-cell-thumb" />
+                    ) : null}
+                    <a href={`/specimen/${specimen.id}`}>
+                      {specimen.name || specimen.taxon_nodes?.name || "Specimen"}
+                    </a>
+                  </>
+                ) : (
+                  <span>Empty</span>
+                )}
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  ));
+
   return (
     <div>
       <p className="breadcrumb">
@@ -105,36 +162,11 @@ export default async function TankPage({
         <ConfigureGridForm tankId={tankRow.id} />
       ) : (
         <>
-          {Array.from({ length: tiers }, (_, i) => i + 1).map((z) => (
-            <div className="tank-grid-tier" key={z}>
-              {tiers > 1 ? <h3>Tier L{z}</h3> : null}
-              <div
-                className="tank-grid"
-                style={{ gridTemplateColumns: `repeat(${columns}, minmax(70px, 1fr))` }}
-              >
-                {slotList
-                  .filter((slot) => slot.z === z)
-                  .map((slot) => {
-                    const specimen = specimenBySlot.get(slot.id);
-                    return (
-                      <div
-                        key={slot.id}
-                        className={`tank-grid-cell ${specimen ? "occupied" : "empty"}`}
-                      >
-                        <span className="slot-label">{slot.label}</span>
-                        {specimen ? (
-                          <a href={`/specimen/${specimen.id}`}>
-                            {specimen.name || specimen.taxon_nodes?.name || "Specimen"}
-                          </a>
-                        ) : (
-                          <span>Empty</span>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          ))}
+          <TankGridView tierGrids={tierGrids} />
+
+          <p style={{ marginTop: "-0.75rem", marginBottom: "1.5rem" }}>
+            <ResetGridButton tankId={tankRow.id} />
+          </p>
 
           <h2>Unplaced specimens</h2>
           {unplaced.length === 0 ? (

@@ -749,6 +749,14 @@ CREATE TABLE affiliate_links (
                        CHECK (link_type IN ('wysiwyg', 'representative')),
     referral_code  text,
     is_active      boolean NOT NULL DEFAULT true,
+    -- Business-tier listing fields (docs/PROGRESS.md, 2026-07): only
+    -- account_type_code = 'business' users may write these rows (see RLS).
+    for_sale_or_trade boolean NOT NULL DEFAULT true,
+    price          numeric,
+    hidden_by_owner boolean NOT NULL DEFAULT false,
+    -- Reserved for a future paid "sticky to front of page" placement; no UI
+    -- surfaces this yet.
+    promote        boolean NOT NULL DEFAULT false,
     created_at     timestamptz NOT NULL DEFAULT now(),
     updated_at     timestamptz NOT NULL DEFAULT now(),
     deleted_at     timestamptz

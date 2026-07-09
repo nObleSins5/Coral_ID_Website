@@ -96,6 +96,12 @@ export default async function Dashboard() {
       <p className="muted">
         Signed in as <strong>{profile?.username ?? user.email}</strong>{" "}
         <span className="pill">{profile?.account_type_code ?? "hobbyist"}</span>
+        {profile?.account_type_code === "business" ? (
+          <>
+            {" "}
+            · <a href="/business">Business dashboard</a>
+          </>
+        ) : null}
       </p>
 
       {tankList.length === 0 ? (

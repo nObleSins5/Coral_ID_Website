@@ -14,7 +14,9 @@ type Link = {
 };
 
 // Shown on a photo card, but only renders anything for that photo's own
-// uploader — "a vendor showcases their own photo" (schema-decisions.md §10).
+// uploader, AND only if they're a business-tier account (affiliate links
+// became business-only in 2026-07 — see sql/supabase/12_business_listings.sql;
+// hobbyist-to-hobbyist trade flagging is a separate, not-yet-built feature).
 // Fetches its own data client-side because morph pages are statically
 // generated with no per-request auth (see AddSpecimenForm/AddPhotoForm for
 // the same pattern).
@@ -32,6 +34,7 @@ export function AffiliateLinkManager({
   const router = useRouter();
   const [loaded, setLoaded] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isBusiness, setIsBusiness] = useState(false);
   const [links, setLinks] = useState<Link[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +48,12 @@ export function AffiliateLinkManager({
       } = await supabase.auth.getUser();
       setUserId(user?.id ?? null);
       if (user && user.id === uploaderUserId) {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("account_type_code")
+          .eq("id", user.id)
+          .maybeSingle();
+        setIsBusiness(profile?.account_type_code === "business");
         const { data } = await supabase
           .from("affiliate_links")
           .select("id, vendor_name, url, link_type, is_active")
@@ -56,7 +65,7 @@ export function AffiliateLinkManager({
     })();
   }, [photoId, uploaderUserId]);
 
-  if (!loaded || userId !== uploaderUserId) return null;
+  if (!loaded || userId !== uploaderUserId || !isBusiness) return null;
 
   function handleAdd(formData: FormData) {
     setError(null);
@@ -127,9 +136,24 @@ export function AffiliateLinkManager({
 
           <label htmlFor={`type-${photoId}`}>Link type</label>
           <select id={`type-${photoId}`} name="link_type" defaultValue="representative">
-            <option value="wysiwyg">This exact frag (dead once it sells)</option>
+            <option value="wysiwyg">This exact frag (may already be sold)</option>
             <option value="representative">This morph in general</option>
           </select>
+
+          <label htmlFor={`price-${photoId}`}>Price (optional)</label>
+          <input
+            id={`price-${photoId}`}
+            name="price"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Leave blank to show no price"
+          />
+
+          <label className="checkbox-label">
+            <input type="checkbox" name="for_sale_or_trade" defaultChecked />
+            Currently for sale/trade
+          </label>
 
           <div className="form-actions">
             <button type="submit" disabled={pending}>

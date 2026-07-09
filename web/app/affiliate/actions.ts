@@ -13,9 +13,10 @@ function revalidateMorph(formData: FormData) {
 
 // Attaches a vendor link to one of the CALLER'S OWN photos — "a vendor
 // showcases their own photo of a coral to compete with other vendors selling
-// the same morph" (docs/schema-decisions.md §10). No separate vendor account
-// tier required for v1: any photo uploader can do this on their own upload,
-// per docs/future-considerations.md idea 6a.
+// the same morph" (docs/schema-decisions.md §10). Business-tier only
+// (account_type_code = 'business') as of 2026-07 — see
+// sql/supabase/12_business_listings.sql; RLS enforces this too, but checking
+// here gives a readable error instead of a raw RLS-violation message.
 export async function addAffiliateLink(
   formData: FormData,
 ): Promise<{ error?: string }> {
@@ -25,10 +26,22 @@ export async function addAffiliateLink(
   } = await supabase.auth.getUser();
   if (!user) return { error: "You must be logged in." };
 
+  const { data: profile } = await supabase
+    .from("users")
+    .select("account_type_code")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.account_type_code !== "business") {
+    return { error: "Only business accounts can add affiliate links." };
+  }
+
   const photoId = String(formData.get("coral_photo_id") ?? "");
   const vendorName = String(formData.get("vendor_name") ?? "").trim();
   const url = String(formData.get("url") ?? "").trim();
   const linkType = String(formData.get("link_type") ?? "representative");
+  const forSaleOrTrade = formData.get("for_sale_or_trade") === "on";
+  const priceRaw = String(formData.get("price") ?? "").trim();
+  const price = priceRaw ? Number(priceRaw) : null;
   if (!photoId || !vendorName || !url) {
     return { error: "Fill in a vendor name and a URL." };
   }
@@ -36,6 +49,9 @@ export async function addAffiliateLink(
     return { error: "URL must start with http:// or https://." };
   }
   if (!LINK_TYPES.has(linkType)) return { error: "Invalid link type." };
+  if (priceRaw && (Number.isNaN(price) || (price as number) < 0)) {
+    return { error: "Price must be a positive number." };
+  }
 
   const { data: photo } = await supabase
     .from("coral_photos")
@@ -51,10 +67,48 @@ export async function addAffiliateLink(
     vendor_name: vendorName,
     url,
     link_type: linkType,
+    for_sale_or_trade: forSaleOrTrade,
+    price,
   });
   if (error) return { error: error.message };
 
   revalidateMorph(formData);
+  return {};
+}
+
+// Inline edits from the /business dashboard: price, the for-sale/trade flag,
+// and hiding a listing from public view without deactivating it (a listing
+// can be temporarily hidden and un-hidden; deactivation, below, is one-way).
+export async function updateAffiliateListing(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const linkId = String(formData.get("affiliate_link_id") ?? "");
+  if (!linkId) return { error: "Missing link reference." };
+
+  const forSaleOrTrade = formData.get("for_sale_or_trade") === "on";
+  const hidden = formData.get("hidden_by_owner") === "on";
+  const priceRaw = String(formData.get("price") ?? "").trim();
+  const price = priceRaw ? Number(priceRaw) : null;
+  if (priceRaw && (Number.isNaN(price) || (price as number) < 0)) {
+    return { error: "Price must be a positive number." };
+  }
+
+  const { data, error } = await supabase
+    .from("affiliate_links")
+    .update({ for_sale_or_trade: forSaleOrTrade, hidden_by_owner: hidden, price })
+    .eq("id", linkId)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!data) return { error: "Link not found." };
+
+  revalidatePath("/business");
   return {};
 }
 
@@ -82,6 +136,7 @@ export async function deactivateAffiliateLink(
   if (!data) return { error: "Link not found." };
 
   revalidateMorph(formData);
+  revalidatePath("/business");
   return {};
 }
 
