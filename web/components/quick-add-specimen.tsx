@@ -159,11 +159,12 @@ export function QuickAddSpecimen({
   if (mode === "local") {
     return (
       <form className="add-photo-form" action={handleLocal}>
+        <div className="quick-add-notice quick-add-notice-private">
+          <strong>Private</strong>
+          Just for you — not shared with the wiki or community.
+        </div>
         <label htmlFor="quick-add-local-name">Label</label>
         <input id="quick-add-local-name" name="name" defaultValue={query} required />
-        <p className="muted" style={{ fontSize: "0.85rem" }}>
-          Private — just for you, not shared with the wiki or community.
-        </p>
         <label htmlFor="quick-add-local-photo">Photo (optional)</label>
         <input
           id="quick-add-local-photo"
@@ -196,6 +197,11 @@ export function QuickAddSpecimen({
   if (mode === "unidentified") {
     return (
       <form className="add-photo-form" action={handleUnidentified}>
+        <div className="quick-add-notice quick-add-notice-public">
+          <strong>Public</strong>
+          This photo and name go to the wiki, where the community votes on the
+          identification. Not reversible once submitted.
+        </div>
         <label htmlFor="quick-add-new-name">Name</label>
         <input id="quick-add-new-name" name="name" defaultValue={query} required />
         <label htmlFor="quick-add-new-genus">Genus</label>
@@ -209,9 +215,6 @@ export function QuickAddSpecimen({
             </option>
           ))}
         </select>
-        <p className="muted" style={{ fontSize: "0.85rem" }}>
-          Public — the community will vote on this identification.
-        </p>
         <label htmlFor="quick-add-new-photo">Photo (required)</label>
         <input
           id="quick-add-new-photo"

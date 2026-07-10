@@ -1,34 +1,57 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { resetGrid } from "@/app/tank/actions";
 
 // Destructive — unplaces every specimen in the tank and deletes the grid
-// layout. Warns before doing anything, since there's no undo.
+// layout. In-system confirmation (not window.confirm — a native dialog was
+// the one moment this page broke out of its own visual system for the one
+// truly destructive action on it) since there's no undo.
 export function ResetGridButton({ tankId }: { tankId: string }) {
   const router = useRouter();
+  const [armed, setArmed] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function handleClick() {
-    const confirmed = window.confirm(
-      "Reset this tank's grid? Every specimen will be unplaced back into " +
-        "the unplaced-specimens list, and the current layout will be " +
-        "deleted so you can set it up again. This can't be undone — " +
-        "you may want to screenshot the grid first.",
-    );
-    if (!confirmed) return;
+  function handleConfirm() {
     const formData = new FormData();
     formData.set("tank_id", tankId);
     startTransition(async () => {
       await resetGrid(formData);
+      setArmed(false);
       router.refresh();
     });
   }
 
+  if (!armed) {
+    return (
+      <button type="button" className="btn-secondary" onClick={() => setArmed(true)}>
+        Reset grid
+      </button>
+    );
+  }
+
   return (
-    <button type="button" className="btn-secondary" onClick={handleClick} disabled={pending}>
-      {pending ? "Resetting…" : "Reset grid"}
-    </button>
+    <div className="card reset-grid-confirm">
+      <p style={{ marginTop: 0 }}>
+        Reset this tank&apos;s grid? Every specimen will be unplaced back into
+        the unplaced-specimens list, and the current layout will be deleted
+        so you can set it up again. This can&apos;t be undone — you may want
+        to screenshot the grid first.
+      </p>
+      <div className="form-actions">
+        <button type="button" className="btn-danger" onClick={handleConfirm} disabled={pending}>
+          {pending ? "Resetting…" : "Yes, reset grid"}
+        </button>
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={() => setArmed(false)}
+          disabled={pending}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }

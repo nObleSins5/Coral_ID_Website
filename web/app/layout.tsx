@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
+import { AuthNavLink } from "@/components/auth-nav-link";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -29,7 +30,7 @@ export default function RootLayout({
             <a href="/identify">Identify</a>
             <a href="/wiki">Wiki</a>
             <a href="/dashboard">Dashboard</a>
-            <a href="/login">Log in</a>
+            <AuthNavLink />
           </nav>
         </header>
         <main className="container">{children}</main>
