@@ -168,7 +168,7 @@ export default async function TankPage({
         <>
           <TankGridView tierGrids={tierGrids} />
 
-          <p style={{ marginTop: "-0.75rem", marginBottom: "1.5rem" }}>
+          <p style={{ marginTop: "0.5rem", marginBottom: "1.5rem" }}>
             <ResetGridButton tankId={tankRow.id} />
           </p>
 
