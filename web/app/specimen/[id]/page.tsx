@@ -115,12 +115,10 @@ export default async function SpecimenPage({
 
       {representativePhoto ? (
         <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={representativePhoto.url}
-            alt={`${label} — representative photo`}
-            style={{ width: "100%", maxHeight: "320px", objectFit: "cover", borderRadius: "10px" }}
-          />
+          <div className="photo-tile large">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={representativePhoto.url} alt={`${label} — representative photo`} />
+          </div>
           {!row.taxon_node_id ? (
             <p style={{ marginTop: "0.6rem" }}>
               <span className="muted" style={{ fontSize: "0.85rem" }}>

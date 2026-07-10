@@ -285,6 +285,7 @@ td {
 }
 .color-tile.large {
   aspect-ratio: 16 / 10;
+  max-height: 420px;
 }
 .color-tile-label {
   background: rgba(0, 0, 0, 0.55);
@@ -330,6 +331,7 @@ td {
 }
 .photo-tile.large {
   aspect-ratio: 16 / 10;
+  max-height: 420px;
 }
 .photo-tile.large .freshness-badge {
   font-size: 0.8rem;
@@ -430,6 +432,7 @@ td {
   border-radius: 8px;
   border: 2px solid var(--border);
   overflow: hidden;
+  margin: 0;
   padding: 0;
   background: var(--bg);
   cursor: pointer;
