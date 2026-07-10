@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-10T00:00:00.000Z",
+  "title": "Design System: Coral Registry",
+  "extensions": {
+    "colorMeta": {
+      "shallow-reef-blue": {
+        "role": "primary",
+        "displayName": "Shallow Reef Blue",
+        "canonical": "oklch(85% 0.09 231)",
+        "tonalRamp": ["#062033", "#0c3a5c", "#0f5686", "#1276ad", "#2e9ad2", "#5cbdec", "#70d6ff", "#c7ecff"]
+      },
+      "deep-water-blue": {
+        "role": "primary-legible",
+        "displayName": "Deep Water Blue",
+        "canonical": "oklch(45% 0.11 240)",
+        "tonalRamp": ["#031321", "#052038", "#083152", "#0b4a75", "#0369a1", "#2f88c0", "#6bb0d8", "#b3dbee"]
+      },
+      "abyssal-ink": {
+        "role": "text-on-accent",
+        "displayName": "Abyssal Ink",
+        "canonical": "oklch(19% 0.03 235)",
+        "tonalRamp": ["#020a11", "#041521", "#062031", "#072433", "#0e3a52", "#1c5876", "#3d7fa0", "#7cadc6"]
+      },
+      "tide-pool-mist": {
+        "role": "neutral-bg",
+        "displayName": "Tide Pool Mist",
+        "canonical": "oklch(97% 0.015 231)",
+        "tonalRamp": ["#0c161d", "#1c2c37", "#3a5262", "#6c8a9a", "#a9c3cf", "#d3e3ea", "#e9f1f6", "#f5f9fc"]
+      },
+      "reef-white": {
+        "role": "neutral-surface",
+        "displayName": "Reef White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": ["#0d0d0d", "#2b2b2b", "#4d4d4d", "#7a7a7a", "#a8a8a8", "#d1d1d1", "#ececec", "#ffffff"]
+      },
+      "sandbar": {
+        "role": "border",
+        "displayName": "Sandbar",
+        "canonical": "oklch(91% 0.012 231)",
+        "tonalRamp": ["#0f171d", "#233038", "#465862", "#748891", "#a7b8bf", "#cbd8dd", "#dee7eb", "#e1e8ee"]
+      },
+      "basalt": {
+        "role": "text",
+        "displayName": "Basalt",
+        "canonical": "oklch(23% 0.02 240)",
+        "tonalRamp": ["#05080a", "#0c1219", "#16202a", "#28353f", "#465360", "#6e7b86", "#9ba6ae", "#cdd4d8"]
+      },
+      "wet-slate": {
+        "role": "text-muted",
+        "displayName": "Wet Slate",
+        "canonical": "oklch(46% 0.02 235)",
+        "tonalRamp": ["#0e1215", "#1c2226", "#333c42", "#55636e", "#75828b", "#9aa5ac", "#c1c9cd", "#e5e9eb"]
+      },
+      "bleached-coral-red": {
+        "role": "error",
+        "displayName": "Bleached Coral Red",
+        "canonical": "oklch(42% 0.17 25)",
+        "tonalRamp": ["#1a0403", "#3d0906", "#671009", "#941a0f", "#b91c1c", "#d34a3f", "#e68a80", "#f5c7c1"]
+      },
+      "polyp-lime": {
+        "role": "status-positive",
+        "displayName": "Polyp Lime",
+        "canonical": "oklch(96% 0.16 118)",
+        "tonalRamp": ["#1c2405", "#38480a", "#5f7a10", "#8cac1e", "#bcd845", "#dcef8f", "#e9ff70", "#f5ffc4"]
+      },
+      "sun-bleached-yellow": {
+        "role": "status-moderate",
+        "displayName": "Sun-Bleached Yellow",
+        "canonical": "oklch(87% 0.13 85)",
+        "tonalRamp": ["#241b04", "#453208", "#725310", "#a67a1c", "#d6a437", "#f0c669", "#ffd670", "#ffeab8"]
+      },
+      "low-tide-orange": {
+        "role": "status-difficult",
+        "displayName": "Low-Tide Orange",
+        "canonical": "oklch(78% 0.15 42)",
+        "tonalRamp": ["#260f05", "#48200a", "#763510", "#a8501c", "#d6702f", "#f0985c", "#ff9770", "#ffc4ab"]
+      },
+      "anemone-pink": {
+        "role": "status-expert-and-wanted",
+        "displayName": "Anemone Pink",
+        "canonical": "oklch(76% 0.16 8)",
+        "tonalRamp": ["#280713", "#4a0e22", "#7a1738", "#ac2452", "#d64074", "#f06f9a", "#ff70a6", "#ffbcd3"]
+      }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Page-level h1 — a tank name, a morph name." },
+      "title": { "displayName": "Title", "purpose": "Section-level h2 — 'Recommended parameters', 'Unplaced specimens'." },
+      "body": { "displayName": "Body", "purpose": "Paragraph text, table cells, form values." },
+      "label": { "displayName": "Label", "purpose": "Form labels, breadcrumbs, muted context lines." }
+    },
+    "shadows": [
+      { "name": "ambient", "value": "0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.08)", "purpose": "The one shadow tier in the system. Every card/panel at rest. Never intensified on hover." }
+    ],
+    "motion": [
+      { "name": "hover-brighten", "value": "filter: brightness(1.08)", "purpose": "The only hover treatment on the primary button — a small brightness lift, no transform, no shadow change." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "600px" },
+      { "name": "md", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Default call-to-action across the registry — 'Add', 'Save', 'Create tank', 'Log parameters'.",
+      "html": "<button class=\"ds-btn-primary\">Add to collection</button>",
+      "css": ".ds-btn-primary { padding: 0.6rem 1rem; background: #70d6ff; color: #072433; border: none; border-radius: 7px; font-weight: 600; font-size: 0.95rem; cursor: pointer; } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid #0369a1; outline-offset: 1px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Lower-stakes action beside a primary button — Cancel, Deactivate, Remove.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { padding: 0.6rem 1rem; background: transparent; color: #55636e; border: 1px solid #e1e8ee; border-radius: 7px; font-weight: 600; font-size: 0.95rem; cursor: pointer; } .ds-btn-secondary:hover { border-color: #0369a1; color: #0369a1; } .ds-btn-secondary:focus-visible { outline: 2px solid #0369a1; outline-offset: 1px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Standalone content container — the base surface for every panel in the registry.",
+      "html": "<div class=\"ds-card\"><p>Card content</p></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid #e1e8ee; border-radius: 10px; padding: 1.1rem 1.25rem; box-shadow: 0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.08); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Text/number/select input used across every form in the registry.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"e.g. Steve\" />",
+      "css": ".ds-input { width: 100%; padding: 0.55rem 0.65rem; background: #ffffff; border: 1px solid #e1e8ee; border-radius: 7px; color: #16202a; font-size: 0.95rem; } .ds-input:focus { outline: 2px solid #0369a1; outline-offset: 1px; }"
+    },
+    {
+      "name": "Difficulty Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Care-difficulty escalation badge — the one place color carries meaning at a glance. Four variants: easy (lime) through expert (pink).",
+      "html": "<span class=\"ds-pill-difficulty ds-pill-difficulty--moderate\">Moderate</span>",
+      "css": ".ds-pill-difficulty { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 999px; color: #072433; } .ds-pill-difficulty--easy { background: #e9ff70; } .ds-pill-difficulty--moderate { background: #ffd670; } .ds-pill-difficulty--difficult { background: #ff9770; } .ds-pill-difficulty--expert { background: #ff70a6; }"
+    },
+    {
+      "name": "Neutral Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Informational, non-actionable tag — light/flow/growth-form, account type.",
+      "html": "<span class=\"ds-pill\">hobbyist</span>",
+      "css": ".ds-pill { display: inline-block; font-size: 0.75rem; padding: 0.1rem 0.5rem; border: 1px solid #e1e8ee; border-radius: 999px; color: #55636e; }"
+    },
+    {
+      "name": "Toggle Pill (Vote / Wishlist)",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "Stateful pill button — confirm-vote or wishlist toggle. At rest it's a neutral outlined pill; active state fills with its status color.",
+      "html": "<button class=\"ds-toggle-pill ds-toggle-pill--active\">✓ Confirm match</button>",
+      "css": ".ds-toggle-pill { margin: 0; padding: 0.1rem 0.6rem; font-size: 0.78rem; font-weight: 400; background: transparent; color: #55636e; border: 1px solid #e1e8ee; border-radius: 999px; cursor: pointer; } .ds-toggle-pill--active { background: #e9ff70; color: #072433; border-color: #e9ff70; }"
+    },
+    {
+      "name": "Tank Grid Cell",
+      "kind": "custom",
+      "refersTo": "tank-grid-cell",
+      "description": "Signature component: one slot in a tank's grid. Occupied cells get the accent border and, if the specimen has a photo, a cropped thumbnail.",
+      "html": "<div class=\"ds-grid-cell ds-grid-cell--occupied\"><span class=\"ds-grid-cell__label\">A1</span><img class=\"ds-grid-cell__thumb\" src=\"https://placehold.co/100x40\" alt=\"\" /><a href=\"#\" class=\"ds-grid-cell__link\">Frank</a></div>",
+      "css": ".ds-grid-cell { border: 1px solid #e1e8ee; border-radius: 8px; padding: 0.4rem; min-height: 3.5rem; font-size: 0.75rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.2rem; background: #f5f9fc; } .ds-grid-cell--occupied { background: #f5f9fc; border-color: #70d6ff; } .ds-grid-cell__label { font-size: 0.65rem; color: #55636e; } .ds-grid-cell__thumb { width: 100%; height: 2.2rem; object-fit: cover; border-radius: 5px; } .ds-grid-cell__link { font-weight: 600; color: #0369a1; text-decoration: none; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Coral Registry",
+    "overview": "This is a registry, not a storefront and not a field guide. Every coral morph, every tank, every specimen a hobbyist logs is an entry: a structured record with its own detail page, cross-linked to related entries, carrying real metadata the way IMDb carries cast/crew/ratings or Metacritic carries scores. The registering-and-maintaining act is the product, not a feature bolted onto a marketing site. This system explicitly rejects the generic AI-dashboard look: no gradient hero metrics, no cream/sand near-white neutrals dressed up as warmth, no side-stripe accent borders, no identical icon-heading-text card grids repeated for their own sake. Confidence comes from showing real numbers plainly, not from decorating the page around them.",
+    "keyCharacteristics": [
+      "Registry-entry pages over marketing pages — dense, structured, cross-linked",
+      "One quiet accent color, used sparingly, never decoratively",
+      "Flat surfaces with a single whisper-soft shadow tier, not a layered elevation system",
+      "Coral photography and real data are the loudest things on any page — the UI recedes around them",
+      "One typeface, Roboto, carrying the whole hierarchy through size and weight, not font-pairing drama"
+    ],
+    "rules": [
+      { "name": "The One-Accent Rule", "body": "Shallow Reef Blue is the only color used for a plain UI affordance. The four status colors never substitute for it — they only ever appear attached to their one specific meaning.", "section": "colors" },
+      { "name": "The Ink-on-Accent Rule", "body": "Anything placed on top of an accent- or status-colored surface uses Abyssal Ink, never white.", "section": "colors" },
+      { "name": "The Single-Voice Rule", "body": "No second typeface gets introduced for personality. If a heading needs more presence, it earns it through size or weight within Roboto's own range.", "section": "typography" },
+      { "name": "The Whisper Rule", "body": "One shadow value, used uniformly, never escalated. If a surface needs to feel more important than another, that's a typography or color-status decision, not a shadow decision.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use Shallow Reef Blue for exactly one thing at a time on any given screen.",
+      "Do keep every card at 10px radius and the single Ambient shadow.",
+      "Do let hex values, vote counts, and parameter numbers appear as plain text at full contrast.",
+      "Do use Abyssal Ink, never white, as text on any accent- or status-colored surface."
+    ],
+    "donts": [
+      "Don't introduce a cream/sand/parchment near-white background.",
+      "Don't use border-left/border-right as a colored accent stripe on any card, list item, or callout.",
+      "Don't use gradient text or gradient fills anywhere.",
+      "Don't add a second shadow tier or a hover-lift transform to cards.",
+      "Don't decorate the hex-color and element-color-key swatches as UI chrome — they render real sampled coral color.",
+      "Don't import a second typeface for personality."
+    ]
+  }
+}
