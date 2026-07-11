@@ -302,6 +302,77 @@ export async function getAllGenusMorphSlugPairs(): Promise<
     .map((m) => ({ genus: genusById.get(m.parent_id!)!, morph: m.slug }));
 }
 
+export type FeaturedMorph = {
+  id: string;
+  name: string;
+  slug: string;
+  genusName: string;
+  genusSlug: string;
+  care_difficulty_code: string | null;
+  heroUrl: string;
+};
+
+// A small real-photo showcase for the landing page — any morph with at
+// least one public photo, newest-photographed first, using the same
+// most-voted hero-photo rule as the genus/morph pages (getHeroPhotoUrlsForTaxa)
+// rather than re-deriving it.
+export async function getFeaturedMorphs(limit = 4): Promise<FeaturedMorph[]> {
+  const supabase = createPublicClient();
+  const { data: photoRows } = await supabase
+    .from("coral_photos")
+    .select("taxon_node_id, created_at")
+    .eq("is_public", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  const seen = new Set<string>();
+  const taxonIds: string[] = [];
+  for (const row of photoRows ?? []) {
+    const id = row.taxon_node_id as string | null;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    taxonIds.push(id);
+    if (taxonIds.length >= limit) break;
+  }
+  if (taxonIds.length === 0) return [];
+
+  const { data: morphs } = await supabase
+    .from("taxon_nodes")
+    .select("id, name, slug, care_difficulty_code, parent_id")
+    .in("id", taxonIds);
+
+  const genusIds = [
+    ...new Set((morphs ?? []).map((m) => m.parent_id).filter(Boolean)),
+  ] as string[];
+  const { data: genera } = await supabase
+    .from("taxon_nodes")
+    .select("id, name, slug")
+    .in("id", genusIds);
+  const genusById = new Map((genera ?? []).map((g) => [g.id, g]));
+
+  const heroUrls = await getHeroPhotoUrlsForTaxa(taxonIds);
+
+  const featured: FeaturedMorph[] = [];
+  for (const m of morphs ?? []) {
+    const genus = m.parent_id ? genusById.get(m.parent_id) : undefined;
+    const heroUrl = heroUrls.get(m.id);
+    if (!genus || !heroUrl) continue;
+    featured.push({
+      id: m.id,
+      name: m.name,
+      slug: m.slug,
+      genusName: genus.name,
+      genusSlug: genus.slug,
+      care_difficulty_code: m.care_difficulty_code,
+      heroUrl,
+    });
+  }
+  // Preserve newest-photographed order from taxonIds rather than the
+  // unordered `in()` result.
+  const order = new Map(taxonIds.map((id, i) => [id, i]));
+  return featured.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
 // ---------------------------------------------------------------------------
 // Unidentified-ID flow (Door 1's primary entry point — /identify)
 // ---------------------------------------------------------------------------

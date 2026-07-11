@@ -120,7 +120,7 @@ export function QuickAddSpecimen({
   // A known coral, selected from search.
   if (matched) {
     return (
-      <form className="add-photo-form" action={handleExisting}>
+      <form className="add-photo-form card" action={handleExisting}>
         <label>Coral</label>
         <p style={{ margin: "0 0 0.5rem" }}>
           {matched.name} <span className="muted">({matched.genusName})</span>
@@ -158,7 +158,7 @@ export function QuickAddSpecimen({
   // "Just label this slot" — private, local-only.
   if (mode === "local") {
     return (
-      <form className="add-photo-form" action={handleLocal}>
+      <form className="add-photo-form card" action={handleLocal}>
         <div className="quick-add-notice quick-add-notice-private">
           <strong>Private</strong>
           Just for you — not shared with the wiki or community.
@@ -196,7 +196,7 @@ export function QuickAddSpecimen({
   // "Propose as a new coral for the wiki" — public, kicks off /identify.
   if (mode === "unidentified") {
     return (
-      <form className="add-photo-form" action={handleUnidentified}>
+      <form className="add-photo-form card" action={handleUnidentified}>
         <div className="quick-add-notice quick-add-notice-public">
           <strong>Public</strong>
           This photo and name go to the wiki, where the community votes on the
@@ -246,7 +246,7 @@ export function QuickAddSpecimen({
 
   // Default: search.
   return (
-    <div className="add-photo-form">
+    <div className="add-photo-form card">
       <label>Search the wiki</label>
       <input
         value={query}

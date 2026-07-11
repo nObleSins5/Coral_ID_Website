@@ -108,6 +108,43 @@ export default async function MorphPage({
         ) : null}
       </div>
 
+      {/* Both calls to action sit right under the identity/pills row, ahead
+          of the params/color-key reference block — a hobbyist deciding
+          "I have this coral" shouldn't have to scroll past a data table to
+          act on it. Each form collapses to a single button until clicked. */}
+      <div className="morph-actions-row">
+        <div className="card">
+          <h2 style={{ marginTop: 0 }}>My collection</h2>
+          <div className="collection-actions-row">
+            <AddSpecimenForm
+              taxonNodeId={morph.id}
+              taxonName={morph.name}
+              genusSlug={genus.slug}
+              morphSlug={morph.slug}
+              photos={photos.map((p) => ({
+                id: p.id,
+                url: p.url,
+                uploader_user_id: p.uploader_user_id,
+              }))}
+            />
+            <WishlistButton
+              taxonNodeId={morph.id}
+              genusSlug={genus.slug}
+              morphSlug={morph.slug}
+            />
+          </div>
+        </div>
+
+        <div className="card" id="add-photo-section">
+          <h2 style={{ marginTop: 0 }}>Community photos</h2>
+          <AddPhotoForm
+            taxonNodeId={morph.id}
+            genusSlug={genus.slug}
+            morphSlug={morph.slug}
+          />
+        </div>
+      </div>
+
       <div className="detail-grid">
         <div>
           {heroPhoto ? (
@@ -171,33 +208,11 @@ export default async function MorphPage({
         </div>
       </div>
 
-      <h2>My collection</h2>
-      <div className="card">
-        <div className="collection-actions-row">
-          <AddSpecimenForm
-            taxonNodeId={morph.id}
-            taxonName={morph.name}
-            genusSlug={genus.slug}
-            morphSlug={morph.slug}
-            photos={photos.map((p) => ({
-              id: p.id,
-              url: p.url,
-              uploader_user_id: p.uploader_user_id,
-            }))}
-          />
-          <WishlistButton
-            taxonNodeId={morph.id}
-            genusSlug={genus.slug}
-            morphSlug={morph.slug}
-          />
-        </div>
-      </div>
-
-      <h2>Community photos</h2>
+      <h2>All community photos</h2>
       {photos.length === 0 ? (
         <p className="muted">
-          No photos yet — be the first to log one. Each photo can be stamped
-          with the water parameters running in your tank at the time.
+          No photos yet — be the first to log one above. Each photo can be
+          stamped with the water parameters running in your tank at the time.
         </p>
       ) : (
         <div className="photo-grid">
@@ -215,13 +230,6 @@ export default async function MorphPage({
           ))}
         </div>
       )}
-      <div className="card" id="add-photo-section">
-        <AddPhotoForm
-          taxonNodeId={morph.id}
-          genusSlug={genus.slug}
-          morphSlug={morph.slug}
-        />
-      </div>
 
       <h2>Where to find it</h2>
       {affiliateLinks.length === 0 ? (

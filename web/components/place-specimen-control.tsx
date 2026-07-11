@@ -37,7 +37,11 @@ export function PlaceSpecimenControl({
   }
 
   return (
-    <form action={handleSubmit} style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+    <form
+      className="place-specimen-form"
+      action={handleSubmit}
+      style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}
+    >
       <input type="hidden" name="specimen_id" value={specimenId} />
       <select
         name="grid_slot_id"
