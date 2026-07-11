@@ -217,3 +217,14 @@ WHERE slug IN (
     'walt-disney-acropora','green-slimer','tricolor-valida','birds-nest',
     'milka-stylophora','pocillopora','pavona-cactus'
 );
+
+-- Reusable "not sure which genus" bucket for /identify's brand-new-morph
+-- path (id_suggestions_new_morph_needs_genus requires a genus even when the
+-- proposer doesn't know it) — mirrored in
+-- sql/supabase/15_unknown_genus_placeholder.sql for the already-live project.
+-- Hidden from the public wiki grid (is_visible = false).
+INSERT INTO taxon_nodes (parent_id, rank_code, name, slug, is_visible)
+SELECT id, 'genus', 'Genus unknown', 'genus-unknown', false
+FROM taxon_nodes
+WHERE rank_code = 'category' AND slug = 'coral'
+ON CONFLICT (slug) DO NOTHING;

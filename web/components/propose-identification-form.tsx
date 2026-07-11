@@ -50,7 +50,9 @@ export function ProposeIdentificationForm({
       formData.set("new_name", query.trim());
       formData.set("new_genus_id", newGenusId);
     } else {
-      setError("Pick an existing coral or choose “none of these”.");
+      setError(
+        "Pick an existing coral above, or use “Can’t find it?” below to propose an undocumented coral.",
+      );
       return;
     }
     startTransition(async () => {
@@ -150,6 +152,7 @@ export function ProposeIdentificationForm({
                 {g.name}
               </option>
             ))}
+            <option value="unsure">Not sure — genus unknown</option>
           </select>
           <p className="muted propose-switch">
             <button type="button" className="link-button" onClick={() => setNewMorphMode(false)}>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { buildGridSlots, MAX_GRID_SLOTS } from "@/lib/grid";
-import { computeParameterSnapshot, uploadPhotoFile } from "@/lib/photo-upload";
+import { computeParameterSnapshot, resolveGenusId, uploadPhotoFile } from "@/lib/photo-upload";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getOwnedTank(supabase: any, tankId: string, userId: string) {
@@ -277,10 +277,14 @@ export async function quickAddUnidentified(
   const tankId = String(formData.get("tank_id") ?? "");
   const gridSlotId = String(formData.get("grid_slot_id") ?? "") || null;
   const name = String(formData.get("name") ?? "").trim();
-  const genusId = String(formData.get("genus_id") ?? "") || null;
+  const genusIdRaw = String(formData.get("genus_id") ?? "") || null;
   const takenAtRaw = String(formData.get("taken_at") ?? "");
   if (!name) return { error: "Name this coral." };
-  if (!genusId) return { error: "Choose which genus this belongs to." };
+  if (!genusIdRaw) return { error: "Choose which genus this belongs to." };
+
+  const resolvedGenus = await resolveGenusId(supabase, genusIdRaw);
+  if (resolvedGenus.error) return { error: resolvedGenus.error };
+  const genusId = resolvedGenus.id;
 
   const tank = await getOwnedTank(supabase, tankId, user.id);
   if (!tank) return { error: "Tank not found." };

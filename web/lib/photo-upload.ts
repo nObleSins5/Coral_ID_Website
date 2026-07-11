@@ -66,6 +66,33 @@ export async function computeParameterSnapshot(
   };
 }
 
+// Reusable "not sure which genus" bucket a brand-new-morph proposal can point
+// to instead of a real genus — id_suggestions_new_morph_needs_genus (schema)
+// requires SOME genus even when the proposer doesn't know it. Sent from the
+// client as the sentinel value "unsure" (not a real uuid); resolved here to
+// the actual placeholder taxon_node id (sql/supabase/15_unknown_genus_placeholder.sql)
+// so callers never need to know it. Shared by app/identify/actions.ts
+// (propose an ID) and app/tank/actions.ts (quick-add "propose as new").
+const UNKNOWN_GENUS_SLUG = "genus-unknown";
+
+export async function resolveGenusId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any>,
+  genusId: string | null,
+): Promise<{ id: string | null; error?: string }> {
+  if (genusId !== "unsure") return { id: genusId };
+
+  const { data: unknownGenus } = await supabase
+    .from("taxon_nodes")
+    .select("id")
+    .eq("slug", UNKNOWN_GENUS_SLUG)
+    .maybeSingle();
+  if (!unknownGenus) {
+    return { id: null, error: "Couldn't resolve the 'genus unknown' bucket — try again later." };
+  }
+  return { id: unknownGenus.id };
+}
+
 export async function uploadPhotoFile(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any>,

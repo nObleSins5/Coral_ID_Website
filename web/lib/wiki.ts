@@ -420,6 +420,7 @@ export type PendingSuggestion = {
   proposed_taxon_id: string | null;
   proposed_taxon_name: string | null; // resolved "Name (Genus)" label, if targeting an existing taxon
   proposed_name: string | null; // an alias claim (alongside proposed_taxon_id) or a brand-new morph name
+  proposed_genus_name: string | null; // resolved genus name for a brand-new-morph proposal (e.g. "Genus unknown")
   suggested_by_user_id: string;
   suggested_by_username: string;
   net_votes: number;
@@ -451,7 +452,7 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
   const { data: suggestions } = await supabase
     .from("id_suggestions")
     .select(
-      "id, coral_photo_id, proposed_taxon_id, proposed_name, suggested_by_user_id, net_votes, created_at",
+      "id, coral_photo_id, proposed_taxon_id, proposed_name, proposed_genus_id, suggested_by_user_id, net_votes, created_at",
     )
     .in("coral_photo_id", photoIds)
     .eq("status_code", "pending")
@@ -489,6 +490,26 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
     }
   }
 
+  // Resolve proposed_genus_id -> plain genus name for brand-new-morph
+  // proposals (no existing taxon match, so nothing above resolved a genus
+  // for them) — e.g. "Rainbow Fire Acro (Genus unknown)" when the proposer
+  // picked the "not sure" bucket. See sql/supabase/15_unknown_genus_placeholder.sql.
+  const directGenusIds = [
+    ...new Set(
+      suggestionList
+        .filter((s) => !s.proposed_taxon_id && s.proposed_genus_id)
+        .map((s) => s.proposed_genus_id as string),
+    ),
+  ];
+  const directGenusNameById = new Map<string, string>();
+  if (directGenusIds.length > 0) {
+    const { data: directGenera } = await supabase
+      .from("taxon_nodes")
+      .select("id, name")
+      .in("id", directGenusIds);
+    for (const g of directGenera ?? []) directGenusNameById.set(g.id, g.name);
+  }
+
   const usernames = await getUsernamesFor(
     suggestionList.map((s) => s.suggested_by_user_id),
   );
@@ -503,6 +524,10 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
         ? (taxonLabels.get(s.proposed_taxon_id) ?? null)
         : null,
       proposed_name: s.proposed_name,
+      proposed_genus_name:
+        !s.proposed_taxon_id && s.proposed_genus_id
+          ? (directGenusNameById.get(s.proposed_genus_id) ?? null)
+          : null,
       suggested_by_user_id: s.suggested_by_user_id,
       suggested_by_username:
         usernames.get(s.suggested_by_user_id) ?? "A hobbyist",

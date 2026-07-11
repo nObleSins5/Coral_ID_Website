@@ -160,6 +160,25 @@ CREATE POLICY husbandry_products_auth_insert ON public.husbandry_products
 CREATE POLICY coral_aliases_auth_insert ON public.coral_aliases
     FOR INSERT TO authenticated WITH CHECK (proposed_by_user_id = auth.uid());
 
+-- Moderator review of proposed/rejected rows (users.is_moderator — see
+-- sql/supabase/14_alias_moderation.sql). Additional, OR'd SELECT policy on
+-- top of the *_public_read policies above, which only cover 'approved' rows.
+CREATE POLICY coral_aliases_moderator_read ON public.coral_aliases
+    FOR SELECT TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+CREATE POLICY coral_aliases_moderator_update ON public.coral_aliases
+    FOR UPDATE TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+
+CREATE POLICY husbandry_products_moderator_read ON public.husbandry_products
+    FOR SELECT TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+CREATE POLICY husbandry_products_moderator_update ON public.husbandry_products
+    FOR UPDATE TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+
 -- Affiliate links: owner-write, scoped via the underlying photo (only the
 -- photo's own uploader manages links on it — see 11_affiliate_links.sql) AND
 -- restricted to business-tier accounts (12_business_listings.sql, 2026-07 —

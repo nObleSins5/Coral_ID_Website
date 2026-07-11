@@ -34,7 +34,7 @@ export default async function Dashboard() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("username, account_type_code")
+    .select("username, account_type_code, is_moderator")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -100,6 +100,12 @@ export default async function Dashboard() {
           <>
             {" "}
             · <a href="/business">Business dashboard</a>
+          </>
+        ) : null}
+        {profile?.is_moderator ? (
+          <>
+            {" "}
+            · <a href="/moderate">Moderation queue</a>
           </>
         ) : null}
       </p>

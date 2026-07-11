@@ -189,6 +189,9 @@ function PhotoCard({
                   {s.proposed_taxon_name && s.proposed_name ? (
                     <span className="muted"> — &quot;{s.proposed_name}&quot;?</span>
                   ) : null}
+                  {!s.proposed_taxon_name && s.proposed_genus_name ? (
+                    <span className="muted"> ({s.proposed_genus_name})</span>
+                  ) : null}
                 </span>
                 <span className="muted suggestion-by">by {s.suggested_by_username}</span>
                 <VoteButtons

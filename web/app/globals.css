@@ -957,6 +957,32 @@ td {
   padding: 0.2rem 0;
 }
 
+/* --- Moderation queue (/moderate) --- */
+
+.moderation-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.moderation-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.moderation-row:first-child {
+  padding-top: 0;
+}
+.moderation-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex: none;
+}
+.moderation-actions button {
+  margin-top: 0;
+}
+
 /* --- Landing (/) --- */
 
 .landing {

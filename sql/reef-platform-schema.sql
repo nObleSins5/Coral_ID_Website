@@ -154,6 +154,10 @@ CREATE TABLE users (
     visible_to_traders  boolean NOT NULL DEFAULT false,   -- Door 2 opt-in
     preferred_temp_unit char(1) NOT NULL DEFAULT 'F'
                             CHECK (preferred_temp_unit IN ('C', 'F')),
+    -- Independent of account_type_code (hobbyist/business) — a moderator
+    -- reviews coral_aliases/husbandry_products proposals and can still be
+    -- either account type at the same time (sql/supabase/14_alias_moderation.sql).
+    is_moderator        boolean NOT NULL DEFAULT false,
     created_at          timestamptz NOT NULL DEFAULT now(),
     updated_at          timestamptz NOT NULL DEFAULT now(),
     deleted_at          timestamptz,
@@ -300,6 +304,7 @@ CREATE TABLE husbandry_products (
     added_by_user_id       uuid REFERENCES users(id),
     moderation_status_code text NOT NULL DEFAULT 'proposed'
                                REFERENCES moderation_statuses(code),
+    approved_by_user_id    uuid REFERENCES users(id),
     created_at             timestamptz NOT NULL DEFAULT now(),
     updated_at             timestamptz NOT NULL DEFAULT now(),
     UNIQUE (brand, product_name)

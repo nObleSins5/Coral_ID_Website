@@ -214,6 +214,7 @@ export function QuickAddSpecimen({
               {g.name}
             </option>
           ))}
+          <option value="unsure">Not sure — genus unknown</option>
         </select>
         <label htmlFor="quick-add-new-photo">Photo (required)</label>
         <input

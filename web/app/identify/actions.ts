@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { computeParameterSnapshot, uploadPhotoFile } from "@/lib/photo-upload";
+import { computeParameterSnapshot, resolveGenusId, uploadPhotoFile } from "@/lib/photo-upload";
 
 // Uploads a photo with NO taxon attached — Door 1's primary entry point
 // ("what is this coral?"). It appears in the /identify queue for the
@@ -71,7 +71,7 @@ export async function proposeIdentification(
   const existingTaxonId = String(formData.get("existing_taxon_id") ?? "") || null;
   const aliasName = String(formData.get("alias_name") ?? "").trim() || null;
   const newName = String(formData.get("new_name") ?? "").trim() || null;
-  const newGenusId = String(formData.get("new_genus_id") ?? "") || null;
+  let newGenusId = String(formData.get("new_genus_id") ?? "") || null;
 
   if (!photoId) return { error: "Missing photo reference." };
 
@@ -81,6 +81,10 @@ export async function proposeIdentification(
   if (!existingTaxonId && newName && !newGenusId) {
     return { error: "Choose which genus this new coral belongs to." };
   }
+
+  const resolvedGenus = await resolveGenusId(supabase, newGenusId);
+  if (resolvedGenus.error) return { error: resolvedGenus.error };
+  newGenusId = resolvedGenus.id;
 
   // A photo escalated here from a private, local-only specimen (see
   // app/tank/actions.ts quickAddLocal) needs to become public — the
