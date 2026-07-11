@@ -179,6 +179,14 @@ CREATE POLICY husbandry_products_moderator_update ON public.husbandry_products
     USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
     WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
 
+-- A user can read back their OWN proposed product (not yet approved, so the
+-- public_read policy above doesn't cover it) — needed so husbandry/equipment
+-- logging can display a just-proposed product's name immediately, not just
+-- once a moderator approves it. sql/supabase/17_husbandry_logging.sql.
+CREATE POLICY husbandry_products_owner_read ON public.husbandry_products
+    FOR SELECT TO authenticated
+    USING (added_by_user_id = auth.uid());
+
 -- Affiliate links: owner-write, scoped via the underlying photo (only the
 -- photo's own uploader manages links on it — see 11_affiliate_links.sql) AND
 -- restricted to business-tier accounts (12_business_listings.sql, 2026-07 —

@@ -160,6 +160,8 @@ export default async function TankPage({
       <p className="muted" style={{ marginTop: 0 }}>
         {tankRow.tank_type ? `${tankRow.tank_type} · ` : ""}
         {tankRow.volume ? `${tankRow.volume} gal` : ""}
+        {" · "}
+        <a href={`/tank/${tankRow.id}/husbandry`}>Equipment &amp; dosing</a>
       </p>
 
       {!columns || !rows ? (
