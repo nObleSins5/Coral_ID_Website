@@ -228,3 +228,36 @@ SELECT id, 'genus', 'Genus unknown', 'genus-unknown', false
 FROM taxon_nodes
 WHERE rank_code = 'category' AND slug = 'coral'
 ON CONFLICT (slug) DO NOTHING;
+
+-- Genus-level care/light/flow defaults — mirrored in
+-- sql/supabase/16_genus_care_defaults.sql (see that file for rationale).
+-- Resolved at read time (web/lib/wiki.ts, withGenusCareDefaults) as a
+-- fallback for any morph that doesn't set its own value; no existing morph
+-- row is touched.
+UPDATE taxon_nodes SET care_difficulty_code = 'difficult', light_level_code = 'high',   flow_level_code = 'high'   WHERE rank_code = 'genus' AND slug = 'acropora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'blastomussa';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'briareum';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'caulastraea';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'clavularia';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'cycloseris';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'medium', flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'dipsastraea';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'discosoma';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'duncanopsammia';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'medium', flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'euphyllia';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'goniopora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'lobophyllia';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'micromussa';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'high',   flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'montipora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'palythoa';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'pavona';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'rhodactis';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'ricordea';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'high',   flow_level_code = 'high'   WHERE rank_code = 'genus' AND slug = 'pocillopora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'sarcophyton';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'high',   flow_level_code = 'high'   WHERE rank_code = 'genus' AND slug = 'seriatopora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'sinularia';
+UPDATE taxon_nodes SET care_difficulty_code = 'moderate',  light_level_code = 'high',   flow_level_code = 'high'   WHERE rank_code = 'genus' AND slug = 'stylophora';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'low',    flow_level_code = 'low'    WHERE rank_code = 'genus' AND slug = 'trachyphyllia';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'turbinaria';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'xenia';
+UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'zoanthus';

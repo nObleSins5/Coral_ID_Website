@@ -44,6 +44,34 @@ export type MorphDetail = MorphSummary & {
 const ELEMENT_SELECT =
   "element_type_code, description, color_ranges ( color_pattern_code, label, color_stops ( hex, ordinal ) )";
 
+type CareFields = {
+  care_difficulty_code: string | null;
+  light_level_code: string | null;
+  flow_level_code: string | null;
+};
+
+// Genus-level fallback: care difficulty, light, and flow are substantially a
+// genus property, not a morph one (every Acropora wants high light/flow
+// regardless of morph; every Euphyllia wants moderate difficulty and lower
+// light/flow) — resolved at READ time rather than copied onto each morph at
+// creation, so correcting a genus default instantly applies to every morph
+// under it instead of needing a bulk update across already-created rows.
+// Only fills in a field the morph itself left null; a morph that's a genuine
+// exception to its genus keeps its own value. See
+// docs/future-considerations.md ("Genus-level care defaults...").
+function withGenusCareDefaults<T extends CareFields>(
+  morph: T,
+  genusDefaults: CareFields | null | undefined,
+): T {
+  if (!genusDefaults) return morph;
+  return {
+    ...morph,
+    care_difficulty_code: morph.care_difficulty_code ?? genusDefaults.care_difficulty_code,
+    light_level_code: morph.light_level_code ?? genusDefaults.light_level_code,
+    flow_level_code: morph.flow_level_code ?? genusDefaults.flow_level_code,
+  };
+}
+
 export async function getGenera(): Promise<
   (Genus & { morph_count: number })[]
 > {
@@ -87,16 +115,24 @@ export async function getMorphsForGenus(
   genusId: string,
 ): Promise<MorphSummary[]> {
   const supabase = createPublicClient();
-  const { data } = await supabase
-    .from("taxon_nodes")
-    .select(
-      `id, name, slug, care_difficulty_code, light_level_code, flow_level_code, growth_form_code,
-       element_profiles ( ${ELEMENT_SELECT} )`,
-    )
-    .eq("rank_code", "morph")
-    .eq("parent_id", genusId)
-    .order("name");
-  return (data as unknown as MorphSummary[]) ?? [];
+  const [{ data }, { data: genusDefaults }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select(
+        `id, name, slug, care_difficulty_code, light_level_code, flow_level_code, growth_form_code,
+         element_profiles ( ${ELEMENT_SELECT} )`,
+      )
+      .eq("rank_code", "morph")
+      .eq("parent_id", genusId)
+      .order("name"),
+    supabase
+      .from("taxon_nodes")
+      .select("care_difficulty_code, light_level_code, flow_level_code")
+      .eq("id", genusId)
+      .maybeSingle(),
+  ]);
+  const morphs = (data as unknown as MorphSummary[]) ?? [];
+  return morphs.map((m) => withGenusCareDefaults(m, genusDefaults));
 }
 
 export async function getMorphBySlug(
@@ -134,12 +170,12 @@ export async function getMorphWithGenus(
   const supabase = createPublicClient();
   const { data: genus } = await supabase
     .from("taxon_nodes")
-    .select("id, name, slug, scientific_name")
+    .select("id, name, slug, scientific_name, care_difficulty_code, light_level_code, flow_level_code")
     .eq("id", morph.parent_id)
     .maybeSingle();
 
   if (!genus || genus.slug !== genusSlug) return null;
-  return { morph, genus };
+  return { morph: withGenusCareDefaults(morph, genus), genus };
 }
 
 export type WikiPhoto = {
@@ -346,7 +382,7 @@ export async function getFeaturedMorphs(limit = 4): Promise<FeaturedMorph[]> {
   ] as string[];
   const { data: genera } = await supabase
     .from("taxon_nodes")
-    .select("id, name, slug")
+    .select("id, name, slug, care_difficulty_code")
     .in("id", genusIds);
   const genusById = new Map((genera ?? []).map((g) => [g.id, g]));
 
@@ -363,7 +399,7 @@ export async function getFeaturedMorphs(limit = 4): Promise<FeaturedMorph[]> {
       slug: m.slug,
       genusName: genus.name,
       genusSlug: genus.slug,
-      care_difficulty_code: m.care_difficulty_code,
+      care_difficulty_code: m.care_difficulty_code ?? genus.care_difficulty_code,
       heroUrl,
     });
   }
