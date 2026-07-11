@@ -187,6 +187,40 @@ CREATE POLICY husbandry_products_owner_read ON public.husbandry_products
     FOR SELECT TO authenticated
     USING (added_by_user_id = auth.uid());
 
+-- Per-coral comment board (docs/future-considerations.md "Idea 3";
+-- sql/supabase/19_coral_comments.sql). Post-publish: public read excludes
+-- hidden/deleted, the author can always read their own, a moderator can
+-- read everything (for the /moderate reported-comments queue).
+CREATE POLICY coral_comments_public_read ON public.coral_comments
+    FOR SELECT TO anon, authenticated
+    USING (NOT is_hidden AND deleted_at IS NULL);
+CREATE POLICY coral_comments_owner_read ON public.coral_comments
+    FOR SELECT TO authenticated
+    USING (user_id = auth.uid());
+CREATE POLICY coral_comments_moderator_read ON public.coral_comments
+    FOR SELECT TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+CREATE POLICY coral_comments_auth_insert ON public.coral_comments
+    FOR INSERT TO authenticated
+    WITH CHECK (user_id = auth.uid());
+-- Owner can soft-delete their own (app layer only ever writes deleted_at
+-- through this policy, never body/is_hidden).
+CREATE POLICY coral_comments_owner_delete ON public.coral_comments
+    FOR UPDATE TO authenticated
+    USING (user_id = auth.uid())
+    WITH CHECK (user_id = auth.uid());
+CREATE POLICY coral_comments_moderator_update ON public.coral_comments
+    FOR UPDATE TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+
+CREATE POLICY coral_comment_reports_insert ON public.coral_comment_reports
+    FOR INSERT TO authenticated
+    WITH CHECK (user_id = auth.uid());
+CREATE POLICY coral_comment_reports_select_own ON public.coral_comment_reports
+    FOR SELECT TO authenticated
+    USING (user_id = auth.uid());
+
 -- Affiliate links: owner-write, scoped via the underlying photo (only the
 -- photo's own uploader manages links on it — see 11_affiliate_links.sql) AND
 -- restricted to business-tier accounts (12_business_listings.sql, 2026-07 —

@@ -119,7 +119,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 0.55rem 0.65rem;
   background: var(--panel);
@@ -127,11 +128,16 @@ select {
   border-radius: 7px;
   color: var(--text);
   font-size: 0.95rem;
+  font-family: inherit;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--accent-text);
   outline-offset: 1px;
+}
+textarea {
+  resize: vertical;
 }
 
 .row {
@@ -1279,5 +1285,22 @@ td {
 }
 .husbandry-drawer-body {
   margin-top: 0.75rem;
+}
+
+/* --- Comment board (morph page "Discussion" section) --- */
+
+.comment-row {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.comment-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.comment-row:first-child {
+  padding-top: 0;
+}
+.comment-row-actions .link-button {
+  font-size: 0.78rem;
 }
 

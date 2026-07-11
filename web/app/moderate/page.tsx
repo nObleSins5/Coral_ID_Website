@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUsernamesFor } from "@/lib/wiki";
-import { AliasModerationRow, ProductModerationRow } from "@/components/moderation-row";
+import { AliasModerationRow, ProductModerationRow, CommentModerationRow } from "@/components/moderation-row";
 
 type AliasRow = {
   id: string;
@@ -18,6 +18,14 @@ type ProductRow = {
   category_code: string;
   added_by_user_id: string | null;
   created_at: string;
+};
+
+type CommentRow = {
+  id: string;
+  body: string;
+  user_id: string;
+  created_at: string;
+  taxon_nodes: { name: string; slug: string; parent_id: string | null; rank_code: string } | null;
 };
 
 // Moderator-only review queue for the two catalogs that accumulate
@@ -59,9 +67,27 @@ export default async function ModerateQueue() {
     .order("created_at", { ascending: true });
   const aliasRows = (aliases ?? []) as unknown as AliasRow[];
 
+  const { data: comments } = await supabase
+    .from("coral_comments")
+    .select("id, body, user_id, created_at, taxon_nodes ( name, slug, parent_id, rank_code )")
+    .eq("is_hidden", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  const commentRows = (comments ?? []) as unknown as CommentRow[];
+
+  const commentIds = commentRows.map((c) => c.id);
+  const { data: reports } =
+    commentIds.length > 0
+      ? await supabase.from("coral_comment_reports").select("comment_id").in("comment_id", commentIds)
+      : { data: [] as { comment_id: string }[] };
+  const reportCountByComment = new Map<string, number>();
+  for (const r of reports ?? []) {
+    reportCountByComment.set(r.comment_id, (reportCountByComment.get(r.comment_id) ?? 0) + 1);
+  }
+
   const genusIds = [
     ...new Set(
-      aliasRows
+      [...aliasRows, ...commentRows]
         .map((a) => (a.taxon_nodes?.rank_code === "morph" ? a.taxon_nodes.parent_id : null))
         .filter((x): x is string => !!x),
     ),
@@ -88,6 +114,7 @@ export default async function ModerateQueue() {
     [
       ...aliasRows.map((a) => a.proposed_by_user_id),
       ...productRows.map((p) => p.added_by_user_id),
+      ...commentRows.map((c) => c.user_id),
     ].filter((x): x is string => !!x),
   );
 
@@ -151,6 +178,34 @@ export default async function ModerateQueue() {
               createdAt={p.created_at}
             />
           ))}
+        </div>
+      )}
+
+      <h2>Reported comments</h2>
+      {commentRows.length === 0 ? (
+        <p className="muted">No reported comments right now.</p>
+      ) : (
+        <div className="card">
+          {commentRows.map((c) => {
+            const taxon = c.taxon_nodes;
+            const genus =
+              taxon?.rank_code === "morph" && taxon.parent_id
+                ? genusById.get(taxon.parent_id)
+                : null;
+            const taxonHref = genus && taxon ? `/coral/${genus.slug}/${taxon.slug}` : null;
+            return (
+              <CommentModerationRow
+                key={c.id}
+                commentId={c.id}
+                body={c.body}
+                taxonName={taxon ? `${taxon.name}${genus ? ` (${genus.name})` : ""}` : "Unknown entry"}
+                taxonHref={taxonHref}
+                authorUsername={usernames.get(c.user_id) ?? "A hobbyist"}
+                reportCount={reportCountByComment.get(c.id) ?? 0}
+                createdAt={c.created_at}
+              />
+            );
+          })}
         </div>
       )}
     </div>

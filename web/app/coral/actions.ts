@@ -234,3 +234,87 @@ export async function toggleWishlist(
   revalidatePath("/dashboard");
   return { wishlisted: true };
 }
+
+// -----------------------------------------------------------------------
+// Per-coral comment board (docs/future-considerations.md "Idea 3") — flat,
+// post-publish (goes live immediately, not queue-gated like coral_aliases),
+// strongly moderated via report-threshold auto-hide
+// (handle_coral_comment_report(), sql/supabase/19_coral_comments.sql) plus
+// direct moderator hide/restore/delete from /moderate.
+// -----------------------------------------------------------------------
+
+export async function postComment(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to comment." };
+
+  const taxonNodeId = String(formData.get("taxon_node_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  const morphSlug = String(formData.get("morph_slug") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (!taxonNodeId) return { error: "Missing coral reference." };
+  if (!body) return { error: "Write something first." };
+  if (body.length > 2000) return { error: "Comments are capped at 2000 characters." };
+
+  const { error } = await supabase.from("coral_comments").insert({
+    taxon_node_id: taxonNodeId,
+    user_id: user.id,
+    body,
+  });
+  if (error) return { error: error.message };
+
+  if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+  return {};
+}
+
+// Soft-delete of the caller's OWN comment. RLS (coral_comments_owner_delete)
+// would technically allow updating any column, but this action only ever
+// writes deleted_at.
+export async function deleteComment(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const commentId = String(formData.get("comment_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  const morphSlug = String(formData.get("morph_slug") ?? "");
+  if (!commentId) return { error: "Missing comment reference." };
+
+  const { error } = await supabase
+    .from("coral_comments")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", commentId)
+    .eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  if (genusSlug && morphSlug) revalidatePath(`/coral/${genusSlug}/${morphSlug}`);
+  return {};
+}
+
+// Enough distinct reports auto-hides the comment (DB trigger); this action
+// just records the caller's own report.
+export async function reportComment(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to report a comment." };
+
+  const commentId = String(formData.get("comment_id") ?? "");
+  if (!commentId) return { error: "Missing comment reference." };
+
+  const { error } = await supabase.from("coral_comment_reports").insert({
+    comment_id: commentId,
+    user_id: user.id,
+  });
+  // A unique-violation just means they already reported this one.
+  if (error && error.code !== "23505") return { error: error.message };
+
+  return {};
+}

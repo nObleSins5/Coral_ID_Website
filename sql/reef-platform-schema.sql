@@ -523,6 +523,33 @@ CREATE INDEX idx_coral_aliases_norm ON coral_aliases (alias_name_normalized);
 CREATE INDEX idx_coral_aliases_trgm
     ON coral_aliases USING gin (alias_name_normalized gin_trgm_ops);
 
+-- A flat (no threading), strongly-moderated discussion board per coral —
+-- docs/future-considerations.md "Idea 3". Post-publish, not pre-publish like
+-- coral_aliases above: a comment goes live immediately, but enough distinct
+-- reports (coral_comment_reports + handle_coral_comment_report(), mirroring
+-- handle_affiliate_link_report() in §10) auto-hides it pending moderator
+-- review. See sql/supabase/19_coral_comments.sql for the full RLS.
+CREATE TABLE coral_comments (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    taxon_node_id     uuid NOT NULL REFERENCES taxon_nodes(id) ON DELETE CASCADE,
+    user_id           uuid NOT NULL REFERENCES users(id),
+    body              text NOT NULL CHECK (char_length(btrim(body)) > 0 AND char_length(body) <= 2000),
+    is_hidden         boolean NOT NULL DEFAULT false,
+    hidden_by_user_id uuid REFERENCES users(id),
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    deleted_at        timestamptz
+);
+CREATE INDEX idx_coral_comments_taxon ON coral_comments (taxon_node_id, created_at);
+
+CREATE TABLE coral_comment_reports (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    comment_id  uuid NOT NULL REFERENCES coral_comments(id) ON DELETE CASCADE,
+    user_id     uuid NOT NULL REFERENCES users(id),
+    reported_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (comment_id, user_id)
+);
+CREATE INDEX idx_coral_comment_reports_comment ON coral_comment_reports (comment_id);
+
 -- A suggestion targets a taxon node at ANY level, proposes a not-yet-existing
 -- name against an existing node (an alias claim — see coral_aliases insert in
 -- the app layer, deliberately NOT auto-approved by this table's own vote: an
@@ -840,6 +867,38 @@ $$;
 CREATE TRIGGER trg_affiliate_link_reports_check
     AFTER INSERT ON affiliate_link_reports
     FOR EACH ROW EXECUTE FUNCTION handle_affiliate_link_report();
+
+-- Same reactive-report shape as affiliate links, applied to coral_comments
+-- above (docs/future-considerations.md "Idea 3").
+INSERT INTO app_settings (key, value, description) VALUES
+    ('coral_comment_report_threshold', '3'::jsonb,
+     'Number of distinct-user reports before a comment auto-hides (is_hidden = true), pending moderator review.');
+
+CREATE OR REPLACE FUNCTION handle_coral_comment_report() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_comment_id uuid := NEW.comment_id;
+    v_count      integer;
+    v_threshold  integer;
+BEGIN
+    SELECT COUNT(*) INTO v_count
+        FROM coral_comment_reports WHERE comment_id = v_comment_id;
+    SELECT (value #>> '{}')::integer INTO v_threshold
+        FROM app_settings WHERE key = 'coral_comment_report_threshold';
+
+    IF v_count >= v_threshold THEN
+        UPDATE coral_comments SET is_hidden = true WHERE id = v_comment_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_coral_comment_reports_check
+    AFTER INSERT ON coral_comment_reports
+    FOR EACH ROW EXECUTE FUNCTION handle_coral_comment_report();
 
 CREATE TABLE notifications (
     id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

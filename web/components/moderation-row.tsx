@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { moderateAlias, moderateProduct } from "@/app/moderate/actions";
+import { moderateAlias, moderateProduct, restoreComment, deleteReportedComment } from "@/app/moderate/actions";
 
 // One pending row + Approve/Reject — same optimistic-remove-on-success shape
 // as the rest of the app's inline moderation-ish actions (reset-grid-button,
@@ -84,6 +84,73 @@ export function AliasModerationRow({
           onClick={() => decide("rejected")}
         >
           Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function CommentModerationRow({
+  commentId,
+  body,
+  taxonName,
+  taxonHref,
+  authorUsername,
+  reportCount,
+  createdAt,
+}: {
+  commentId: string;
+  body: string;
+  taxonName: string;
+  taxonHref: string | null;
+  authorUsername: string;
+  reportCount: number;
+  createdAt: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function act(action: (formData: FormData) => Promise<{ error?: string }>) {
+    setError(null);
+    const formData = new FormData();
+    formData.set("comment_id", commentId);
+    startTransition(async () => {
+      const result = await action(formData);
+      if (result?.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="moderation-row">
+      <div>
+        <p style={{ margin: 0 }}>
+          On {taxonHref ? <a href={taxonHref}>{taxonName}</a> : taxonName} — by{" "}
+          <strong>{authorUsername}</strong>{" "}
+          <span className="pill">
+            {reportCount} report{reportCount === 1 ? "" : "s"}
+          </span>
+        </p>
+        <p className="muted" style={{ margin: "0.25rem 0" }}>
+          &quot;{body}&quot;
+        </p>
+        <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+          {new Date(createdAt).toLocaleDateString()}
+        </p>
+        {error ? <p className="error">{error}</p> : null}
+      </div>
+      <div className="moderation-actions">
+        <button type="button" disabled={pending} onClick={() => act(restoreComment)}>
+          Restore
+        </button>
+        <button
+          type="button"
+          className="btn-danger"
+          disabled={pending}
+          onClick={() => act(deleteReportedComment)}
+        >
+          Delete
         </button>
       </div>
     </div>

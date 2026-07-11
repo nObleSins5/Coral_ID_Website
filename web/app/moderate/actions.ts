@@ -72,3 +72,46 @@ export async function moderateProduct(
   revalidatePath("/moderate");
   return {};
 }
+
+// Reported comments (is_hidden = true, auto-hidden by report threshold or
+// already moderator-hidden) — restore un-hides it, delete soft-deletes it.
+// sql/supabase/19_coral_comments.sql.
+export async function restoreComment(formData: FormData): Promise<{ error?: string }> {
+  const gate = await requireModerator();
+  if ("error" in gate) return { error: gate.error };
+
+  const commentId = String(formData.get("comment_id") ?? "");
+  if (!commentId) return { error: "Missing comment reference." };
+
+  const { error } = await gate.supabase
+    .from("coral_comments")
+    .update({ is_hidden: false, hidden_by_user_id: null })
+    .eq("id", commentId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/moderate");
+  return {};
+}
+
+export async function deleteReportedComment(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const gate = await requireModerator();
+  if ("error" in gate) return { error: gate.error };
+
+  const commentId = String(formData.get("comment_id") ?? "");
+  if (!commentId) return { error: "Missing comment reference." };
+
+  const { error } = await gate.supabase
+    .from("coral_comments")
+    .update({
+      deleted_at: new Date().toISOString(),
+      hidden_by_user_id: gate.userId,
+      is_hidden: true,
+    })
+    .eq("id", commentId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/moderate");
+  return {};
+}

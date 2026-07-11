@@ -7,6 +7,8 @@ import {
   getPhotosForTaxon,
   getUsernamesFor,
 } from "@/lib/wiki";
+import { getCommentsForTaxon } from "@/lib/comments";
+import { CoralCommentsSection } from "@/components/coral-comments-section";
 import {
   CareDifficultyPill,
   CarePill,
@@ -69,6 +71,7 @@ export default async function MorphPage({
   const voteCounts = await getAccurateVoteCounts(photos.map((p) => p.id));
   const usernames = await getUsernamesFor(photos.map((p) => p.uploader_user_id));
   const affiliateLinks = await getAffiliateLinksForTaxon(morph.id);
+  const comments = await getCommentsForTaxon(morph.id);
 
   // Hero = most-voted photo, computed live (no cached counter/batch job —
   // trivial at this scale). photos is already newest-first, and we only
@@ -268,6 +271,14 @@ export default async function MorphPage({
           ))}
         </div>
       )}
+
+      <h2>Discussion</h2>
+      <CoralCommentsSection
+        taxonNodeId={morph.id}
+        genusSlug={genus.slug}
+        morphSlug={morph.slug}
+        initialComments={comments}
+      />
     </div>
   );
 }
