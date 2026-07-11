@@ -8,7 +8,10 @@ import {
   getUsernamesFor,
 } from "@/lib/wiki";
 import { getCommentsForTaxon } from "@/lib/comments";
+import { getConfirmedColorSamples } from "@/lib/color-samples";
 import { CoralCommentsSection } from "@/components/coral-comments-section";
+import { ColorContributeSection } from "@/components/color-contribute-section";
+import { ELEMENT_LABEL } from "@/components/coral-ui";
 import {
   CareDifficultyPill,
   CarePill,
@@ -72,6 +75,16 @@ export default async function MorphPage({
   const usernames = await getUsernamesFor(photos.map((p) => p.uploader_user_id));
   const affiliateLinks = await getAffiliateLinksForTaxon(morph.id);
   const comments = await getCommentsForTaxon(morph.id);
+  const communitySamplesMap = await getConfirmedColorSamples(morph.id);
+  const communitySamples = Object.fromEntries(communitySamplesMap);
+
+  // Elements this coral's anatomy template says it has, for the color picker's
+  // element dropdown. Falls back to the elements it already has logged.
+  const pickerElements = (
+    templateElementCodes.length > 0
+      ? templateElementCodes
+      : morph.element_profiles.map((e) => e.element_type_code)
+  ).map((code) => ({ code, label: ELEMENT_LABEL[code] ?? code }));
 
   // Hero = most-voted photo, computed live (no cached counter/batch job —
   // trivial at this scale). photos is already newest-first, and we only
@@ -210,7 +223,17 @@ export default async function MorphPage({
           <ElementColorKey
             elements={morph.element_profiles}
             templateElementCodes={templateElementCodes.length > 0 ? templateElementCodes : undefined}
+            communitySamples={communitySamples}
           />
+          <div style={{ marginTop: "1rem" }}>
+            <ColorContributeSection
+              taxonNodeId={morph.id}
+              genusSlug={genus.slug}
+              morphSlug={morph.slug}
+              templateElements={pickerElements}
+              photos={photos.map((p) => ({ id: p.id, url: p.url }))}
+            />
+          </div>
         </div>
       </div>
 

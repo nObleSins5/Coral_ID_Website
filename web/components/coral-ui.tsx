@@ -112,9 +112,14 @@ export function CompactColorKey({ elements }: { elements: ElementProfile[] }) {
 export function ElementColorKey({
   elements,
   templateElementCodes,
+  communitySamples,
 }: {
   elements: ElementProfile[];
   templateElementCodes?: string[];
+  // Confirmed community color samples per element (element_type_code -> hexes),
+  // from the color-picker tool. Shown alongside the seed range, or as the
+  // element's color when there's no seed range yet.
+  communitySamples?: Record<string, string[]>;
 }) {
   if (!templateElementCodes && elements.length === 0)
     return <p className="muted">No element profiles recorded yet.</p>;
@@ -138,6 +143,7 @@ export function ElementColorKey({
         // that's the same "not yet documented" gap as the row not existing
         // at all, not real data to render as an empty swatch.
         const hasColorData = el ? el.color_ranges.some((r) => r.color_stops.length > 0) : false;
+        const community = communitySamples?.[code] ?? [];
         return (
           <div className="element-row" key={code}>
             <div className="element-name">{ELEMENT_LABEL[code] ?? code}</div>
@@ -154,6 +160,11 @@ export function ElementColorKey({
                     </span>
                   </div>
                 ))}
+                {community.length > 0 ? <CommunitySwatches hexes={community} /> : null}
+              </div>
+            ) : community.length > 0 ? (
+              <div className="element-colors">
+                <CommunitySwatches hexes={community} />
               </div>
             ) : (
               <div className="element-colors">
@@ -163,6 +174,21 @@ export function ElementColorKey({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CommunitySwatches({ hexes }: { hexes: string[] }) {
+  return (
+    <div className="color-range community-range">
+      <span className="color-bar-strip">
+        {hexes.slice(0, 8).map((hex, i) => (
+          <span key={i} className="color-bar-chip" style={{ background: hex }} title={hex} />
+        ))}
+      </span>
+      <span className="color-meta muted">
+        community &middot; {hexes.length} sample{hexes.length === 1 ? "" : "s"}
+      </span>
     </div>
   );
 }

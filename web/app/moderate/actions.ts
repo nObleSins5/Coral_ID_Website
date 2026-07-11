@@ -115,3 +115,35 @@ export async function deleteReportedComment(
   revalidatePath("/moderate");
   return {};
 }
+
+// Contributed element color samples held for review (status still 'proposed'
+// — either a brand-new element with nothing to range-check against, or one
+// the ΔE range check flagged out_of_range). approve -> confirmed, reject ->
+// rejected. sql/supabase/21_element_color_samples.sql.
+export async function moderateColorSample(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const gate = await requireModerator();
+  if ("error" in gate) return { error: gate.error };
+
+  const sampleId = String(formData.get("sample_id") ?? "");
+  const decision = String(formData.get("decision") ?? "");
+  if (!sampleId || !DECISIONS.has(decision)) {
+    return { error: "Invalid moderation request." };
+  }
+  const status = decision === "approved" ? "confirmed" : "rejected";
+
+  const { error } = await gate.supabase
+    .from("element_color_samples")
+    .update({
+      status,
+      reviewed_by_user_id: gate.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", sampleId)
+    .eq("status", "proposed");
+  if (error) return { error: error.message };
+
+  revalidatePath("/moderate");
+  return {};
+}
