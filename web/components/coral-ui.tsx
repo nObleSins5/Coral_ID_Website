@@ -101,32 +101,68 @@ export function CompactColorKey({ elements }: { elements: ElementProfile[] }) {
   );
 }
 
-// Full, labeled element color key for the detail page.
-export function ElementColorKey({ elements }: { elements: ElementProfile[] }) {
-  if (elements.length === 0)
+// Full, labeled element color key for the detail page. templateElementCodes
+// (from the genus's anatomy_template_code, see sql/supabase/20_anatomy_templates.sql)
+// is the ordered, standardized set of elements THIS kind of coral actually
+// has — passing it shows every expected element, marking any the morph
+// hasn't logged real color data for yet as "Not yet documented" rather than
+// silently omitting it (the gap this closes: most seeded morphs only ever
+// had one element logged, with no consistency by growth form). Falls back
+// to just the morph's own elements when no template is known.
+export function ElementColorKey({
+  elements,
+  templateElementCodes,
+}: {
+  elements: ElementProfile[];
+  templateElementCodes?: string[];
+}) {
+  if (!templateElementCodes && elements.length === 0)
     return <p className="muted">No element profiles recorded yet.</p>;
+
+  const byCode = new Map(elements.map((el) => [el.element_type_code, el]));
+  const orderedCodes = templateElementCodes
+    ? [
+        ...templateElementCodes,
+        ...elements
+          .map((el) => el.element_type_code)
+          .filter((code) => !templateElementCodes.includes(code)),
+      ]
+    : elements.map((el) => el.element_type_code);
+
   return (
     <div className="element-key">
-      {elements.map((el) => (
-        <div className="element-row" key={el.element_type_code}>
-          <div className="element-name">
-            {ELEMENT_LABEL[el.element_type_code] ?? el.element_type_code}
-          </div>
-          <div className="element-colors">
-            {el.color_ranges.map((r, i) => (
-              <div className="color-range" key={i}>
-                <span className="color-bar" style={{ background: rangeToCss(r) }} />
-                <span className="color-meta">
-                  {r.label ? <strong>{r.label}</strong> : null}{" "}
-                  <span className="muted">
-                    {sortedHexes(r).join(" → ")}
-                  </span>
-                </span>
+      {orderedCodes.map((code) => {
+        const el = byCode.get(code);
+        // An element_profiles row can exist with zero color_ranges/color_stops
+        // (logged as "this coral has one" without ever recording a color) —
+        // that's the same "not yet documented" gap as the row not existing
+        // at all, not real data to render as an empty swatch.
+        const hasColorData = el ? el.color_ranges.some((r) => r.color_stops.length > 0) : false;
+        return (
+          <div className="element-row" key={code}>
+            <div className="element-name">{ELEMENT_LABEL[code] ?? code}</div>
+            {hasColorData && el ? (
+              <div className="element-colors">
+                {el.color_ranges.map((r, i) => (
+                  <div className="color-range" key={i}>
+                    <span className="color-bar" style={{ background: rangeToCss(r) }} />
+                    <span className="color-meta">
+                      {r.label ? <strong>{r.label}</strong> : null}{" "}
+                      <span className="muted">
+                        {sortedHexes(r).join(" → ")}
+                      </span>
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="element-colors">
+                <span className="muted element-undocumented">Not yet documented</span>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

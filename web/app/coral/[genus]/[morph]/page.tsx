@@ -64,7 +64,7 @@ export default async function MorphPage({
   const { genus: genusSlug, morph: morphSlug } = await params;
   const result = await getMorphWithGenus(genusSlug, morphSlug);
   if (!result) notFound();
-  const { morph, genus } = result;
+  const { morph, genus, templateElementCodes } = result;
 
   const colors = keyColors(morph.element_profiles);
   const photos = await getPhotosForTaxon(morph.id);
@@ -207,7 +207,10 @@ export default async function MorphPage({
           <p className="muted" style={{ marginTop: "-0.5rem" }}>
             Compare each part of your coral against these typical ranges.
           </p>
-          <ElementColorKey elements={morph.element_profiles} />
+          <ElementColorKey
+            elements={morph.element_profiles}
+            templateElementCodes={templateElementCodes.length > 0 ? templateElementCodes : undefined}
+          />
         </div>
       </div>
 

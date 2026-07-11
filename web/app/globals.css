@@ -556,6 +556,12 @@ td {
 .color-meta {
   font-size: 0.85rem;
 }
+.element-undocumented {
+  font-size: 0.85rem;
+  font-style: italic;
+  padding-top: 0.35rem;
+  display: inline-block;
+}
 
 .detail-grid {
   display: grid;

@@ -158,24 +158,45 @@ export async function getMorphBySlug(
   return data as unknown as MorphDetail | null;
 }
 
+// Ordered element_type_codes for a genus's anatomy_template_code (which
+// elements THIS kind of coral actually has) — sql/supabase/20_anatomy_templates.sql.
+// Empty for a genus with no template assigned yet (e.g. the "Genus unknown"
+// placeholder), which ElementColorKey treats as "fall back to whatever the
+// morph itself has."
+export async function getAnatomyTemplateElements(
+  templateCode: string | null,
+): Promise<string[]> {
+  if (!templateCode) return [];
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("anatomy_template_elements")
+    .select("element_type_code")
+    .eq("template_code", templateCode)
+    .order("sort_order");
+  return (data ?? []).map((r) => r.element_type_code);
+}
+
 // Fetches a morph and its parent genus together, verifying the genus slug in
 // the URL actually matches the morph's real parent (so /coral/wrong-genus/x 404s).
 export async function getMorphWithGenus(
   genusSlug: string,
   morphSlug: string,
-): Promise<{ morph: MorphDetail; genus: Genus } | null> {
+): Promise<{ morph: MorphDetail; genus: Genus; templateElementCodes: string[] } | null> {
   const morph = await getMorphBySlug(morphSlug);
   if (!morph || !morph.parent_id) return null;
 
   const supabase = createPublicClient();
   const { data: genus } = await supabase
     .from("taxon_nodes")
-    .select("id, name, slug, scientific_name, care_difficulty_code, light_level_code, flow_level_code")
+    .select(
+      "id, name, slug, scientific_name, care_difficulty_code, light_level_code, flow_level_code, anatomy_template_code",
+    )
     .eq("id", morph.parent_id)
     .maybeSingle();
 
   if (!genus || genus.slug !== genusSlug) return null;
-  return { morph: withGenusCareDefaults(morph, genus), genus };
+  const templateElementCodes = await getAnatomyTemplateElements(genus.anatomy_template_code);
+  return { morph: withGenusCareDefaults(morph, genus), genus, templateElementCodes };
 }
 
 export type WikiPhoto = {

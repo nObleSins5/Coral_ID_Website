@@ -96,6 +96,44 @@ INSERT INTO growth_forms (code, label, sort_order) VALUES
     ('digitate',       'Digitate',         8),
     ('submassive',     'Submassive',       9);
 
+-- Which of the element_types above actually apply to a given coral's real
+-- anatomy — assigned at the GENUS level (anatomy is a genus property, not a
+-- morph one). Standardizes the element color key instead of each morph
+-- freely logging whatever single element happened to get picked at seed
+-- time — see sql/supabase/20_anatomy_templates.sql.
+CREATE TABLE anatomy_templates (
+    code       text PRIMARY KEY,
+    label      text NOT NULL,
+    sort_order smallint NOT NULL DEFAULT 0
+);
+INSERT INTO anatomy_templates (code, label, sort_order) VALUES
+    ('branching_sps', 'Branching/SPS', 1),
+    ('lps_corallite', 'LPS with corallite', 2),
+    ('lps_tentacled', 'Tentacled LPS', 3),
+    ('polyp_soft',    'Polyp-based soft coral / zoanthid', 4);
+
+CREATE TABLE anatomy_template_elements (
+    template_code     text NOT NULL REFERENCES anatomy_templates(code) ON DELETE CASCADE,
+    element_type_code text NOT NULL REFERENCES element_types(code),
+    sort_order        smallint NOT NULL DEFAULT 0,
+    PRIMARY KEY (template_code, element_type_code)
+);
+INSERT INTO anatomy_template_elements (template_code, element_type_code, sort_order) VALUES
+    ('branching_sps', 'coenosarc_skin',    1),
+    ('branching_sps', 'axial_corallite',   2),
+    ('branching_sps', 'radial_corallite',  3),
+    ('branching_sps', 'growth_tip',        4),
+    ('lps_corallite', 'coenosarc_skin',    1),
+    ('lps_corallite', 'corallite',         2),
+    ('lps_corallite', 'mouth_oral_disc',   3),
+    ('lps_tentacled', 'coenosarc_skin',    1),
+    ('lps_tentacled', 'tentacle',          2),
+    ('lps_tentacled', 'mouth_oral_disc',   3),
+    ('polyp_soft',    'base_body',         1),
+    ('polyp_soft',    'polyp',             2),
+    ('polyp_soft',    'tentacle',          3),
+    ('polyp_soft',    'mouth_oral_disc',   4);
+
 CREATE TABLE care_difficulties (
     code       text PRIMARY KEY,
     label      text NOT NULL,
@@ -211,6 +249,11 @@ CREATE TABLE taxon_nodes (
     light_level_code      text REFERENCES care_levels(code),
     flow_level_code       text REFERENCES care_levels(code),
     growth_form_code      text REFERENCES growth_forms(code),
+    -- Genus-level (see anatomy_templates above) — which elements this kind
+    -- of coral actually has, so the element color key can show the full
+    -- standardized set (with gaps marked, not silently omitted) instead of
+    -- whatever subset a morph happens to have logged.
+    anatomy_template_code text REFERENCES anatomy_templates(code),
     placement             text,
     description           text,
 

@@ -40,6 +40,7 @@ BEGIN
         -- trait lookups
         'ranks','element_types','growth_forms','care_difficulties','care_levels',
         'corallite_shapes','skin_textures','polyp_sizes','color_patterns','named_colors',
+        'anatomy_templates','anatomy_template_elements',
         -- wiki content
         'taxon_nodes','element_profiles','color_ranges','color_stops',
         'taxon_reference_images','taxon_recommended_products',

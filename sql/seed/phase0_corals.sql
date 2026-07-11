@@ -261,3 +261,14 @@ UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'l
 UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'turbinaria';
 UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'xenia';
 UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'zoanthus';
+
+-- Anatomy templates (which elements a genus actually has) — mirrored in
+-- sql/supabase/20_anatomy_templates.sql (see that file for rationale).
+UPDATE taxon_nodes SET anatomy_template_code = 'branching_sps' WHERE rank_code = 'genus' AND slug IN
+    ('acropora', 'montipora', 'pavona', 'pocillopora', 'seriatopora', 'stylophora');
+UPDATE taxon_nodes SET anatomy_template_code = 'lps_corallite' WHERE rank_code = 'genus' AND slug IN
+    ('blastomussa', 'caulastraea', 'cycloseris', 'dipsastraea', 'lobophyllia', 'micromussa', 'trachyphyllia', 'turbinaria');
+UPDATE taxon_nodes SET anatomy_template_code = 'lps_tentacled' WHERE rank_code = 'genus' AND slug IN
+    ('duncanopsammia', 'euphyllia', 'goniopora');
+UPDATE taxon_nodes SET anatomy_template_code = 'polyp_soft' WHERE rank_code = 'genus' AND slug IN
+    ('briareum', 'clavularia', 'discosoma', 'palythoa', 'rhodactis', 'ricordea', 'sarcophyton', 'sinularia', 'xenia', 'zoanthus');
