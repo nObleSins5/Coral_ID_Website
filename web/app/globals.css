@@ -1238,3 +1238,46 @@ td {
   margin-bottom: 0.5rem;
 }
 
+.husbandry-row-with-duplicate {
+  border-bottom: 1px solid var(--border);
+}
+.husbandry-row-with-duplicate:last-child {
+  border-bottom: none;
+}
+.husbandry-row-with-duplicate .husbandry-row {
+  border-bottom: none;
+}
+.husbandry-row-with-duplicate .link-button {
+  display: inline-block;
+  margin: 0 0 0.6rem;
+}
+
+.husbandry-drawers {
+  padding: 0;
+}
+.husbandry-drawer {
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.husbandry-drawer:last-child {
+  border-bottom: none;
+}
+.husbandry-drawer summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+.husbandry-drawer summary::-webkit-details-marker {
+  display: none;
+}
+.husbandry-drawer summary::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.husbandry-drawer[open] summary::before {
+  content: "▾ ";
+}
+.husbandry-drawer-body {
+  margin-top: 0.75rem;
+}
+

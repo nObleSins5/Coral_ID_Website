@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addDosingMethod, endDosingMethod } from "@/app/tank/[id]/husbandry/actions";
+import { addDosingMethod } from "@/app/tank/[id]/husbandry/actions";
 import { ProductPicker } from "@/components/product-picker";
 import type { SearchableProduct } from "@/lib/husbandry";
 
@@ -16,6 +16,7 @@ export type DosingMethodItem = {
 };
 type Category = { code: string; label: string };
 
+const ELEMENTS = ["alkalinity", "calcium", "magnesium"] as const;
 const ELEMENT_LABEL: Record<string, string> = {
   alkalinity: "Alkalinity",
   calcium: "Calcium",
@@ -31,49 +32,15 @@ const METHOD_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-function DosingRow({ tankId, item }: { tankId: string; item: DosingMethodItem }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function end() {
-    const formData = new FormData();
-    formData.set("tank_id", tankId);
-    formData.set("dosing_method_id", item.id);
-    startTransition(async () => {
-      await endDosingMethod(formData);
-      router.refresh();
-    });
-  }
-
-  return (
-    <div className="husbandry-row">
-      <div>
-        <p style={{ margin: 0 }}>
-          <strong>{ELEMENT_LABEL[item.element] ?? item.element}</strong>{" "}
-          <span className="pill">{METHOD_LABEL[item.method] ?? item.method}</span>
-        </p>
-        <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
-          {item.productLabel ? `${item.productLabel} · ` : ""}
-          since {item.started_on}
-          {item.ended_on ? ` · ended ${item.ended_on}` : ""}
-        </p>
-      </div>
-      {!item.ended_on ? (
-        <button type="button" className="btn-secondary" disabled={pending} onClick={end}>
-          End
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function AddDosingMethodForm({
+function ChangeMethodForm({
   tankId,
+  element,
   products,
   categories,
   onDone,
 }: {
   tankId: string;
+  element: string;
   products: SearchableProduct[];
   categories: Category[];
   onDone: () => void;
@@ -85,6 +52,7 @@ function AddDosingMethodForm({
   function handleSubmit(formData: FormData) {
     setError(null);
     formData.set("tank_id", tankId);
+    formData.set("element", element);
     startTransition(async () => {
       const result = await addDosingMethod(formData);
       if (result?.error) setError(result.error);
@@ -97,19 +65,8 @@ function AddDosingMethodForm({
 
   return (
     <form className="add-photo-form card" action={handleSubmit}>
-      <label htmlFor="dosing-element">Element</label>
-      <select id="dosing-element" name="element" defaultValue="" required>
-        <option value="" disabled>
-          Choose an element
-        </option>
-        {Object.entries(ELEMENT_LABEL).map(([code, label]) => (
-          <option key={code} value={code}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <label htmlFor="dosing-method">Method</label>
-      <select id="dosing-method" name="method" defaultValue="" required>
+      <label htmlFor={`dosing-method-${element}`}>Method</label>
+      <select id={`dosing-method-${element}`} name="method" defaultValue="" required>
         <option value="" disabled>
           Choose a method
         </option>
@@ -120,18 +77,21 @@ function AddDosingMethodForm({
         ))}
       </select>
       <ProductPicker products={products} categories={categories} />
-      <label htmlFor="dosing-started">Started on</label>
+      <p className="muted" style={{ fontSize: "0.8rem", marginTop: "-0.25rem" }}>
+        E.g. a calcium reactor doesn&apos;t need a brand/product — leave it blank.
+      </p>
+      <label htmlFor={`dosing-started-${element}`}>Started on</label>
       <input
-        id="dosing-started"
+        id={`dosing-started-${element}`}
         name="started_on"
         type="date"
         defaultValue={new Date().toISOString().slice(0, 10)}
       />
-      <label htmlFor="dosing-notes">Notes (optional)</label>
-      <input id="dosing-notes" name="notes" />
+      <label htmlFor={`dosing-notes-${element}`}>Notes (optional)</label>
+      <input id={`dosing-notes-${element}`} name="notes" />
       <div className="form-actions">
         <button type="submit" disabled={pending}>
-          {pending ? "Adding…" : "Add dosing method"}
+          {pending ? "Saving…" : "Save"}
         </button>
         <button type="button" className="btn-secondary" onClick={onDone}>
           Cancel
@@ -139,6 +99,75 @@ function AddDosingMethodForm({
       </div>
       {error ? <p className="error">{error}</p> : null}
     </form>
+  );
+}
+
+function ElementDrawer({
+  tankId,
+  element,
+  active,
+  past,
+  products,
+  categories,
+}: {
+  tankId: string;
+  element: string;
+  active: DosingMethodItem | null;
+  past: DosingMethodItem[];
+  products: SearchableProduct[];
+  categories: Category[];
+}) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <details className="husbandry-drawer" open={!active}>
+      <summary>
+        {ELEMENT_LABEL[element]}
+        {active ? (
+          <span className="muted">
+            {" "}
+            — {METHOD_LABEL[active.method] ?? active.method}
+            {active.productLabel ? ` · ${active.productLabel}` : ""}
+          </span>
+        ) : (
+          <span className="muted"> — not set up yet</span>
+        )}
+      </summary>
+      <div className="husbandry-drawer-body">
+        {active ? (
+          <p className="muted" style={{ marginTop: 0 }}>
+            Since {active.started_on}
+            {active.productLabel ? ` · ${active.productLabel}` : " · no product logged"}
+          </p>
+        ) : null}
+        {editing ? (
+          <ChangeMethodForm
+            tankId={tankId}
+            element={element}
+            products={products}
+            categories={categories}
+            onDone={() => setEditing(false)}
+          />
+        ) : (
+          <button type="button" onClick={() => setEditing(true)}>
+            {active ? "Change method" : "Set up dosing"}
+          </button>
+        )}
+        {past.length > 0 ? (
+          <div style={{ marginTop: "1rem" }}>
+            <p className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.35rem" }}>
+              Past methods
+            </p>
+            {past.map((m) => (
+              <p key={m.id} className="muted" style={{ fontSize: "0.8rem", margin: "0.2rem 0" }}>
+                {METHOD_LABEL[m.method] ?? m.method}
+                {m.productLabel ? ` · ${m.productLabel}` : ""} · {m.started_on} → {m.ended_on}
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -153,31 +182,24 @@ export function HusbandryDosingSection({
   products: SearchableProduct[];
   categories: Category[];
 }) {
-  const [adding, setAdding] = useState(false);
-
   return (
-    <div>
-      {methods.length === 0 ? (
-        <p className="muted">No dosing methods logged yet.</p>
-      ) : (
-        <div className="card">
-          {methods.map((item) => (
-            <DosingRow key={item.id} tankId={tankId} item={item} />
-          ))}
-        </div>
-      )}
-      {adding ? (
-        <AddDosingMethodForm
-          tankId={tankId}
-          products={products}
-          categories={categories}
-          onDone={() => setAdding(false)}
-        />
-      ) : (
-        <button type="button" onClick={() => setAdding(true)}>
-          + Add dosing method
-        </button>
-      )}
+    <div className="card husbandry-drawers">
+      {ELEMENTS.map((element) => {
+        const forElement = methods.filter((m) => m.element === element);
+        const active = forElement.find((m) => !m.ended_on) ?? null;
+        const past = forElement.filter((m) => m.ended_on);
+        return (
+          <ElementDrawer
+            key={element}
+            tankId={tankId}
+            element={element}
+            active={active}
+            past={past}
+            products={products}
+            categories={categories}
+          />
+        );
+      })}
     </div>
   );
 }

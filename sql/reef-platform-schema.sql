@@ -357,6 +357,15 @@ CREATE TABLE equipment (
     brand               text,
     model               text,
     name                text,
+    -- Shared by flow ("right"/"left"/"back") and light ("slot #") — both are
+    -- just where the thing sits in/on the tank (sql/supabase/18_equipment_detail_fields.sql).
+    placement           text,
+    -- Flow-only.
+    flow_pattern         text CHECK (flow_pattern IN ('pulsing', 'wave_crest', 'random', 'laminar', 'other')),
+    -- Light-only.
+    light_mode          text CHECK (light_mode IN ('ramping', 'on_off')),
+    peak_hours          numeric,
+    wattage             numeric,
     installed_on        date,
     removed_on          date,
     notes               text,

@@ -15,6 +15,8 @@ const DOSING_METHODS = new Set([
   "other",
 ]);
 const LEVEL_KEYS = ["low", "med", "high"] as const;
+const FLOW_PATTERNS = new Set(["pulsing", "wave_crest", "random", "laminar", "other"]);
+const LIGHT_MODES = new Set(["ramping", "on_off"]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getOwnedTank(supabase: any, tankId: string, userId: string) {
@@ -37,13 +39,20 @@ function readProduct(formData: FormData) {
 }
 
 // -----------------------------------------------------------------------
-// Equipment — a light/flow item optionally gets Low/Med/High % reference
-// points (equipment_levels) set at add-time; every add/level-change/remove
+// Flow equipment (pumps/wavemakers) — its own section per product feedback
+// (2026-07-11): brand/model, flow pattern, an "average flow rate" of
+// low/med/high (equipment_levels, reused from the original generic design —
+// each level row is created with no fixed percent since the UI now explains
+// low/med/high as a rough GPH-per-tank-volume range instead of asking the
+// user for an exact percent), and placement. Every add/level-change/remove
 // is logged as a timestamped equipment_events row so it can later overlay on
 // the parameter/coloration timeline (docs/future-considerations.md, "Idea 2").
+// A removed pump is never hard-deleted (removed_on only) — its row and
+// event history stay joinable against whenever a taxon/photo was confirmed,
+// even after it's physically out of the tank.
 // -----------------------------------------------------------------------
 
-export async function addEquipment(formData: FormData): Promise<{ error?: string }> {
+export async function addFlowEquipment(formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -51,12 +60,16 @@ export async function addEquipment(formData: FormData): Promise<{ error?: string
   if (!user) return { error: "You must be logged in." };
 
   const tankId = String(formData.get("tank_id") ?? "");
-  const equipmentTypeCode = String(formData.get("equipment_type_code") ?? "");
   const brand = String(formData.get("brand") ?? "").trim() || null;
   const model = String(formData.get("model") ?? "").trim() || null;
-  const name = String(formData.get("name") ?? "").trim() || null;
+  const flowPattern = String(formData.get("flow_pattern") ?? "") || null;
+  const placement = String(formData.get("placement") ?? "").trim() || null;
+  const averageRate = String(formData.get("average_flow_rate") ?? "");
   const installedOnRaw = String(formData.get("installed_on") ?? "");
-  if (!equipmentTypeCode) return { error: "Choose an equipment type." };
+  if (flowPattern && !FLOW_PATTERNS.has(flowPattern)) return { error: "Invalid flow pattern." };
+  if (!LEVEL_KEYS.includes(averageRate as (typeof LEVEL_KEYS)[number])) {
+    return { error: "Choose an average flow rate." };
+  }
 
   const tank = await getOwnedTank(supabase, tankId, user.id);
   if (!tank) return { error: "Tank not found." };
@@ -67,34 +80,94 @@ export async function addEquipment(formData: FormData): Promise<{ error?: string
     .from("equipment")
     .insert({
       tank_id: tankId,
-      equipment_type_code: equipmentTypeCode,
+      equipment_type_code: "flow",
       brand,
       model,
-      name,
+      flow_pattern: flowPattern,
+      placement,
       installed_on: installedOn,
     })
     .select("id")
     .single();
   if (equipmentError || !equipment) {
-    return { error: equipmentError?.message ?? "Could not add equipment." };
+    return { error: equipmentError?.message ?? "Could not add this pump." };
   }
 
-  // Only light/flow gear gets Low/Med/High reference percents (schema
-  // comment on equipment_levels) — any filled-in percent becomes a row.
-  if (equipmentTypeCode === "light" || equipmentTypeCode === "flow") {
-    const levelRows = LEVEL_KEYS.map((level) => ({
-      level,
-      percent: formData.get(`level_${level}_percent`),
-    }))
-      .filter((r) => r.percent !== null && String(r.percent).trim() !== "")
-      .map((r) => ({
-        equipment_id: equipment.id,
-        level: r.level,
-        percent: Number(r.percent),
-      }));
-    if (levelRows.length > 0) {
-      await supabase.from("equipment_levels").insert(levelRows);
-    }
+  const { data: levelRows } = await supabase
+    .from("equipment_levels")
+    .insert(LEVEL_KEYS.map((level) => ({ equipment_id: equipment.id, level })))
+    .select("id, level");
+  const initialLevel = (levelRows ?? []).find((l) => l.level === averageRate);
+
+  await supabase.from("equipment_events").insert([
+    {
+      equipment_id: equipment.id,
+      event_type: "installed",
+      occurred_at: new Date(`${installedOn}T00:00:00`).toISOString(),
+    },
+    ...(initialLevel
+      ? [{ equipment_id: equipment.id, event_type: "level_change", level_id: initialLevel.id }]
+      : []),
+  ]);
+
+  revalidatePath(`/tank/${tankId}/husbandry`);
+  return {};
+}
+
+// -----------------------------------------------------------------------
+// Light equipment — its own section: brand/model, ramping vs. on/off, peak
+// hours + wattage, and placement (slot #). No low/med/high level tracking —
+// unlike flow, intensity here is described by the ramp mode + wattage
+// fields, not a runtime-adjustable setpoint.
+// -----------------------------------------------------------------------
+
+export async function addLightEquipment(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const brand = String(formData.get("brand") ?? "").trim() || null;
+  const model = String(formData.get("model") ?? "").trim() || null;
+  const lightMode = String(formData.get("light_mode") ?? "") || null;
+  const placement = String(formData.get("placement") ?? "").trim() || null;
+  const peakHoursRaw = String(formData.get("peak_hours") ?? "").trim();
+  const wattageRaw = String(formData.get("wattage") ?? "").trim();
+  const installedOnRaw = String(formData.get("installed_on") ?? "");
+  if (lightMode && !LIGHT_MODES.has(lightMode)) return { error: "Invalid ramp mode." };
+  const peakHours = peakHoursRaw ? Number(peakHoursRaw) : null;
+  const wattage = wattageRaw ? Number(wattageRaw) : null;
+  if (peakHoursRaw && (peakHours === null || Number.isNaN(peakHours))) {
+    return { error: "Peak hours must be a number." };
+  }
+  if (wattageRaw && (wattage === null || Number.isNaN(wattage))) {
+    return { error: "Wattage must be a number." };
+  }
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const installedOn = installedOnRaw || new Date().toISOString().slice(0, 10);
+
+  const { data: equipment, error: equipmentError } = await supabase
+    .from("equipment")
+    .insert({
+      tank_id: tankId,
+      equipment_type_code: "light",
+      brand,
+      model,
+      light_mode: lightMode,
+      peak_hours: peakHours,
+      wattage,
+      placement,
+      installed_on: installedOn,
+    })
+    .select("id")
+    .single();
+  if (equipmentError || !equipment) {
+    return { error: equipmentError?.message ?? "Could not add this light." };
   }
 
   await supabase.from("equipment_events").insert({
@@ -107,8 +180,8 @@ export async function addEquipment(formData: FormData): Promise<{ error?: string
   return {};
 }
 
-// Logs which reference level (low/med/high) the equipment is running at,
-// right now — the actual "how strong is the user running lights/flow" signal.
+// Logs which reference level (low/med/high) a pump is running at, right now
+// — flow-only; see addFlowEquipment above.
 export async function logEquipmentLevelChange(
   formData: FormData,
 ): Promise<{ error?: string }> {
@@ -212,6 +285,16 @@ export async function addDosingMethod(formData: FormData): Promise<{ error?: str
     if (resolved.error) return { error: resolved.error };
     resolvedProductId = resolved.id;
   }
+
+  // Core-Element Dosing's drawer shows ONE current method per element —
+  // changing it ends whatever was active before, rather than stacking a
+  // second concurrent "active" method for the same element.
+  await supabase
+    .from("dosing_methods")
+    .update({ ended_on: new Date().toISOString().slice(0, 10) })
+    .eq("tank_id", tankId)
+    .eq("element", element)
+    .is("ended_on", null);
 
   const { error } = await supabase.from("dosing_methods").insert({
     tank_id: tankId,
