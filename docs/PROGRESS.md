@@ -6,6 +6,17 @@
 
 Read `README.md` and `docs/reef-platform-spec.md` first for product context; `docs/schema-decisions.md` for why the schema looks the way it does; `docs/future-considerations.md` for product ideas raised but not yet scheduled (e.g. affiliate-link staleness).
 
+## ✅ Applied (2026-07-12, later session): dashboard parameter log + graph modal
+
+No schema change — `parameter_readings` was already append-only with no cull, so this is display-layer only.
+
+1. **Dashboard "your tanks" log** (`app/dashboard/page.tsx`) — shows up to 5 most recent `parameter_readings` rows per tank (was: only the single latest), each with dashes for whatever fields that session left null — deliberately no carry-forward on this view, so it always shows exactly what was logged. Older rows aren't deleted (still needed for the graph below); the log just displays the top 5 of however many exist.
+2. **"View graph" modal per parameter** (`components/parameter-graph-button.tsx`) — a hand-rolled SVG line chart (no charting dependency) plus a date/value table, up to 10 most recent **non-null** values for that one parameter (so a sparsely-logged parameter like calcium still gets a real 10-point trend instead of mostly-empty rows pulled from the last 10 reading sessions). Basic modal a11y: Escape to close, click-outside to close, focus moves to the close button on open and back to the trigger on close.
+3. **Photo parameter snapshots now carry forward per-parameter** (`lib/photo-upload.ts` `computeParameterSnapshot`) — previously took ONE closest reading's raw fields (which could be null if that session didn't log every param); now does a per-parameter lookback across up to 50 readings at/before the photo's date, so each of the 5 params independently gets its last known value. `snapshot_measured_at` / `parameter_reading_id` still point at the single closest reading.
+4. **Removed the "Params ~Xh old" freshness badge** from the community photo drawer (`components/coral-ui.tsx` `PhotoCard`) — not shown to the community for now. The parameter table itself is unchanged; `formatFreshness` was deleted (no other callers).
+
+**Live-tested** (throwaway hobbyist account + tank, deleted after): logged 3 parameter readings with varying null patterns, confirmed the log shows dashes for nulls, confirmed "View graph" opens a modal with a correct chart (right min/max, correct chronological plotting) and table, confirmed a parameter with a null in the middle of its history (calcium) correctly skips that gap rather than breaking the line. **Not live-tested**: the >5-row cull-to-visible-5 behavior and the photo-snapshot carry-forward logic specifically — browser automation in this session had trouble reliably driving more than 3 sequential form submissions (root cause unclear, likely tooling-specific, not reproduced as a real app bug); both are straightforward code (`.slice(0, 5)` and a per-column lookback loop) that typechecks clean, but treat them as code-complete rather than user-confirmed until exercised with a real multi-week logging history.
+
 ## Live infrastructure
 
 - **Supabase project**: `jbfjzkhjbsrnwnmrydba` (org account clay.ks88@gmail.com), region us-west-2, Postgres 17.6.

@@ -354,22 +354,6 @@ export function CareDifficultyPill({ code }: { code: string | null }) {
   );
 }
 
-// The spec's parameter-freshness trust signal: elapsed time between a photo
-// and the parameter reading stamped on it. Smaller gap = higher confidence.
-export function formatFreshness(
-  takenAt: string | null,
-  snapshotMeasuredAt: string | null,
-): string | null {
-  if (!snapshotMeasuredAt) return null;
-  const taken = takenAt ? new Date(takenAt).getTime() : Date.now();
-  const measured = new Date(snapshotMeasuredAt).getTime();
-  const diffMin = Math.round(Math.abs(taken - measured) / 60000);
-  if (diffMin < 60) return `Params ~${diffMin || 1}m old`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 48) return `Params ~${diffHr}h old`;
-  return `Params ~${Math.round(diffHr / 24)}d old`;
-}
-
 export type PhotoWithSnapshot = {
   id: string;
   url: string;
@@ -413,7 +397,6 @@ export function PhotoCard({
     morphSlug: string;
   }>;
 }) {
-  const freshness = formatFreshness(photo.taken_at, photo.snapshot_measured_at);
   const hasSnapshot = photo.snapshot_measured_at != null;
 
   return (
@@ -434,7 +417,7 @@ export function PhotoCard({
       </div>
       {hasSnapshot ? (
         <details className="photo-params-drawer">
-          <summary>Parameters{freshness ? ` · ${freshness}` : ""}</summary>
+          <summary>Parameters</summary>
           <table className="param-table">
             <tbody>
               <tr>

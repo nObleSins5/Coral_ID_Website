@@ -26,12 +26,20 @@ const EMPTY_SNAPSHOT: ParameterSnapshot = {
   snapshot_phosphate_ppm: null,
 };
 
-// Finds the reading that was actually current AS OF the photo's taken_at date
-// — not just "the latest" — so an old photo doesn't get today's parameters
-// stamped on it. taken_at is date-only, so the cutoff is the END of that
-// calendar day (a reading logged later the same day still counts). No
-// qualifying reading (photo predates all logging) => no snapshot, the honest
-// answer rather than a guess.
+// A reading session doesn't have to log every parameter — a hobbyist might
+// only test alkalinity that day and leave the rest blank. Per-parameter
+// lookback across the tank's history means a photo still gets the last
+// known value for each parameter individually, rather than nulling out a
+// field just because the closest single session didn't happen to include
+// it. Bounded lookback window, not unbounded history.
+const LOOKBACK_READINGS = 50;
+
+// Finds the parameter values that were actually current AS OF the photo's
+// taken_at date — not just "the latest" — so an old photo doesn't get
+// today's parameters stamped on it. taken_at is date-only, so the cutoff is
+// the END of that calendar day (a reading logged later the same day still
+// counts). No qualifying reading at all (photo predates all logging) =>
+// no snapshot, the honest answer rather than a guess.
 export async function computeParameterSnapshot(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: SupabaseClient<any>,
@@ -43,7 +51,7 @@ export async function computeParameterSnapshot(
   const cutoff = new Date(
     `${takenAtRaw || new Date().toISOString().slice(0, 10)}T23:59:59.999Z`,
   ).toISOString();
-  const { data: reading } = await supabase
+  const { data: readings } = await supabase
     .from("parameter_readings")
     .select(
       "id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
@@ -51,18 +59,26 @@ export async function computeParameterSnapshot(
     .eq("tank_id", tankId)
     .lte("measured_at", cutoff)
     .order("measured_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(LOOKBACK_READINGS);
 
-  if (!reading) return EMPTY_SNAPSHOT;
+  if (!readings || readings.length === 0) return EMPTY_SNAPSHOT;
+
+  const closest = readings[0];
+  const firstNonNull = (key: keyof (typeof readings)[number]) => {
+    for (const r of readings) {
+      if (r[key] != null) return r[key];
+    }
+    return null;
+  };
+
   return {
-    parameter_reading_id: reading.id,
-    snapshot_measured_at: reading.measured_at,
-    snapshot_alkalinity_dkh: reading.alkalinity_dkh,
-    snapshot_calcium_ppm: reading.calcium_ppm,
-    snapshot_magnesium_ppm: reading.magnesium_ppm,
-    snapshot_nitrate_ppm: reading.nitrate_ppm,
-    snapshot_phosphate_ppm: reading.phosphate_ppm,
+    parameter_reading_id: closest.id,
+    snapshot_measured_at: closest.measured_at,
+    snapshot_alkalinity_dkh: firstNonNull("alkalinity_dkh"),
+    snapshot_calcium_ppm: firstNonNull("calcium_ppm"),
+    snapshot_magnesium_ppm: firstNonNull("magnesium_ppm"),
+    snapshot_nitrate_ppm: firstNonNull("nitrate_ppm"),
+    snapshot_phosphate_ppm: firstNonNull("phosphate_ppm"),
   };
 }
 

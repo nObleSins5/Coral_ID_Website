@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createTank, logParameters, removeFromWishlist } from "./actions";
+import { ParameterGraphButton, type GraphPoint } from "@/components/parameter-graph-button";
 
 type Tank = {
   id: string;
@@ -10,6 +11,7 @@ type Tank = {
 };
 
 type Reading = {
+  id: string;
   tank_id: string;
   measured_at: string;
   alkalinity_dkh: number | null;
@@ -18,6 +20,34 @@ type Reading = {
   nitrate_ppm: number | null;
   phosphate_ppm: number | null;
 };
+
+const LOG_ROWS_VISIBLE = 5;
+const GRAPH_POINTS_MAX = 10;
+
+const PARAM_COLUMNS = [
+  { key: "alkalinity_dkh", label: "Alkalinity", short: "Alk", unit: "dKH" },
+  { key: "calcium_ppm", label: "Calcium", short: "Ca", unit: "ppm" },
+  { key: "magnesium_ppm", label: "Magnesium", short: "Mg", unit: "ppm" },
+  { key: "nitrate_ppm", label: "Nitrate", short: "NO₃", unit: "ppm" },
+  { key: "phosphate_ppm", label: "Phosphate", short: "PO₄", unit: "ppm" },
+] as const;
+
+// Up to GRAPH_POINTS_MAX most recent NON-NULL values for one parameter,
+// newest first — a hobbyist who logs alkalinity daily but calcium weekly
+// still gets a real 10-point calcium trend, not 10 mostly-empty rows.
+function buildParamSeries(
+  readings: Reading[],
+  key: (typeof PARAM_COLUMNS)[number]["key"],
+): GraphPoint[] {
+  const points: GraphPoint[] = [];
+  for (const r of readings) {
+    const value = r[key];
+    if (value == null) continue;
+    points.push({ measured_at: r.measured_at, value });
+    if (points.length >= GRAPH_POINTS_MAX) break;
+  }
+  return points;
+}
 
 type WishlistItem = {
   id: string;
@@ -43,17 +73,24 @@ export default async function Dashboard() {
     .select("id, name, tank_type, volume")
     .order("created_at", { ascending: true });
 
-  // Most recent reading per tank (RLS scopes to the caller's tanks).
+  // Recent readings per tank (RLS scopes to the caller's tanks). Fetched,
+  // not deleted, beyond the 5 rows shown in the log — parameter_readings is
+  // append-only (see schema comment) and the graph modal below needs up to
+  // GRAPH_POINTS_MAX history per parameter, which is more than the visible
+  // log ever shows.
   const { data: readings } = await supabase
     .from("parameter_readings")
     .select(
-      "tank_id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
+      "id, tank_id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
     )
-    .order("measured_at", { ascending: false });
+    .order("measured_at", { ascending: false })
+    .limit(1000);
 
-  const latest = new Map<string, Reading>();
+  const readingsByTank = new Map<string, Reading[]>();
   for (const r of (readings ?? []) as Reading[]) {
-    if (!latest.has(r.tank_id)) latest.set(r.tank_id, r);
+    const arr = readingsByTank.get(r.tank_id);
+    if (arr) arr.push(r);
+    else readingsByTank.set(r.tank_id, [r]);
   }
 
   const tankList = (tanks ?? []) as Tank[];
@@ -114,7 +151,8 @@ export default async function Dashboard() {
         <p className="muted">No tanks yet — create your first one below.</p>
       ) : (
         tankList.map((tank) => {
-          const r = latest.get(tank.id);
+          const tankReadings = readingsByTank.get(tank.id) ?? [];
+          const log = tankReadings.slice(0, LOG_ROWS_VISIBLE);
           return (
             <div className="card" key={tank.id}>
               <h2 style={{ marginTop: 0 }}>
@@ -125,29 +163,41 @@ export default async function Dashboard() {
                 </span>
               </h2>
 
-              {r ? (
+              {log.length > 0 ? (
                 <table>
                   <thead>
                     <tr>
-                      <th>Alk (dKH)</th>
-                      <th>Ca (ppm)</th>
-                      <th>Mg (ppm)</th>
-                      <th>NO₃ (ppm)</th>
-                      <th>PO₄ (ppm)</th>
+                      {PARAM_COLUMNS.map((col) => (
+                        <th key={col.key}>
+                          <div className="param-log-head">
+                            <span>
+                              {col.short} ({col.unit})
+                            </span>
+                            <ParameterGraphButton
+                              label={col.label}
+                              unit={col.unit}
+                              tankName={tank.name}
+                              points={buildParamSeries(tankReadings, col.key)}
+                            />
+                          </div>
+                        </th>
+                      ))}
                       <th>Logged</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>{r.alkalinity_dkh ?? "—"}</td>
-                      <td>{r.calcium_ppm ?? "—"}</td>
-                      <td>{r.magnesium_ppm ?? "—"}</td>
-                      <td>{r.nitrate_ppm ?? "—"}</td>
-                      <td>{r.phosphate_ppm ?? "—"}</td>
-                      <td className="muted">
-                        {new Date(r.measured_at).toLocaleString()}
-                      </td>
-                    </tr>
+                    {log.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.alkalinity_dkh ?? "—"}</td>
+                        <td>{r.calcium_ppm ?? "—"}</td>
+                        <td>{r.magnesium_ppm ?? "—"}</td>
+                        <td>{r.nitrate_ppm ?? "—"}</td>
+                        <td>{r.phosphate_ppm ?? "—"}</td>
+                        <td className="muted">
+                          {new Date(r.measured_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               ) : (
