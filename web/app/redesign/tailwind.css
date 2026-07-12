@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind/shadcn tokens for the /redesign route only. Values are taken
+ * directly from DESIGN.md's Coral Registry palette (see repo root) so
+ * shadcn primitives render on-brand rather than shadcn's own defaults.
+ * This file is imported only by app/redesign/layout.tsx — it never loads
+ * on the rest of the app, which keeps its Tailwind Preflight reset scoped
+ * to this route for the A/B comparison.
+ *
+ * All custom properties are namespaced `--rd-*`. The rest of the app
+ * (globals.css, always loaded via the root layout) defines its own
+ * same-named, unprefixed variables (--border, --muted, --accent, ...) for
+ * the same :root — an unprefixed collision here would silently repoint
+ * those variables for every reused product component (CarePill,
+ * ElementColorKey) rendered on this route too.
+ */
+:root {
+  --rd-radius: 0.4375rem; /* 7px, DESIGN.md button radius */
+
+  --rd-background: #f5f9fc; /* tide-pool-mist */
+  --rd-foreground: #16202a; /* basalt */
+
+  --rd-card: #ffffff; /* reef-white */
+  --rd-card-foreground: #16202a;
+
+  --rd-popover: #ffffff;
+  --rd-popover-foreground: #16202a;
+
+  --rd-primary: #70d6ff; /* shallow-reef-blue, the one accent */
+  --rd-primary-foreground: #072433; /* abyssal-ink */
+
+  --rd-secondary: #e1e8ee; /* sandbar, as a neutral surface */
+  --rd-secondary-foreground: #16202a;
+
+  --rd-muted: #eef3f7;
+  --rd-muted-foreground: #55636e; /* wet-slate */
+
+  --rd-accent: #0369a1; /* deep-water-blue, link/focus/hover */
+  --rd-accent-foreground: #ffffff;
+
+  --rd-destructive: #b91c1c; /* bleached-coral-red */
+
+  --rd-border: #e1e8ee; /* sandbar */
+  --rd-input: #e1e8ee;
+  --rd-ring: #0369a1; /* deep-water-blue, matches DESIGN.md's focus rule */
+
+  --rd-polyp-lime: #e9ff70;
+  --rd-sun-bleached-yellow: #ffd670;
+  --rd-low-tide-orange: #ff9770;
+  --rd-anemone-pink: #ff70a6;
+}
+
+@theme inline {
+  --color-background: var(--rd-background);
+  --color-foreground: var(--rd-foreground);
+  --color-card: var(--rd-card);
+  --color-card-foreground: var(--rd-card-foreground);
+  --color-popover: var(--rd-popover);
+  --color-popover-foreground: var(--rd-popover-foreground);
+  --color-primary: var(--rd-primary);
+  --color-primary-foreground: var(--rd-primary-foreground);
+  --color-secondary: var(--rd-secondary);
+  --color-secondary-foreground: var(--rd-secondary-foreground);
+  --color-muted: var(--rd-muted);
+  --color-muted-foreground: var(--rd-muted-foreground);
+  --color-accent: var(--rd-accent);
+  --color-accent-foreground: var(--rd-accent-foreground);
+  --color-destructive: var(--rd-destructive);
+  --color-border: var(--rd-border);
+  --color-input: var(--rd-input);
+  --color-ring: var(--rd-ring);
+
+  --color-polyp-lime: var(--rd-polyp-lime);
+  --color-sun-bleached-yellow: var(--rd-sun-bleached-yellow);
+  --color-low-tide-orange: var(--rd-low-tide-orange);
+  --color-anemone-pink: var(--rd-anemone-pink);
+
+  --radius-sm: calc(var(--rd-radius) - 2px);
+  --radius-md: var(--rd-radius);
+  --radius-lg: calc(var(--rd-radius) + 3px); /* ~10px, DESIGN.md card radius */
+  --radius-xl: calc(var(--rd-radius) + 6px);
+
+  --font-sans: var(--font-roboto), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@layer base {
+  /* Scoped equivalent of shadcn's usual `* { @apply border-border
+     outline-ring/50 }` + `body { @apply bg-background text-foreground }` —
+     applied only within .redesign-root so bare `border`/`outline`
+     utilities on shadcn components resolve to our tokens without touching
+     the shared header/nav or any other route. */
+  .redesign-root {
+    background-color: var(--rd-background);
+    color: var(--rd-foreground);
+  }
+  .redesign-root *{
+    border-color: var(--rd-border);
+    outline-color: color-mix(in oklab, var(--rd-ring) 50%, transparent);
+  }
+  /* globals.css has a legacy `button { margin-top: 1rem; ... }` reset
+     (element-selector specificity, so it wins over anything a shadcn
+     primitive doesn't explicitly set) that's meant for the rest of the
+     app's plain buttons. shadcn's Button/etc. override every other
+     property it sets via classes, but not margin — neutralize it here so
+     any shadcn button on this route doesn't inherit a stray top margin. */
+  .redesign-root button {
+    margin-top: 0;
+  }
+}
+
+/*
+ * globals.css also defines several bare-element selectors (h1, h2, a,
+ * input/select/textarea) as UNLAYERED rules. Per the CSS cascade-layers
+ * spec, any unlayered declaration always wins over a layered one
+ * (Tailwind's utilities are all inside `@layer theme/base/components/
+ * utilities`) regardless of specificity — so no Tailwind class on this
+ * route could ever override h1's font-size, a plain <a>'s color, etc.
+ * These counter-rules live outside any @layer (so they're unlayered too)
+ * and win on specificity (`.redesign-root h1` > `h1`), scoped to this
+ * route only. Values are written out directly rather than deferring to
+ * Tailwind classes, since a layered class still can't win here.
+ */
+.redesign-root h1 {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-size: clamp(1.9rem, 1.35rem + 2.2vw, 3rem);
+}
+.redesign-root h2 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+.redesign-root a {
+  color: var(--rd-accent);
+  text-decoration: none;
+}
+.redesign-root a:hover {
+  text-decoration: underline;
+}
+.redesign-root input {
+  width: 100%;
+  height: 3rem;
+  padding: 0 0.75rem 0 2.25rem;
+  border: 1px solid var(--rd-border);
+  border-radius: calc(var(--rd-radius) + 3px);
+  font-size: 1rem;
+  font-family: inherit;
+  background: var(--rd-card);
+  color: var(--rd-foreground);
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.06),
+    0 1px 3px rgba(16, 24, 40, 0.08);
+}
+.redesign-root input:focus-visible {
+  outline: 2px solid var(--rd-ring);
+  outline-offset: 1px;
+}
