@@ -76,7 +76,7 @@ export default async function GenusPage({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={heroUrl}
-                      alt=""
+                      alt={`${m.name} — representative photo`}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />
                   </div>

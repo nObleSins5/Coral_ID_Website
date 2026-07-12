@@ -420,7 +420,7 @@ export function PhotoCard({
     <div className="photo-card">
       <div className="photo-tile">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={photo.url} alt="" loading="lazy" />
+        <img src={photo.url} alt={`${morphName} — community photo by ${username}`} loading="lazy" />
       </div>
       <div className="photo-card-meta">
         <span className="photo-username">{username}</span>

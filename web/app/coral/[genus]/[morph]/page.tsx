@@ -153,7 +153,7 @@ export default async function MorphPage({
           {heroPhoto ? (
             <div className="photo-tile large">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={heroPhoto.url} alt="" />
+              <img src={heroPhoto.url} alt={`${morph.name} — most-voted community photo`} />
               <span className="freshness-badge">
                 Community favorite
                 {heroVotes > 0
