@@ -1,6 +1,8 @@
 # Progress & Handoff
 
-*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-08, branch `claude/repo-setup-wmc6wq`.*
+*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-12, branch `main`.*
+
+**Branch note (2026-07-12):** `claude/repo-setup-wmc6wq` (the branch this doc used to say to work on) fell 9 commits behind `main` — it was a strict prefix, nothing unique to lose — and this session fast-forwarded to `main` and has worked there directly since. Work directly on `main` going forward unless told otherwise; there's no reason to recreate or return to that branch.
 
 Read `README.md` and `docs/reef-platform-spec.md` first for product context; `docs/schema-decisions.md` for why the schema looks the way it does; `docs/future-considerations.md` for product ideas raised but not yet scheduled (e.g. affiliate-link staleness).
 
@@ -111,6 +113,35 @@ Big round, all typecheck/build-verified; not live-tested end to end (no login se
 
 **Not yet done** (see `docs/future-considerations.md` for the fuller "identify a coral" plan this is step 1 of): the anatomy-guide diagrams (visual reference showing where each element is on a real coral, one per template), the color-picker tool (click a photo to sample a pixel's hex, tag it to an element — manual only for v1, decided over automatic extraction), and backfilling the 36 morphs that are still missing elements using that tool once it exists. Also not built: logging for equipment types other than flow/light (heater, skimmer, doser, chiller, ATO, reactor, return pump — schema-ready, `equipment_types` already lists them, no UI yet).
 
+## ✅ Applied (2026-07-09 through 2026-07-11, undocumented until now): hero photos, design docs, layout fixes
+
+These commits landed on `main` but were never written up here — noted briefly so this doc stops lying about repo state. See `git log` on `main` for full messages if more detail is needed.
+
+- **2026-07-09** — genus listing page shows each morph's hero (most-voted) photo instead of only a color-tile placeholder.
+- **2026-07-10** — added `PRODUCT.md`/`DESIGN.md` (register, users, positioning, brand personality / colors, typography, elevation, components — see `CLAUDE.md`'s pointer to both) and installed design-review skills; fixed oversized hero/gallery photo tiles and a button-grid margin bug in the photo picker, then swept that same margin bug beyond the photo picker to quick-add's Add/Submit button and `PlaceSpecimenControl`'s Place button.
+- **2026-07-10, later** — hardened the tank grid page (clearer fork between placing an existing specimen vs. quick-adding a new one, an in-system reset confirmation instead of relying on `window.confirm`, the header's auth state now reflects reality instead of a stale client guess).
+- **2026-07-11** — redesigned the landing page (real hero with a live coral photo + positioning statement, a differentiator section, a photo showcase gallery, a proper CTA band, replacing the old title+paragraph+three-cards page); documented the missing coral-photo `alt` text as a backlog item (see below).
+
+## ✅ Applied (2026-07-12): color-ID redesign — decouple color from anatomy, retire the wiki picker, `/identify` comparison tool
+
+Working from a reference zoanthid color-guide chart (a flower-diagram style: solid center + a ring of solid petal colors per named zoa), the user identified two problems with the color system built 2026-07-11 (see the anatomy-standardization entry above): crowdsourced pixel-sampling introduces noise the product doesn't want (no expert gate on what a novice submits), and the anatomy model didn't fit soft-bodied corals — a zoa's face and skirt are two distinct, usually-solid regions, but were forced into one `mouth_oral_disc` element with a misleading 2-stop "range" (gradient) pattern. Went through several rounds of plan-mode discussion before landing on the shape below (see `docs/schema-decisions.md` §8 for the schema rationale in full).
+
+**Built and applied to the live project** (migrations `sql/supabase/22_decouple_color_from_elements.sql`, `23_drop_element_color_samples.sql`, both idempotent and mirrored into `sql/coral_trait_schema.sql`/`sql/reef-platform-schema.sql` for fresh installs):
+
+1. **`color_ranges` decoupled from `element_profiles`** — hangs directly off `taxon_node_id` now, with an optional/suggested `position_label` (no more required-checklist "Not yet documented" enforcement) and a new nullable `approx_percent` for a future feature (see future-considerations.md). `element_profiles` is untouched, still used for morphology (shape/texture/size).
+2. **`polyp_soft` anatomy template split** into `zoanthid_paly`, `mushroom_coral`, `leather_soft_coral` (true stalk+cap — sarcophyton/sinularia), `mat_soft_coral` (encrusting, no real stalk — briareum/xenia/clavularia). `polyp` retired as a color position everywhere (tentacle + mouth can differ in color, never one element); genus reassignments and the `polyp`→`tentacle` cleanup both confirmed live.
+3. **The wiki's crowdsourced color-picker/contribution pipeline removed outright** — `element_color_samples` table dropped, `/moderate`'s color-sample queue removed, `submitColorSamples` deleted. Canonical colors now come from research/moderator entry only.
+4. **Color-sampling tool moved to `/identify`** (`web/components/photo-color-sampler.tsx`) — searching a candidate name and matching an existing coral shows that coral's real reference color key inline (`getColorKeyForTaxon`) plus a wiki-page link, and an optional personal pixel-sampler against the user's own uploaded photo. Purely visual comparison — nothing is submitted or stored.
+5. **Pattern rendering redesigned** (`ColorSwatch` in `web/components/coral-ui.tsx`) — `spotted`/`mottled`/`ringed` now render as small deterministic SVGs (speckles, blotches, concentric rings) instead of a generic linear-gradient bar; `banded` is real repeating stripes. `rainbow`/`range`/`tipped`/`solid` are unchanged (still correct for what they represent).
+
+**Verification**: installed a local Postgres and replayed the *entire* schema + migration history + seed data from scratch (twice, to confirm idempotency) before touching the live project. This caught a real bug — `sql/seed/phase0_corals.sql` had its own duplicate copy of the genus→anatomy-template assignment that still pointed at the retired `polyp_soft`; fixed. Applied both migrations to the live Supabase project (`jbfjzkhjbsrnwnmrydba`), found and fixed 7 morphs' worth of pre-existing live color data that the schema migration alone didn't reshape (the backfill only renames `element_type_code`→`position_label` 1:1; splitting one row into two needed an explicit delete + reseed), confirmed via direct query, and browser-verified live (fire-and-ice-zoa's face/skirt split, grandis-paly's ringed pattern, Utter Chaos's 4 distinct skirt-color chips on the genus listing page). `get_advisors` showed no new findings from this change. **Committed (`4afb99b`) and pushed to `origin/main`** — Vercel should auto-deploy from there.
+
+**Not live-tested**: the `/identify` propose-a-name flow's new matched-coral comparison UI (search → see reference colors → optional personal sampler) needs a logged-in session to reach; creating a throwaway test account on the live project was correctly blocked by the session's permission classifier as an unauthorized action (only migration-apply was pre-approved). Confirm this end-to-end next session with either an already-logged-in browser session or explicit sign-off to create/clean-up a throwaway account. Code-reviewed and typecheck/lint-clean; reuses the same query/render patterns already proven elsewhere (`getMorphWithGenus`, `ElementColorKey`).
+
+**Spun off, not fixed here** (out of scope for this change): replaying the full migration history from scratch also surfaced that `sql/supabase/11_affiliate_links.sql` defines two RLS policies (`affiliate_link_reports_insert`/`_select_own`) and one more (`affiliate_clicks_insert`) whose names collide with earlier definitions in `02_rls_policies.sql`, missing the `DROP POLICY IF EXISTS` guard used everywhere else in that file. Harmless on the already-migrated live DB (only matters when replaying from scratch), flagged as a separate background task rather than fixed inline.
+
+**Still open from this pass** (see `docs/future-considerations.md`'s 2026-07-12 entry for the fuller list): anatomy-guide diagrams still not built; most corals' hex colors are still provisional placeholders pending a cited-source pass; the "I see these colors + %" self-ID matcher is deliberately deferred (schema has `approx_percent` ready, no matching logic built).
+
 ## Known, deferred polish (not urgent) — a UI pass backlog
 
 - **Image display sizing** — photos render "very large" in places (hero image and/or gallery cards need tighter max-height/cropping rules). Not addressed by the 2026-07-08 design pass (that pass was color/type tokens, not layout/sizing) — still open.
@@ -119,18 +150,20 @@ Big round, all typecheck/build-verified; not live-tested end to end (no login se
 
 Explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status: original roadmap complete, plus specimen linkage, the unidentified-ID flow, wishlisting, the tank grid, affiliate links, and a parameters seed pass
+## Status (2026-07-12): color-ID redesign shipped and live; a handful of loose ends
 
-Schema → seed data → vertical slice → coral wiki → photo logging & voting → public deployment → specimen linkage → unidentified-ID flow → wishlist button → tank grid + specimen editing → affiliate/vendor links → recommended-parameters seed fill are all built. Everything except the tank grid, affiliate links, and the new parameter data is live and user-confirmed; those three are code/data-complete but **need the pending items above applied and a live smoke test** before they can be marked confirmed. Pick any of the following to keep going — nothing else is blocking:
+Everything through the 2026-07-12 color-ID redesign (above) is applied to the live Supabase project, committed (`4afb99b`), and pushed to `origin/main` — Vercel deploys from `main`, so it should be live there shortly after a push (confirm the Vercel dashboard shows a successful deploy of that commit if picking this up fresh). Pick any of the following — nothing here is blocking anything else:
 
-1. **Enable the Supabase connector for this chat, then apply the three pending items above and smoke-test live** — (tank grid) create a tank with a grid, place/move/remove a specimen, edit its representative photo; (affiliate links) upload a photo, attach a link to it as `wysiwyg` and as `representative`, visit it through `/go/[id]` and confirm a row lands in `affiliate_clicks`, then report it dead from a second account enough times to confirm it auto-deactivates; (parameters) reload any morph page and confirm the "Recommended parameters" table is no longer all dashes.
-2. **Clean up the test taxon** — see the pending-cleanup note above.
-3. **UI polish pass** — the backlog above, now that there's real content/interaction across several features to look at together.
-4. **Next feature**, candidates already scoped/discussed:
+1. **Verify the `/identify` propose-flow live** — log in (or get sign-off to create/clean up a throwaway test account) and confirm: typing a candidate coral name shows its real reference color key + wiki-page link, and the personal photo-color-sampler works against an uploaded photo with no network POST. Everything else from the redesign is already browser-verified live; this one piece isn't.
+2. **Fix the duplicate-RLS-policy replay bug** — a background task was already spun off for this (`sql/supabase/11_affiliate_links.sql` has 3 `CREATE POLICY` statements that collide with earlier same-named policies in `02_rls_policies.sql`, missing a `DROP POLICY IF EXISTS` guard). Cosmetic on the live DB; only blocks a from-scratch migration replay. Check whether that task chip was already picked up before redoing it.
+3. **Anatomy-guide diagrams** — still not built (one reference image per template showing where each color region is on a real coral). More useful now that the templates actually match real anatomy.
+4. **Seed data accuracy** — most corals' hex colors are still provisional placeholders pending a cited-source pass (spec §9 open decision); this is now easier to do incrementally per-color since colors aren't gated behind a rigid element checklist.
+5. **The "I see these colors + %" self-ID matcher** — deliberately deferred (see `docs/future-considerations.md`'s 2026-07-12 entry). Schema has `color_ranges.approx_percent` ready; no matching logic exists yet, and needs real design decisions (perceptual color distance, percentage tolerance, ranking/display) before it's buildable.
+6. **UI polish backlog** — see the section above (image sizing, photo-picker thumbnails, missing `alt` text on coral photos).
+7. **Next feature**, candidates already scoped/discussed:
    - Alias-approval / moderation queue — `coral_aliases` proposals from the ID flow now accumulate with `status='proposed'` and nothing ever reviews them; the spec's sitemap always called for a separate admin/moderator queue for this.
    - Vendor-availability matching against wishlists — the bigger idea `want_list` was originally scoped for (spec §5.4 Door 2); see `docs/future-considerations.md` — needs real design decisions (notification model, what each side sees) before scheduling.
    - Automated affiliate-link health checks / WYSIWYG TTL-expiration — future-considerations.md ideas 4-5, not built; the vendor-uploaded-photo flow and report-flagging (ideas 6a, 3) are.
-5. **Further seed data accuracy** — the 37 corals' hex colors are still provisional placeholders (recommended parameters are no longer part of this gap, see item 3 above under "What's built").
 
 ## Deliberately deferred (not bugs, not forgotten)
 

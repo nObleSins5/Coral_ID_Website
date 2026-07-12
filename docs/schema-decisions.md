@@ -134,16 +134,48 @@ document is the *schema* rationale: what we chose, and why, for
   organisms can be added later — they'd share `taxon_nodes` and get their own trait
   tables (a fish has no corallite/polyp). A single super-root above `category` is a
   one-line add if ever wanted.
-- **Ten `element_profiles`** for the identifiable coral parts (researched/expanded
-  from the original four): corallite, axial corallite, radial corallite, polyp,
-  tentacle, mouth/oral disc, coenosarc/skin, base/body, growth tip, surface
-  texture.
-- **Color model `color_ranges → color_stops`.** A coloration is a *pattern*
-  (solid / range / rainbow / banded / spotted / mottled / tipped / ringed) made of
-  ordered hex stops: solid = 1 stop, range = 2 (from/to), rainbow = N. Each stop
-  can be **pinpoint-sampled from a real photo** (`source_photo_id` + normalized
-  coordinates) rather than hand-typed. **Fluorescence was dropped** — it's a
-  lighting artifact, not an inherent trait.
+- **`element_profiles`** now exists purely for morphology capture (shape/
+  texture/size dropdowns per identifiable part), independent of color.
+  Fourteen `element_types` (expanded 2026-07-12): the original ten —
+  corallite, axial corallite, radial corallite, polyp, tentacle, mouth/oral
+  disc, coenosarc/skin, base/body, growth tip, surface texture — plus
+  `oral_disc_center`, `skirt_1`/`skirt_2`/`skirt_3`, and `stalk`, added when
+  color was decoupled from anatomy (see below). `polyp` is retired as a
+  *color position* everywhere (a polyp is tentacle + mouth, which can differ
+  in color — never one element) but the `element_types` row and
+  `element_profiles`'s use of it for morphology (e.g. `polyp_size_code`) are
+  untouched.
+- **Color model `color_ranges → color_stops`, decoupled from anatomy
+  (2026-07-12).** `color_ranges` hangs directly off `taxon_node_id` — a
+  taxon just has however many distinct colors it has (soft guidance: ~1-4).
+  `position_label` is an *optional, suggested* hint (drawn from the genus's
+  `anatomy_template_code`), not a required checklist item; NULL is valid
+  ("just a distinct color, no specific region claimed"). This replaced the
+  original element-profile-anchored model, which forced unrelated regions
+  into one element (a zoanthid's face and skirt were one `mouth_oral_disc`
+  row with a misleading 2-stop "range" blend) and required knowing
+  anatomical terms ("skirt" vs. "radial corallite" vs. "coenosarc") just to
+  record or compare a color. A coloration is still a *pattern* (solid /
+  range / rainbow / banded / spotted / mottled / tipped / ringed) made of
+  ordered hex stops: solid = 1 stop, range = 2 (from/to), rainbow = N. Each
+  stop can be **pinpoint-sampled from a real photo** (`source_photo_id` +
+  normalized coordinates) rather than hand-typed, though the wiki's own
+  crowdsourced sampling pipeline was removed the same day (see
+  `docs/future-considerations.md`'s 2026-07-12 entry) — canonical colors now
+  come from research/moderator entry only. `approx_percent` (nullable) was
+  added for a future "I see these colors + %" self-ID matcher, not yet
+  built. **Fluorescence was dropped** — it's a lighting artifact, not an
+  inherent trait.
+- **Anatomy templates realigned (2026-07-12).** The old `polyp_soft`
+  catch-all (zoanthids, palys, mushrooms, and soft corals all sharing one
+  template) split into `zoanthid_paly`, `mushroom_coral`,
+  `leather_soft_coral` (true stalk+cap growth — sarcophyton/sinularia), and
+  `mat_soft_coral` (encrusting/matting, no real stalk —
+  briareum/xenia/clavularia). `polyp_soft` itself is left in place
+  (relabeled "(retired)"), not dropped, since old rows shouldn't need a
+  cascade. `has_bubble_texture` (nullable boolean on `taxon_nodes`) is a
+  standalone mushroom-specific flag (bounce/bubble vesicles), not a color
+  position.
 - **Morphology is all dropdowns** (controlled vocab), not free text:
   `growth_form`, `care_difficulty`, `corallite_shape`, `skin_texture`,
   `polyp_size` — plus numeric `size_min_mm`/`size_max_mm` on the polyp element.
