@@ -11,10 +11,12 @@ type Genus = { id: string; name: string };
 // proposeIdentification (app/identify/actions.ts) flips the photo public.
 export function SpecimenProposeControl({
   photoId,
+  photoUrl,
   morphs,
   genera,
 }: {
   photoId: string;
+  photoUrl: string;
   morphs: SearchableMorph[];
   genera: Genus[];
 }) {
@@ -31,6 +33,7 @@ export function SpecimenProposeControl({
   return (
     <ProposeIdentificationForm
       photoId={photoId}
+      photoUrl={photoUrl}
       morphs={morphs}
       genera={genera}
       onDone={() => setOpen(false)}

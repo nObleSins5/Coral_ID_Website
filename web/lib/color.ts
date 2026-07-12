@@ -1,6 +1,8 @@
-// Shared color math for the element color-picker feature. Pure functions, no
-// I/O — safe to import from both client (the picker) and server (the
-// range-check in submitColorSamples).
+// Shared color math for the /identify personal color-comparison tool
+// (web/components/photo-color-sampler.tsx). Pure functions, no I/O —
+// client-only now; the wiki's color-contribution pipeline that used to
+// range-check samples server-side was removed 2026-07-12 (canonical colors
+// come from research/moderator entry only, not crowdsourced sampling).
 //
 // Two distinct color operations live here, and they deliberately use
 // different methods (product decision 2026-07-11):

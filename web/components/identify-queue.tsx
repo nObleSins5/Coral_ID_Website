@@ -207,6 +207,7 @@ function PhotoCard({
         {isProposing ? (
           <ProposeIdentificationForm
             photoId={item.photo.id}
+            photoUrl={item.photo.url}
             morphs={morphs}
             genera={genera}
             onDone={() => setProposingFor(null)}

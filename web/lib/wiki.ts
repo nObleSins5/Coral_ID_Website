@@ -1,5 +1,5 @@
 import { createPublicClient } from "@/lib/supabase/public";
-import type { ElementProfile } from "@/components/coral-ui";
+import type { ColorRange } from "@/components/coral-ui";
 
 // Read-only data access for the public coral wiki (genus -> morph browse tree).
 // Species is intentionally not a browse level — see sql/supabase/04_normalize_taxonomy.sql.
@@ -19,7 +19,7 @@ export type MorphSummary = {
   light_level_code: string | null;
   flow_level_code: string | null;
   growth_form_code: string | null;
-  element_profiles: ElementProfile[];
+  color_ranges: ColorRange[];
 };
 
 export type MorphDetail = MorphSummary & {
@@ -42,7 +42,7 @@ export type MorphDetail = MorphSummary & {
 };
 
 const ELEMENT_SELECT =
-  "element_type_code, description, color_ranges ( color_pattern_code, label, color_stops ( hex, ordinal ) )";
+  "color_ranges ( position_label, color_pattern_code, label, approx_percent, color_stops ( hex, ordinal ) )";
 
 type CareFields = {
   care_difficulty_code: string | null;
@@ -120,7 +120,7 @@ export async function getMorphsForGenus(
       .from("taxon_nodes")
       .select(
         `id, name, slug, care_difficulty_code, light_level_code, flow_level_code, growth_form_code,
-         element_profiles ( ${ELEMENT_SELECT} )`,
+         ${ELEMENT_SELECT}`,
       )
       .eq("rank_code", "morph")
       .eq("parent_id", genusId)
@@ -150,7 +150,7 @@ export async function getMorphBySlug(
        rec_nitrate_ppm_min, rec_nitrate_ppm_max,
        rec_phosphate_ppm_min, rec_phosphate_ppm_max,
        rec_temperature_c_min, rec_temperature_c_max,
-       element_profiles ( ${ELEMENT_SELECT} )`,
+       ${ELEMENT_SELECT}`,
     )
     .eq("rank_code", "morph")
     .eq("slug", slug)
@@ -439,6 +439,7 @@ export type SearchableMorph = {
   name: string;
   slug: string;
   genusName: string;
+  genusSlug: string;
 };
 
 // The whole 37-coral list, fetched once and filtered client-side (type-to-
@@ -452,15 +453,19 @@ export async function getAllMorphsForSearch(): Promise<SearchableMorph[]> {
     .order("name");
   const { data: genera } = await supabase
     .from("taxon_nodes")
-    .select("id, name")
+    .select("id, name, slug")
     .eq("rank_code", "genus");
-  const genusNameById = new Map((genera ?? []).map((g) => [g.id, g.name]));
-  return (morphs ?? []).map((m) => ({
-    id: m.id,
-    name: m.name,
-    slug: m.slug,
-    genusName: (m.parent_id && genusNameById.get(m.parent_id)) || "",
-  }));
+  const generaById = new Map((genera ?? []).map((g) => [g.id, g]));
+  return (morphs ?? []).map((m) => {
+    const genus = m.parent_id ? generaById.get(m.parent_id) : undefined;
+    return {
+      id: m.id,
+      name: m.name,
+      slug: m.slug,
+      genusName: genus?.name ?? "",
+      genusSlug: genus?.slug ?? "",
+    };
+  });
 }
 
 export type UnidentifiedPhoto = {

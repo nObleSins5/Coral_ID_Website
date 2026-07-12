@@ -81,11 +81,11 @@ export default async function GenusPage({
                     />
                   </div>
                 ) : (
-                  <ColorTile colors={keyColors(m.element_profiles)} />
+                  <ColorTile colors={keyColors(m.color_ranges)} />
                 )}
                 <div className="morph-row-main">
                   <div className="name">{m.name}</div>
-                  <CompactColorKey elements={m.element_profiles} />
+                  <CompactColorKey colorRanges={m.color_ranges} />
                 </div>
                 <div className="morph-row-pills">
                   <CareDifficultyPill code={m.care_difficulty_code} />

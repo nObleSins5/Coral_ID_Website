@@ -5,9 +5,7 @@ import {
   AliasModerationRow,
   ProductModerationRow,
   CommentModerationRow,
-  ColorSampleModerationRow,
 } from "@/components/moderation-row";
-import { ELEMENT_LABEL } from "@/components/coral-ui";
 
 type AliasRow = {
   id: string;
@@ -30,18 +28,6 @@ type CommentRow = {
   id: string;
   body: string;
   user_id: string;
-  created_at: string;
-  taxon_nodes: { name: string; slug: string; parent_id: string | null; rank_code: string } | null;
-};
-
-type ColorSampleRow = {
-  id: string;
-  element_type_code: string;
-  used_hex: string;
-  raw_hex: string;
-  delta_e: number | null;
-  out_of_range: boolean;
-  submitted_by_user_id: string;
   created_at: string;
   taxon_nodes: { name: string; slug: string; parent_id: string | null; rank_code: string } | null;
 };
@@ -103,18 +89,9 @@ export default async function ModerateQueue() {
     reportCountByComment.set(r.comment_id, (reportCountByComment.get(r.comment_id) ?? 0) + 1);
   }
 
-  const { data: colorSamples } = await supabase
-    .from("element_color_samples")
-    .select(
-      "id, element_type_code, used_hex, raw_hex, delta_e, out_of_range, submitted_by_user_id, created_at, taxon_nodes ( name, slug, parent_id, rank_code )",
-    )
-    .eq("status", "proposed")
-    .order("created_at", { ascending: true });
-  const colorSampleRows = (colorSamples ?? []) as unknown as ColorSampleRow[];
-
   const genusIds = [
     ...new Set(
-      [...aliasRows, ...commentRows, ...colorSampleRows]
+      [...aliasRows, ...commentRows]
         .map((a) => (a.taxon_nodes?.rank_code === "morph" ? a.taxon_nodes.parent_id : null))
         .filter((x): x is string => !!x),
     ),
@@ -142,7 +119,6 @@ export default async function ModerateQueue() {
       ...aliasRows.map((a) => a.proposed_by_user_id),
       ...productRows.map((p) => p.added_by_user_id),
       ...commentRows.map((c) => c.user_id),
-      ...colorSampleRows.map((s) => s.submitted_by_user_id),
     ].filter((x): x is string => !!x),
   );
 
@@ -237,36 +213,6 @@ export default async function ModerateQueue() {
         </div>
       )}
 
-      <h2>Coral color samples</h2>
-      {colorSampleRows.length === 0 ? (
-        <p className="muted">No color samples pending review.</p>
-      ) : (
-        <div className="card">
-          {colorSampleRows.map((s) => {
-            const taxon = s.taxon_nodes;
-            const genus =
-              taxon?.rank_code === "morph" && taxon.parent_id
-                ? genusById.get(taxon.parent_id)
-                : null;
-            const taxonHref = genus && taxon ? `/coral/${genus.slug}/${taxon.slug}` : null;
-            return (
-              <ColorSampleModerationRow
-                key={s.id}
-                sampleId={s.id}
-                usedHex={s.used_hex}
-                rawHex={s.raw_hex}
-                elementLabel={ELEMENT_LABEL[s.element_type_code] ?? s.element_type_code}
-                taxonName={taxon ? `${taxon.name}${genus ? ` (${genus.name})` : ""}` : "Unknown entry"}
-                taxonHref={taxonHref}
-                submittedBy={usernames.get(s.submitted_by_user_id) ?? "A hobbyist"}
-                deltaE={s.delta_e}
-                outOfRange={s.out_of_range}
-                createdAt={s.created_at}
-              />
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

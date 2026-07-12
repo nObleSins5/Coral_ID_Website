@@ -77,7 +77,16 @@ INSERT INTO element_types (code, label, allows_color, allows_shape, allows_size,
     ('coenosarc_skin',   'Coenosarc / skin (tissue)',          true,  false, false, true,  7),
     ('base_body',        'Base / body',                        true,  false, false, false, 8),
     ('growth_tip',       'Growth tip / growing edge',          true,  false, false, false, 9),
-    ('surface_texture',  'Surface texture (verrucae/papillae)',false, false, false, true, 10);
+    ('surface_texture',  'Surface texture (verrucae/papillae)',false, false, false, true, 10),
+    -- Added for the zoanthid/paly/mushroom/soft-coral anatomy realignment
+    -- (2026-07). "polyp" is retired as a position (a polyp is tentacle +
+    -- mouth, which can differ in color — never one element); these replace
+    -- it with the loose, beginner-friendly regions hobbyists actually see.
+    ('oral_disc_center', 'Oral disc / face (center)',          true,  false, false, false, 11),
+    ('skirt_1',          'Skirt color 1',                      true,  false, false, false, 12),
+    ('skirt_2',          'Skirt color 2',                      true,  false, false, false, 13),
+    ('skirt_3',          'Skirt color 3',                      true,  false, false, false, 14),
+    ('stalk',            'Stalk / capitulum base',              true,  false, false, false, 15);
 
 -- Colony-level morphology (describes the whole colony, not one colored part).
 CREATE TABLE growth_forms (
@@ -107,10 +116,18 @@ CREATE TABLE anatomy_templates (
     sort_order smallint NOT NULL DEFAULT 0
 );
 INSERT INTO anatomy_templates (code, label, sort_order) VALUES
-    ('branching_sps', 'Branching/SPS', 1),
-    ('lps_corallite', 'LPS with corallite', 2),
-    ('lps_tentacled', 'Tentacled LPS', 3),
-    ('polyp_soft',    'Polyp-based soft coral / zoanthid', 4);
+    ('branching_sps',     'Branching/SPS', 1),
+    ('lps_corallite',     'LPS with corallite', 2),
+    ('lps_tentacled',     'Tentacled LPS', 3),
+    -- Retired 2026-07: was a catch-all for zoanthids, mushrooms, and soft
+    -- corals alike, which don't share an anatomy. Left in place (unused,
+    -- not dropped) rather than deleted, since taxon_nodes FKs into it and
+    -- old rows shouldn't need a cascade.
+    ('polyp_soft',        'Polyp-based soft coral / zoanthid (retired)', 4),
+    ('zoanthid_paly',     'Zoanthid / palythoa', 5),
+    ('mushroom_coral',    'Mushroom coral (disc)', 6),
+    ('leather_soft_coral','Leather soft coral (stalk + cap)', 7),
+    ('mat_soft_coral',    'Matting/encrusting soft coral', 8);
 
 CREATE TABLE anatomy_template_elements (
     template_code     text NOT NULL REFERENCES anatomy_templates(code) ON DELETE CASCADE,
@@ -132,7 +149,22 @@ INSERT INTO anatomy_template_elements (template_code, element_type_code, sort_or
     ('polyp_soft',    'base_body',         1),
     ('polyp_soft',    'polyp',             2),
     ('polyp_soft',    'tentacle',          3),
-    ('polyp_soft',    'mouth_oral_disc',   4);
+    ('polyp_soft',    'mouth_oral_disc',   4),
+    -- Suggested (not required) positions — see element_types comment above.
+    ('zoanthid_paly',      'oral_disc_center', 1),
+    ('zoanthid_paly',      'tentacle',         2),
+    ('zoanthid_paly',      'skirt_1',          3),
+    ('zoanthid_paly',      'skirt_2',          4),
+    ('zoanthid_paly',      'skirt_3',          5),
+    ('mushroom_coral',     'oral_disc_center', 1),
+    ('mushroom_coral',     'skirt_1',          2),
+    ('mushroom_coral',     'skirt_2',          3),
+    ('mushroom_coral',     'skirt_3',          4),
+    ('leather_soft_coral', 'stalk',            1),
+    ('leather_soft_coral', 'base_body',        2),
+    ('leather_soft_coral', 'tentacle',         3),
+    ('mat_soft_coral',     'base_body',        1),
+    ('mat_soft_coral',     'tentacle',         2);
 
 CREATE TABLE care_difficulties (
     code       text PRIMARY KEY,
@@ -249,11 +281,12 @@ CREATE TABLE taxon_nodes (
     light_level_code      text REFERENCES care_levels(code),
     flow_level_code       text REFERENCES care_levels(code),
     growth_form_code      text REFERENCES growth_forms(code),
-    -- Genus-level (see anatomy_templates above) — which elements this kind
-    -- of coral actually has, so the element color key can show the full
-    -- standardized set (with gaps marked, not silently omitted) instead of
-    -- whatever subset a morph happens to have logged.
+    -- Genus-level (see anatomy_templates above) — suggested color positions
+    -- for this kind of coral's entry UI (not a required checklist).
     anatomy_template_code text REFERENCES anatomy_templates(code),
+    -- Mushroom-specific texture flag (e.g. "bounce"/bubble-vesicle
+    -- rhodactis) — a standalone feature, not a color position.
+    has_bubble_texture    boolean,
     placement             text,
     description           text,
 
@@ -302,19 +335,31 @@ CREATE TABLE element_profiles (
 );
 CREATE INDEX idx_element_profiles_taxon ON element_profiles (taxon_node_id);
 
--- A described coloration for an element. pattern says how the stops combine:
--- solid = 1 stop, range = 2 stops (from/to), rainbow/banded/etc. = N stops.
+-- A described coloration, one of a taxon's distinct colors. pattern says how
+-- the stops combine: solid = 1 stop, range = 2 stops (from/to), rainbow/
+-- banded/etc. = N stops. Hangs directly off the taxon (not through
+-- element_profiles) — position_label is an optional, non-enforced hint
+-- (e.g. "oral_disc_center", "skirt_1") for the entry UI and wiki grouping,
+-- not a required checklist item; NULL is valid ("just a distinct color, no
+-- specific region claimed"). element_profiles still exists separately for
+-- genuine morphology capture (shape/texture/size) and a color_range may
+-- optionally reference one when useful, but doesn't require it.
 CREATE TABLE color_ranges (
     id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    element_profile_id uuid NOT NULL REFERENCES element_profiles(id) ON DELETE CASCADE,
+    taxon_node_id      uuid NOT NULL REFERENCES taxon_nodes(id) ON DELETE CASCADE,
+    position_label     text REFERENCES element_types(code),
+    element_profile_id uuid REFERENCES element_profiles(id) ON DELETE SET NULL,
     color_pattern_code text NOT NULL REFERENCES color_patterns(code),
     label              text,     -- e.g. "Rainbow oral disc"
     notes              text,
+    -- Rough visual proportion (0-100), for the deferred "I see these colors
+    -- + %" self-ID matcher — not yet populated or consumed by any matcher.
+    approx_percent     numeric CHECK (approx_percent >= 0 AND approx_percent <= 100),
     sort_order         smallint NOT NULL DEFAULT 0,
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_color_ranges_profile ON color_ranges (element_profile_id);
+CREATE INDEX idx_color_ranges_taxon ON color_ranges (taxon_node_id);
 
 -- The actual color point(s). hex is the source of truth; HSL is optional for
 -- machine comparison (Phase 3). A stop can be pinpoint-sampled from a real
@@ -464,29 +509,23 @@ INSERT INTO element_profiles (taxon_node_id, element_type_code, description) VAL
 INSERT INTO element_profiles (taxon_node_id, element_type_code, skin_texture_code, description) VALUES
     ((SELECT id FROM taxon_nodes WHERE slug = 'rainbow-acan'), 'coenosarc_skin', 'smooth', 'Fleshy tissue, gradient wall color.');
 
--- Helper: fetch an element_profile id by (morph slug, element_type).
--- 6e. Colorations.
+-- 6e. Colorations — hang directly off the taxon (position_label is just a
+-- suggested hint, matching the element_profiles rows above where relevant).
 
 -- Pink Stardust growth tip: SOLID blue.
-WITH ep AS (
-    SELECT ep.id FROM element_profiles ep
-    JOIN taxon_nodes tn ON tn.id = ep.taxon_node_id
-    WHERE tn.slug = 'pink-stardust' AND ep.element_type_code = 'growth_tip'
-), cr AS (
-    INSERT INTO color_ranges (element_profile_id, color_pattern_code, label)
-    SELECT id, 'solid', 'Blue tips' FROM ep RETURNING id
+WITH cr AS (
+    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label)
+    SELECT id, 'growth_tip', 'solid', 'Blue tips' FROM taxon_nodes WHERE slug = 'pink-stardust'
+    RETURNING id
 )
 INSERT INTO color_stops (color_range_id, ordinal, hex, named_color_code)
 SELECT id, 0, '#1E90FF', 'blue' FROM cr;
 
 -- Pink Stardust skin: RANGE cream -> green (2 stops).
-WITH ep AS (
-    SELECT ep.id FROM element_profiles ep
-    JOIN taxon_nodes tn ON tn.id = ep.taxon_node_id
-    WHERE tn.slug = 'pink-stardust' AND ep.element_type_code = 'coenosarc_skin'
-), cr AS (
-    INSERT INTO color_ranges (element_profile_id, color_pattern_code, label)
-    SELECT id, 'range', 'Cream to green' FROM ep RETURNING id
+WITH cr AS (
+    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label)
+    SELECT id, 'coenosarc_skin', 'range', 'Cream to green' FROM taxon_nodes WHERE slug = 'pink-stardust'
+    RETURNING id
 )
 INSERT INTO color_stops (color_range_id, ordinal, hex, named_color_code)
 SELECT id, 0, '#FFF3D6', 'cream' FROM cr
@@ -494,13 +533,10 @@ UNION ALL
 SELECT id, 1, '#2E8B57', 'green' FROM cr;
 
 -- Rainbow Acan oral disc: RAINBOW (4 stops).
-WITH ep AS (
-    SELECT ep.id FROM element_profiles ep
-    JOIN taxon_nodes tn ON tn.id = ep.taxon_node_id
-    WHERE tn.slug = 'rainbow-acan' AND ep.element_type_code = 'mouth_oral_disc'
-), cr AS (
-    INSERT INTO color_ranges (element_profile_id, color_pattern_code, label)
-    SELECT id, 'rainbow', 'Rainbow oral disc' FROM ep RETURNING id
+WITH cr AS (
+    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label)
+    SELECT id, 'mouth_oral_disc', 'rainbow', 'Rainbow oral disc' FROM taxon_nodes WHERE slug = 'rainbow-acan'
+    RETURNING id
 )
 INSERT INTO color_stops (color_range_id, ordinal, hex, named_color_code)
 SELECT id, 0, '#E23B3B', 'red'    FROM cr

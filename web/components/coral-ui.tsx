@@ -5,27 +5,28 @@ import { AffiliateLinkManager } from "@/components/affiliate-link-manager";
 
 export type ColorStop = { hex: string; ordinal: number };
 export type ColorRange = {
+  position_label: string | null;
   color_pattern_code: string;
   label: string | null;
+  approx_percent: number | null;
   color_stops: ColorStop[];
-};
-export type ElementProfile = {
-  element_type_code: string;
-  description: string | null;
-  color_ranges: ColorRange[];
 };
 
 export const ELEMENT_LABEL: Record<string, string> = {
   corallite: "Corallite",
   axial_corallite: "Axial corallite",
   radial_corallite: "Radial corallite",
-  polyp: "Polyp",
   tentacle: "Tentacle / tips",
   mouth_oral_disc: "Mouth / oral disc",
   coenosarc_skin: "Coenosarc / skin",
   base_body: "Base / body",
   growth_tip: "Growth tip",
   surface_texture: "Surface texture",
+  oral_disc_center: "Oral disc / face (center)",
+  skirt_1: "Skirt color 1",
+  skirt_2: "Skirt color 2",
+  skirt_3: "Skirt color 3",
+  stalk: "Stalk / capitulum base",
 };
 
 export const CARE_DIFFICULTY: Record<string, string> = {
@@ -59,136 +60,250 @@ function sortedHexes(range: ColorRange): string[] {
     .map((s) => s.hex);
 }
 
-// Turn a coloration into a CSS background: solid = flat fill, range/tipped =
-// smooth gradient, everything else = hard-edged segments.
-export function rangeToCss(range: ColorRange): string {
-  const hexes = sortedHexes(range);
-  if (hexes.length === 0) return "transparent";
-  if (hexes.length === 1) return hexes[0];
-  if (range.color_pattern_code === "range" || range.color_pattern_code === "tipped") {
-    return `linear-gradient(90deg, ${hexes.join(", ")})`;
+// Deterministic seed from a range's own content (label + hexes) — stable
+// across renders/requests, so the scattered dots/blotches below don't
+// reshuffle every time the page renders (no Math.random()).
+function seedFor(range: ColorRange): number {
+  const str = (range.label ?? "") + sortedHexes(range).join("");
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return h >>> 0;
+}
+function mulberry32(seed: number) {
+  let a = seed;
+  return function rand() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Literal, repeating stripes — a fixed px band width so it tiles as real
+// stripes regardless of the swatch's rendered size, rather than one hard
+// segment per color across the whole width (that's `rainbow`, below).
+function bandedCss(hexes: string[]): string {
+  const bandWidth = 14;
+  const stops: string[] = [];
+  hexes.forEach((h, i) => {
+    stops.push(`${h} ${i * bandWidth}px`, `${h} ${(i + 1) * bandWidth}px`);
+  });
+  return `repeating-linear-gradient(90deg, ${stops.join(", ")})`;
+}
+
+// Concentric rings, outer-to-inner — the pattern that most directly echoes
+// a reference zoanthid color-guide chart's flower-ring look.
+function ringedShapes(hexes: string[], compact?: boolean) {
+  const [cx, cy] = compact ? [8, 8] : [45, 13];
+  const maxR = compact ? 7.5 : 12.5;
+  const n = hexes.length;
+  return hexes.map((h, i) => (
+    <circle key={i} cx={cx} cy={cy} r={maxR * ((n - i) / n)} fill={h} />
+  ));
+}
+
+// A base fill + small dots scattered in the other hex(es) at fixed
+// (seeded) positions — a real speckled texture instead of a gradient bar.
+function spottedShapes(hexes: string[], compact: boolean | undefined, seed: number) {
+  const rand = mulberry32(seed);
+  const [w, h] = compact ? [16, 16] : [90, 26];
+  const dotHexes = hexes.length > 1 ? hexes.slice(1) : hexes;
+  const count = compact ? 5 : 10;
+  const shapes = [<rect key="base" x={0} y={0} width={w} height={h} fill={hexes[0]} />];
+  for (let i = 0; i < count; i++) {
+    const r = (compact ? 1.1 : 1.8) + rand() * (compact ? 1 : 1.6);
+    shapes.push(
+      <circle
+        key={i}
+        cx={rand() * w}
+        cy={rand() * h}
+        r={r}
+        fill={dotHexes[i % dotHexes.length]}
+      />,
+    );
   }
+  return shapes;
+}
+
+// A base fill + a few overlapping soft-edged blotches — reads as irregular
+// and blotchy rather than spotted's discrete dots.
+function mottledShapes(hexes: string[], compact: boolean | undefined, seed: number) {
+  const rand = mulberry32(seed);
+  const [w, h] = compact ? [16, 16] : [90, 26];
+  const blotchHexes = hexes.length > 1 ? hexes.slice(1) : hexes;
+  const count = compact ? 3 : 5;
+  const shapes = [<rect key="base" x={0} y={0} width={w} height={h} fill={hexes[0]} />];
+  for (let i = 0; i < count; i++) {
+    const rx = (compact ? 2.5 : 8) + rand() * (compact ? 3 : 7);
+    shapes.push(
+      <ellipse
+        key={i}
+        cx={rand() * w}
+        cy={rand() * h}
+        rx={rx}
+        ry={rx * (0.6 + rand() * 0.4)}
+        fill={blotchHexes[i % blotchHexes.length]}
+        fillOpacity={0.75}
+      />,
+    );
+  }
+  return shapes;
+}
+
+// One coloration's swatch, rendered per pattern instead of always flattening
+// to a single CSS background — spotted/mottled/ringed get a literal small
+// SVG texture; the rest stay CSS for perf/simplicity. `compact` renders at
+// CompactColorKey's small fixed icon size instead of the full color-bar.
+export function ColorSwatch({
+  range,
+  compact,
+  title,
+}: {
+  range: ColorRange;
+  compact?: boolean;
+  title?: string;
+}) {
+  const hexes = sortedHexes(range);
+  const className = compact ? "swatch-chip" : "color-bar";
+  if (hexes.length === 0) return null;
+
+  if (hexes.length === 1) {
+    return <span className={className} style={{ background: hexes[0] }} title={title} />;
+  }
+
+  const pattern = range.color_pattern_code;
+  if (pattern === "range" || pattern === "tipped") {
+    return (
+      <span
+        className={className}
+        style={{ background: `linear-gradient(90deg, ${hexes.join(", ")})` }}
+        title={title}
+      />
+    );
+  }
+  if (pattern === "banded") {
+    return <span className={className} style={{ background: bandedCss(hexes) }} title={title} />;
+  }
+  if (pattern === "spotted" || pattern === "mottled" || pattern === "ringed") {
+    const viewBox = compact ? "0 0 16 16" : "0 0 90 26";
+    const seed = seedFor(range);
+    return (
+      <span className={className} style={{ overflow: "hidden", display: "inline-block" }} title={title}>
+        <svg viewBox={viewBox} width="100%" height="100%" preserveAspectRatio="none">
+          {pattern === "ringed"
+            ? ringedShapes(hexes, compact)
+            : pattern === "spotted"
+              ? spottedShapes(hexes, compact, seed)
+              : mottledShapes(hexes, compact, seed)}
+        </svg>
+      </span>
+    );
+  }
+  // rainbow (and any future multi-stop pattern): hard-edged adjacent
+  // segments across the whole swatch — several distinct colors side by side.
   const n = hexes.length;
   const segs = hexes
     .map((h, i) => `${h} ${(i / n) * 100}% ${((i + 1) / n) * 100}%`)
     .join(", ");
-  return `linear-gradient(90deg, ${segs})`;
+  return (
+    <span className={className} style={{ background: `linear-gradient(90deg, ${segs})` }} title={title} />
+  );
 }
 
-// All hexes across a coral's elements — used for the placeholder tile.
-export function keyColors(elements: ElementProfile[]): string[] {
+// All hexes across a taxon's colors — used for the placeholder tile.
+export function keyColors(colorRanges: ColorRange[]): string[] {
   const out: string[] = [];
-  for (const el of elements)
-    for (const r of el.color_ranges) out.push(...sortedHexes(r));
+  for (const r of colorRanges) out.push(...sortedHexes(r));
   return out;
 }
 
-// Compact palette strip (one bar per element's first coloration) for list rows.
-export function CompactColorKey({ elements }: { elements: ElementProfile[] }) {
+// Compact palette strip (one chip per distinct color) for list rows.
+export function CompactColorKey({ colorRanges }: { colorRanges: ColorRange[] }) {
   return (
     <div className="swatch-strip">
-      {elements.map((el) =>
-        el.color_ranges.slice(0, 1).map((r, i) => (
-          <span
-            key={el.element_type_code + i}
-            className="swatch-chip"
-            title={ELEMENT_LABEL[el.element_type_code] ?? el.element_type_code}
-            style={{ background: rangeToCss(r) }}
-          />
-        )),
-      )}
+      {colorRanges.map((r, i) => (
+        <ColorSwatch
+          key={i}
+          range={r}
+          compact
+          title={r.label ?? (r.position_label ? (ELEMENT_LABEL[r.position_label] ?? r.position_label) : undefined)}
+        />
+      ))}
     </div>
   );
 }
 
-// Full, labeled element color key for the detail page. templateElementCodes
-// (from the genus's anatomy_template_code, see sql/supabase/20_anatomy_templates.sql)
-// is the ordered, standardized set of elements THIS kind of coral actually
-// has — passing it shows every expected element, marking any the morph
-// hasn't logged real color data for yet as "Not yet documented" rather than
-// silently omitting it (the gap this closes: most seeded morphs only ever
-// had one element logged, with no consistency by growth form). Falls back
-// to just the morph's own elements when no template is known.
-export function ElementColorKey({
-  elements,
-  templateElementCodes,
-  communitySamples,
-}: {
-  elements: ElementProfile[];
-  templateElementCodes?: string[];
-  // Confirmed community color samples per element (element_type_code -> hexes),
-  // from the color-picker tool. Shown alongside the seed range, or as the
-  // element's color when there's no seed range yet.
-  communitySamples?: Record<string, string[]>;
-}) {
-  if (!templateElementCodes && elements.length === 0)
-    return <p className="muted">No element profiles recorded yet.</p>;
+function ColorRangeRow({ range }: { range: ColorRange }) {
+  return (
+    <div className="color-range">
+      <ColorSwatch range={range} />
+      <span className="color-meta">
+        {range.label ? <strong>{range.label}</strong> : null}{" "}
+        <span className="muted">{sortedHexes(range).join(" → ")}</span>
+      </span>
+    </div>
+  );
+}
 
-  const byCode = new Map(elements.map((el) => [el.element_type_code, el]));
-  const orderedCodes = templateElementCodes
+// Full color key for the detail page. A taxon just has however many
+// distinct colors it has — position_label is an optional, suggested hint
+// (from the genus's anatomy_template_code, see
+// sql/supabase/22_decouple_color_from_elements.sql), not a required
+// checklist; there's no more "Not yet documented" placeholder enforcement.
+// suggestedPositions orders labeled colors to match the template's expected
+// order; anything unlabeled (or in a position outside the template) is
+// grouped under "Other".
+export function ElementColorKey({
+  colorRanges,
+  suggestedPositions,
+}: {
+  colorRanges: ColorRange[];
+  suggestedPositions?: string[];
+}) {
+  if (colorRanges.length === 0) return <p className="muted">No colors documented yet.</p>;
+
+  const byPosition = new Map<string, ColorRange[]>();
+  const unlabeled: ColorRange[] = [];
+  for (const r of colorRanges) {
+    if (r.position_label) {
+      const list = byPosition.get(r.position_label) ?? [];
+      list.push(r);
+      byPosition.set(r.position_label, list);
+    } else {
+      unlabeled.push(r);
+    }
+  }
+
+  const orderedPositions = suggestedPositions
     ? [
-        ...templateElementCodes,
-        ...elements
-          .map((el) => el.element_type_code)
-          .filter((code) => !templateElementCodes.includes(code)),
+        ...suggestedPositions.filter((p) => byPosition.has(p)),
+        ...[...byPosition.keys()].filter((p) => !suggestedPositions.includes(p)),
       ]
-    : elements.map((el) => el.element_type_code);
+    : [...byPosition.keys()];
 
   return (
     <div className="element-key">
-      {orderedCodes.map((code) => {
-        const el = byCode.get(code);
-        // An element_profiles row can exist with zero color_ranges/color_stops
-        // (logged as "this coral has one" without ever recording a color) —
-        // that's the same "not yet documented" gap as the row not existing
-        // at all, not real data to render as an empty swatch.
-        const hasColorData = el ? el.color_ranges.some((r) => r.color_stops.length > 0) : false;
-        const community = communitySamples?.[code] ?? [];
-        return (
-          <div className="element-row" key={code}>
-            <div className="element-name">{ELEMENT_LABEL[code] ?? code}</div>
-            {hasColorData && el ? (
-              <div className="element-colors">
-                {el.color_ranges.map((r, i) => (
-                  <div className="color-range" key={i}>
-                    <span className="color-bar" style={{ background: rangeToCss(r) }} />
-                    <span className="color-meta">
-                      {r.label ? <strong>{r.label}</strong> : null}{" "}
-                      <span className="muted">
-                        {sortedHexes(r).join(" → ")}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-                {community.length > 0 ? <CommunitySwatches hexes={community} /> : null}
-              </div>
-            ) : community.length > 0 ? (
-              <div className="element-colors">
-                <CommunitySwatches hexes={community} />
-              </div>
-            ) : (
-              <div className="element-colors">
-                <span className="muted element-undocumented">Not yet documented</span>
-              </div>
-            )}
+      {orderedPositions.map((position) => (
+        <div className="element-row" key={position}>
+          <div className="element-name">{ELEMENT_LABEL[position] ?? position}</div>
+          <div className="element-colors">
+            {byPosition.get(position)!.map((r, i) => (
+              <ColorRangeRow range={r} key={i} />
+            ))}
           </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function CommunitySwatches({ hexes }: { hexes: string[] }) {
-  return (
-    <div className="color-range community-range">
-      <span className="color-bar-strip">
-        {hexes.slice(0, 8).map((hex, i) => (
-          <span key={i} className="color-bar-chip" style={{ background: hex }} title={hex} />
-        ))}
-      </span>
-      <span className="color-meta muted">
-        community &middot; {hexes.length} sample{hexes.length === 1 ? "" : "s"}
-      </span>
+        </div>
+      ))}
+      {unlabeled.length > 0 ? (
+        <div className="element-row">
+          <div className="element-name muted">Other</div>
+          <div className="element-colors">
+            {unlabeled.map((r, i) => (
+              <ColorRangeRow range={r} key={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -8,10 +8,7 @@ import {
   getUsernamesFor,
 } from "@/lib/wiki";
 import { getCommentsForTaxon } from "@/lib/comments";
-import { getConfirmedColorSamples } from "@/lib/color-samples";
 import { CoralCommentsSection } from "@/components/coral-comments-section";
-import { ColorContributeSection } from "@/components/color-contribute-section";
-import { ELEMENT_LABEL } from "@/components/coral-ui";
 import {
   CareDifficultyPill,
   CarePill,
@@ -69,22 +66,12 @@ export default async function MorphPage({
   if (!result) notFound();
   const { morph, genus, templateElementCodes } = result;
 
-  const colors = keyColors(morph.element_profiles);
+  const colors = keyColors(morph.color_ranges);
   const photos = await getPhotosForTaxon(morph.id);
   const voteCounts = await getAccurateVoteCounts(photos.map((p) => p.id));
   const usernames = await getUsernamesFor(photos.map((p) => p.uploader_user_id));
   const affiliateLinks = await getAffiliateLinksForTaxon(morph.id);
   const comments = await getCommentsForTaxon(morph.id);
-  const communitySamplesMap = await getConfirmedColorSamples(morph.id);
-  const communitySamples = Object.fromEntries(communitySamplesMap);
-
-  // Elements this coral's anatomy template says it has, for the color picker's
-  // element dropdown. Falls back to the elements it already has logged.
-  const pickerElements = (
-    templateElementCodes.length > 0
-      ? templateElementCodes
-      : morph.element_profiles.map((e) => e.element_type_code)
-  ).map((code) => ({ code, label: ELEMENT_LABEL[code] ?? code }));
 
   // Hero = most-voted photo, computed live (no cached counter/batch job —
   // trivial at this scale). photos is already newest-first, and we only
@@ -218,22 +205,12 @@ export default async function MorphPage({
         <div>
           <h2 style={{ marginTop: 0 }}>Element color key</h2>
           <p className="muted" style={{ marginTop: "-0.5rem" }}>
-            Compare each part of your coral against these typical ranges.
+            Compare each part of your coral against these documented colors.
           </p>
           <ElementColorKey
-            elements={morph.element_profiles}
-            templateElementCodes={templateElementCodes.length > 0 ? templateElementCodes : undefined}
-            communitySamples={communitySamples}
+            colorRanges={morph.color_ranges}
+            suggestedPositions={templateElementCodes.length > 0 ? templateElementCodes : undefined}
           />
-          <div style={{ marginTop: "1rem" }}>
-            <ColorContributeSection
-              taxonNodeId={morph.id}
-              genusSlug={genus.slug}
-              morphSlug={morph.slug}
-              templateElements={pickerElements}
-              photos={photos.map((p) => ({ id: p.id, url: p.url }))}
-            />
-          </div>
         </div>
       </div>
 

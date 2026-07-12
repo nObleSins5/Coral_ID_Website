@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import { computeParameterSnapshot, resolveGenusId, uploadPhotoFile } from "@/lib/photo-upload";
+import { getAnatomyTemplateElements } from "@/lib/wiki";
+import type { ColorRange } from "@/components/coral-ui";
 
 // Uploads a photo with NO taxon attached — Door 1's primary entry point
 // ("what is this coral?"). It appears in the /identify queue for the
@@ -196,4 +199,38 @@ export async function removePhoto(
 
   revalidatePath("/identify");
   return {};
+}
+
+// Reference color key for a candidate coral matched while proposing an ID —
+// lets the user compare their photo's colors against the real documented
+// key before committing to a suggestion. Keyed off a trusted taxon id from
+// the search list (SearchableMorph), so no genus-slug verification is
+// needed here (unlike getMorphWithGenus, which serves a public URL).
+export async function getColorKeyForTaxon(
+  taxonId: string,
+): Promise<{ colorRanges: ColorRange[]; suggestedPositions: string[] }> {
+  const supabase = createPublicClient();
+  const [{ data: taxon }, { data: colorRanges }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select("parent_id")
+      .eq("id", taxonId)
+      .maybeSingle(),
+    supabase
+      .from("color_ranges")
+      .select("position_label, color_pattern_code, label, approx_percent, color_stops ( hex, ordinal )")
+      .eq("taxon_node_id", taxonId),
+  ]);
+
+  let suggestedPositions: string[] = [];
+  if (taxon?.parent_id) {
+    const { data: genus } = await supabase
+      .from("taxon_nodes")
+      .select("anatomy_template_code")
+      .eq("id", taxon.parent_id)
+      .maybeSingle();
+    suggestedPositions = await getAnatomyTemplateElements(genus?.anatomy_template_code ?? null);
+  }
+
+  return { colorRanges: (colorRanges as unknown as ColorRange[]) ?? [], suggestedPositions };
 }

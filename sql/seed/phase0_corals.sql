@@ -88,43 +88,55 @@ FROM (VALUES
 JOIN taxon_nodes g ON g.slug = m.genus_slug
 ON CONFLICT (slug) DO NOTHING;
 
--- Helper: attach a signature element + coloration to a morph (idempotent).
+-- Helper: attach a distinct coloration to a morph (idempotent). p_element is
+-- a suggested position label (element_types.code) — NULL is valid ("just a
+-- distinct color, no specific region claimed"). Colors hang directly off
+-- the taxon, not through element_profiles (2026-07-12 decoupling).
 CREATE OR REPLACE FUNCTION public.seed_coral_color(
     p_slug text, p_element text, p_desc text,
     p_pattern text, p_label text, p_hexes text[]
 ) RETURNS void LANGUAGE plpgsql AS $$
-DECLARE v_taxon uuid; v_profile uuid; v_range uuid; i int;
+DECLARE v_taxon uuid; v_range uuid; i int;
 BEGIN
     SELECT id INTO v_taxon FROM taxon_nodes WHERE slug = p_slug;
     IF v_taxon IS NULL THEN RETURN; END IF;
-    INSERT INTO element_profiles (taxon_node_id, element_type_code, description)
-        VALUES (v_taxon, p_element, p_desc)
-        ON CONFLICT (taxon_node_id, element_type_code) DO UPDATE SET description = EXCLUDED.description
-        RETURNING id INTO v_profile;
-    IF EXISTS (SELECT 1 FROM color_ranges WHERE element_profile_id = v_profile AND label = p_label) THEN
+    IF EXISTS (SELECT 1 FROM color_ranges WHERE taxon_node_id = v_taxon AND label = p_label) THEN
         RETURN;
     END IF;
-    INSERT INTO color_ranges (element_profile_id, color_pattern_code, label)
-        VALUES (v_profile, p_pattern, p_label) RETURNING id INTO v_range;
+    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label, notes)
+        VALUES (v_taxon, NULLIF(p_element, ''), p_pattern, p_label, NULLIF(p_desc, ''))
+        RETURNING id INTO v_range;
     FOR i IN 1 .. array_length(p_hexes, 1) LOOP
         INSERT INTO color_stops (color_range_id, ordinal, hex) VALUES (v_range, i - 1, upper(p_hexes[i]));
     END LOOP;
 END $$;
 
 -- Signature colorations (provisional hexes).
-SELECT public.seed_coral_color('fire-and-ice-zoa','mouth_oral_disc','Blue face, orange skirt.','range','Blue to orange',ARRAY['#2E6FE2','#FF7A18']);
-SELECT public.seed_coral_color('utter-chaos-zoa','mouth_oral_disc','Multicolor face.','rainbow','Utter chaos',ARRAY['#7A2FBE','#E23B3B','#FFD700','#2E8B57']);
-SELECT public.seed_coral_color('rasta-zoa','mouth_oral_disc','Green face, red skirt.','range','Green to red',ARRAY['#2E8B57','#E23B3B']);
-SELECT public.seed_coral_color('grandis-paly','mouth_oral_disc','Concentric rings.','ringed','Grandis rings',ARRAY['#3B2A1A','#2E8B57','#FF8C00']);
-SELECT public.seed_coral_color('green-star-polyps','polyp','Neon green polyps.','solid','Neon green',ARRAY['#39FF14']);
+-- Zoas/palys: face + skirt are distinct, usually-solid regions, not a blend
+-- (2026-07-12 realignment) — see docs/schema-decisions.md.
+SELECT public.seed_coral_color('fire-and-ice-zoa','oral_disc_center','Blue face.','solid','Blue face',ARRAY['#2E6FE2']);
+SELECT public.seed_coral_color('fire-and-ice-zoa','skirt_1','Orange-red skirt.','solid','Orange skirt',ARRAY['#FF7A18']);
+-- Utter Chaos really does show 4 distinct skirt colors, not an abstract
+-- "rainbow" label — 3 fit the suggested skirt_1/2/3 slots, the 4th is an
+-- extra unlabeled distinct color (position NULL is valid).
+SELECT public.seed_coral_color('utter-chaos-zoa','skirt_1',NULL,'solid','Skirt — purple',ARRAY['#7A2FBE']);
+SELECT public.seed_coral_color('utter-chaos-zoa','skirt_2',NULL,'solid','Skirt — red',ARRAY['#E23B3B']);
+SELECT public.seed_coral_color('utter-chaos-zoa','skirt_3',NULL,'solid','Skirt — gold',ARRAY['#FFD700']);
+SELECT public.seed_coral_color('utter-chaos-zoa',NULL,'A 4th distinct skirt color beyond the 3 suggested slots.','solid','Skirt — green',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('rasta-zoa','oral_disc_center','Green face.','solid','Green face',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('rasta-zoa','skirt_1','Red-orange skirt.','solid','Red skirt',ARRAY['#E23B3B']);
+SELECT public.seed_coral_color('grandis-paly','oral_disc_center','Dark center.','solid','Dark center',ARRAY['#3B2A1A']);
+SELECT public.seed_coral_color('grandis-paly','skirt_1','Concentric rings within the skirt.','ringed','Grandis rings',ARRAY['#2E8B57','#FF8C00']);
+SELECT public.seed_coral_color('green-star-polyps','tentacle','Neon green polyps.','solid','Neon green',ARRAY['#39FF14']);
 SELECT public.seed_coral_color('toadstool-leather','base_body','Tan cap.','solid','Tan body',ARRAY['#C8A96B']);
 SELECT public.seed_coral_color('green-finger-leather','base_body','Green fingers.','solid','Green',ARRAY['#6FA84B']);
-SELECT public.seed_coral_color('pulsing-xenia','polyp','Cream pulsing polyps.','solid','Cream',ARRAY['#E8E0C8']);
-SELECT public.seed_coral_color('clove-polyps','polyp','Brown-green cloves.','solid','Brown-green',ARRAY['#5B7A3A']);
-SELECT public.seed_coral_color('red-mushroom','mouth_oral_disc','Deep red disc.','solid','Deep red',ARRAY['#B02222']);
+SELECT public.seed_coral_color('pulsing-xenia','tentacle','Cream pulsing polyps.','solid','Cream',ARRAY['#E8E0C8']);
+SELECT public.seed_coral_color('clove-polyps','tentacle','Brown-green cloves.','solid','Brown-green',ARRAY['#5B7A3A']);
+SELECT public.seed_coral_color('red-mushroom','oral_disc_center','Deep red disc.','solid','Deep red',ARRAY['#B02222']);
 SELECT public.seed_coral_color('og-bounce-mushroom','base_body','Green with bubbles.','mottled','Green / gold bubbles',ARRAY['#2E8B57','#FFD700']);
-SELECT public.seed_coral_color('ricordea-yuma','mouth_oral_disc','Orange-green bubbles.','mottled','Orange-green yuma',ARRAY['#FF8C00','#2E8B57']);
-SELECT public.seed_coral_color('ricordea-florida','mouth_oral_disc','Blue-green.','spotted','Blue-green florida',ARRAY['#1E90FF','#2E8B57']);
+UPDATE taxon_nodes SET has_bubble_texture = true WHERE slug = 'og-bounce-mushroom';
+SELECT public.seed_coral_color('ricordea-yuma','oral_disc_center','Orange-green bubbles.','mottled','Orange-green yuma',ARRAY['#FF8C00','#2E8B57']);
+SELECT public.seed_coral_color('ricordea-florida','oral_disc_center','Blue-green.','spotted','Blue-green florida',ARRAY['#1E90FF','#2E8B57']);
 SELECT public.seed_coral_color('gold-torch','tentacle','Gold-tipped tentacles.','tipped','Gold tips',ARRAY['#B8860B','#FFD700']);
 SELECT public.seed_coral_color('hammer-coral','tentacle','Hammer-tipped tentacles.','range','Gold-green hammer',ARRAY['#2E8B57','#FFD700']);
 SELECT public.seed_coral_color('frogspawn','tentacle','Rounded green tips.','tipped','Green tips',ARRAY['#2E8B57','#ADD8E6']);
@@ -135,14 +147,14 @@ SELECT public.seed_coral_color('blasto-merletti','mouth_oral_disc','Red rim, gre
 SELECT public.seed_coral_color('rainbow-trachy','mouth_oral_disc','Rainbow flesh.','rainbow','Rainbow trach',ARRAY['#E23B3B','#FF8C00','#FFD700','#2E8B57','#1E90FF']);
 SELECT public.seed_coral_color('meat-coral','mouth_oral_disc','Mottled red-green flesh.','mottled','Red-green meat',ARRAY['#B02222','#2E8B57']);
 SELECT public.seed_coral_color('war-coral','corallite','Red-green contrast.','mottled','Red-green war',ARRAY['#E23B3B','#2E8B57']);
-SELECT public.seed_coral_color('red-goniopora','polyp','Long red polyps.','solid','Red',ARRAY['#C0392B']);
+SELECT public.seed_coral_color('red-goniopora','tentacle','Long red polyps.','solid','Red',ARRAY['#C0392B']);
 SELECT public.seed_coral_color('yellow-scroll','base_body','Mustard-yellow.','solid','Yellow',ARRAY['#F2C200']);
 SELECT public.seed_coral_color('plate-coral','mouth_oral_disc','Green disc.','solid','Green',ARRAY['#2E8B57']);
 SELECT public.seed_coral_color('red-cap-montipora','base_body','Red plating skin.','solid','Red',ARRAY['#C0392B']);
-SELECT public.seed_coral_color('red-cap-montipora','polyp','Contrasting green polyps.','solid','Green polyps',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('red-cap-montipora','tentacle','Contrasting green polyps.','solid','Green polyps',ARRAY['#39FF14']);
 SELECT public.seed_coral_color('green-digitata','base_body','Green digitate skin.','solid','Green',ARRAY['#4CAF50']);
 SELECT public.seed_coral_color('sunset-montipora','base_body','Orange body.','range','Orange to green',ARRAY['#FF8C00','#2E8B57']);
-SELECT public.seed_coral_color('sunset-montipora','polyp','Red polyps.','solid','Red polyps',ARRAY['#C0392B']);
+SELECT public.seed_coral_color('sunset-montipora','tentacle','Red polyps.','solid','Red polyps',ARRAY['#C0392B']);
 SELECT public.seed_coral_color('walt-disney-acropora','growth_tip','Blue-grey growth tips.','solid','Blue-grey tips',ARRAY['#546E7A']);
 SELECT public.seed_coral_color('walt-disney-acropora','coenosarc_skin','Lime coenosarc.','solid','Lime',ARRAY['#7CB342']);
 SELECT public.seed_coral_color('walt-disney-acropora','radial_corallite','Lavender radial corallites.','solid','Lavender',ARRAY['#B39DDB']);
@@ -263,12 +275,19 @@ UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'm
 UPDATE taxon_nodes SET care_difficulty_code = 'easy',      light_level_code = 'medium', flow_level_code = 'medium' WHERE rank_code = 'genus' AND slug = 'zoanthus';
 
 -- Anatomy templates (which elements a genus actually has) — mirrored in
--- sql/supabase/20_anatomy_templates.sql (see that file for rationale).
+-- sql/supabase/20_anatomy_templates.sql and sql/supabase/22_decouple_color_from_elements.sql
+-- (see those files for rationale; polyp_soft was split 2026-07-12).
 UPDATE taxon_nodes SET anatomy_template_code = 'branching_sps' WHERE rank_code = 'genus' AND slug IN
     ('acropora', 'montipora', 'pavona', 'pocillopora', 'seriatopora', 'stylophora');
 UPDATE taxon_nodes SET anatomy_template_code = 'lps_corallite' WHERE rank_code = 'genus' AND slug IN
     ('blastomussa', 'caulastraea', 'cycloseris', 'dipsastraea', 'lobophyllia', 'micromussa', 'trachyphyllia', 'turbinaria');
 UPDATE taxon_nodes SET anatomy_template_code = 'lps_tentacled' WHERE rank_code = 'genus' AND slug IN
     ('duncanopsammia', 'euphyllia', 'goniopora');
-UPDATE taxon_nodes SET anatomy_template_code = 'polyp_soft' WHERE rank_code = 'genus' AND slug IN
-    ('briareum', 'clavularia', 'discosoma', 'palythoa', 'rhodactis', 'ricordea', 'sarcophyton', 'sinularia', 'xenia', 'zoanthus');
+UPDATE taxon_nodes SET anatomy_template_code = 'zoanthid_paly' WHERE rank_code = 'genus' AND slug IN
+    ('zoanthus', 'palythoa');
+UPDATE taxon_nodes SET anatomy_template_code = 'mushroom_coral' WHERE rank_code = 'genus' AND slug IN
+    ('discosoma', 'rhodactis', 'ricordea');
+UPDATE taxon_nodes SET anatomy_template_code = 'leather_soft_coral' WHERE rank_code = 'genus' AND slug IN
+    ('sarcophyton', 'sinularia');
+UPDATE taxon_nodes SET anatomy_template_code = 'mat_soft_coral' WHERE rank_code = 'genus' AND slug IN
+    ('briareum', 'xenia', 'clavularia');

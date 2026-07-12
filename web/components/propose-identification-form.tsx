@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { proposeIdentification } from "@/app/identify/actions";
+import { getColorKeyForTaxon, proposeIdentification } from "@/app/identify/actions";
 import type { SearchableMorph } from "@/lib/wiki";
+import { ElementColorKey, type ColorRange } from "@/components/coral-ui";
+import { PhotoColorSampler } from "@/components/photo-color-sampler";
 
 type Genus = { id: string; name: string };
 
@@ -13,11 +15,13 @@ type Genus = { id: string; name: string };
 // re-upload; proposeIdentification flips it public — see app/identify/actions.ts).
 export function ProposeIdentificationForm({
   photoId,
+  photoUrl,
   morphs,
   genera,
   onDone,
 }: {
   photoId: string;
+  photoUrl: string;
   morphs: SearchableMorph[];
   genera: Genus[];
   onDone: () => void;
@@ -31,6 +35,34 @@ export function ProposeIdentificationForm({
   const [newGenusId, setNewGenusId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [colorKey, setColorKey] = useState<{
+    colorRanges: ColorRange[];
+    suggestedPositions: string[];
+  } | null>(null);
+  const [showSampler, setShowSampler] = useState(false);
+
+  // Clears/sets the matched coral and resets the (now stale) reference-color
+  // state that goes with it — called from every place `matched` changes,
+  // rather than as a side effect of an effect (avoids a same-render
+  // cascading setState).
+  function selectMatch(m: SearchableMorph | null) {
+    setMatched(m);
+    setColorKey(null);
+    setShowSampler(false);
+  }
+
+  // Fetch the matched coral's reference colors for comparison — purely
+  // visual, nothing here is submitted or stored.
+  useEffect(() => {
+    if (!matched) return;
+    let cancelled = false;
+    getColorKeyForTaxon(matched.id).then((result) => {
+      if (!cancelled) setColorKey(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [matched]);
 
   const results = useMemo(() => {
     if (matched || newMorphMode || query.trim().length < 2) return [];
@@ -74,7 +106,7 @@ export function ProposeIdentificationForm({
           <input
             value={matched ? matched.name : query}
             onChange={(e) => {
-              setMatched(null);
+              selectMatch(null);
               setQuery(e.target.value);
             }}
             placeholder="e.g. Walt Disney"
@@ -87,7 +119,7 @@ export function ProposeIdentificationForm({
                   key={m.id}
                   className="taxon-result"
                   onClick={() => {
-                    setMatched(m);
+                    selectMatch(m);
                     setAliasName(query);
                   }}
                 >
@@ -117,6 +149,39 @@ export function ProposeIdentificationForm({
             </div>
           )}
 
+          {matched && (
+            <div className="card" style={{ marginTop: "0.5rem" }}>
+              <p style={{ marginTop: 0, marginBottom: "0.4rem" }}>
+                <a href={`/coral/${matched.genusSlug}/${matched.slug}`} target="_blank" rel="noopener">
+                  See {matched.name}&apos;s full wiki page →
+                </a>
+              </p>
+              {colorKey ? (
+                colorKey.colorRanges.length > 0 ? (
+                  <ElementColorKey
+                    colorRanges={colorKey.colorRanges}
+                    suggestedPositions={
+                      colorKey.suggestedPositions.length > 0 ? colorKey.suggestedPositions : undefined
+                    }
+                  />
+                ) : (
+                  <p className="muted" style={{ fontSize: "0.85rem" }}>
+                    No colors documented for {matched.name} yet.
+                  </p>
+                )
+              ) : (
+                <p className="muted" style={{ fontSize: "0.85rem" }}>Loading colors…</p>
+              )}
+              {!showSampler ? (
+                <button type="button" className="btn-secondary" onClick={() => setShowSampler(true)}>
+                  Compare colors from your photo
+                </button>
+              ) : (
+                <PhotoColorSampler photoUrl={photoUrl} />
+              )}
+            </div>
+          )}
+
           <p className="muted propose-switch">
             Can&apos;t find it?{" "}
             <button
@@ -124,7 +189,7 @@ export function ProposeIdentificationForm({
               className="link-button"
               onClick={() => {
                 setNewMorphMode(true);
-                setMatched(null);
+                selectMatch(null);
               }}
             >
               This might be an undocumented coral

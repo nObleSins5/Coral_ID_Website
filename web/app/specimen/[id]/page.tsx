@@ -126,6 +126,7 @@ export default async function SpecimenPage({
               </span>
               <SpecimenProposeControl
                 photoId={row.representative_photo_id as string}
+                photoUrl={representativePhoto.url}
                 morphs={morphs}
                 genera={genera}
               />

@@ -75,7 +75,7 @@ export default async function Home() {
                 Real sampled hex colors for {spotlight.name}, element by
                 element:
               </p>
-              <ElementColorKey elements={spotlight.element_profiles} />
+              <ElementColorKey colorRanges={spotlight.color_ranges} />
             </>
           ) : (
             <p className="muted">
