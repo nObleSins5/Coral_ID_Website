@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { submitColorSamples } from "@/app/coral/actions";
-import { rgbToHex, wbGain, applyGain, WB_TARGETS, type RGB } from "@/lib/color";
+import { rgbToHex, wbGain, applyGain, deltaE76, WB_TARGETS, type RGB } from "@/lib/color";
 
 type TemplateElement = { code: string; label: string };
 type PickPhoto = { id: string; url: string };
@@ -13,6 +13,9 @@ type Reference = { rgb: RGB; material: string; nx: number; ny: number };
 
 const CW = 720;
 const CH = 540;
+const MIN_RADIUS = 3;
+const MAX_RADIUS = 40;
+const DEFAULT_RADIUS = 12;
 const REF_MATERIAL_LABEL: Record<string, string> = {
   white: "Bright white (frag plug / white card)",
   bone: "Bone / off-white",
@@ -93,7 +96,10 @@ function ColorPicker({
   const [activePhotoId, setActivePhotoId] = useState<string | null>(photos.length ? photos[0].id : null);
   const [tainted, setTainted] = useState(false);
   const [mode, setMode] = useState<"sample" | "reference">("sample");
-  const [current, setCurrent] = useState<{ rgb: RGB; nx: number; ny: number } | null>(null);
+  const [radius, setRadius] = useState<number>(DEFAULT_RADIUS);
+  const [current, setCurrent] = useState<{ rgb: RGB; nx: number; ny: number; maxDeltaE: number } | null>(
+    null,
+  );
   const [reference, setReference] = useState<Reference | null>(null);
   const [refMaterial, setRefMaterial] = useState<string>("white");
   const [samples, setSamples] = useState<Sample[]>([]);
@@ -102,6 +108,7 @@ function ColorPicker({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ confirmed: number; pending: number } | null>(null);
   const [pending, startTransition] = useTransition();
+  const hoverRef = useRef<{ x: number; y: number } | null>(null);
 
   const gain = useMemo<RGB | null>(
     () => (reference ? wbGain(reference.rgb, reference.material) : null),
@@ -150,19 +157,48 @@ function ColorPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceIdx]);
 
-  function sampleAt(cx: number, cy: number): RGB {
+  // Circular sample matching the visible brush circle (not a fixed 5x5 box) —
+  // the radius is adjustable so a patch can be sized to fit a uniform area of
+  // tissue instead of averaging across two different structures.
+  function sampleAt(cx: number, cy: number, r = radius): RGB {
     const px = pixelsRef.current;
     if (!px) return [0, 0, 0];
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
+    let rs = 0, gs = 0, bs = 0, n = 0;
+    const r2 = r * r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r2) continue;
         const x = cx + dx, y = cy + dy;
         if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
         const i = (y * CW + x) * 4;
-        r += px[i]; g += px[i + 1]; b += px[i + 2]; n++;
+        rs += px[i]; gs += px[i + 1]; bs += px[i + 2]; n++;
       }
     }
-    return n ? [r / n, g / n, b / n] : [0, 0, 0];
+    return n ? [rs / n, gs / n, bs / n] : [0, 0, 0];
+  }
+
+  // How consistent is this patch? Max CIELAB ΔE from any sampled pixel to the
+  // patch's own mean — a flat, uniform area of tissue scores low; a patch
+  // straddling two different colors (e.g. tissue + skeleton, or a specular
+  // highlight) scores high. Surfaced to the user so they can tell a genuinely
+  // noisy click from a good one, rather than trusting an average blindly.
+  function sampleConsistency(cx: number, cy: number, r: number, mean: RGB): number {
+    const px = pixelsRef.current;
+    if (!px) return 0;
+    let maxDe = 0;
+    const r2 = r * r;
+    const step = r > 20 ? 2 : 1; // subsample for very large brushes, stays fast
+    for (let dy = -r; dy <= r; dy += step) {
+      for (let dx = -r; dx <= r; dx += step) {
+        if (dx * dx + dy * dy > r2) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= CW || y >= CH) continue;
+        const i = (y * CW + x) * 4;
+        const de = deltaE76(rgbToHex(mean), rgbToHex([px[i], px[i + 1], px[i + 2]]));
+        if (de > maxDe) maxDe = de;
+      }
+    }
+    return maxDe;
   }
 
   function evtToCanvas(e: React.MouseEvent) {
@@ -179,14 +215,19 @@ function ColorPicker({
     if (!canvas || !photo) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const src = 15, dest = 116;
+    // Source window scales with the brush radius (plus margin) so the loupe
+    // always shows the whole sample circle, not just a fixed patch of pixels.
+    const src = Math.min(CW, Math.max(radius * 2.6, 16));
+    const dest = 116;
     ctx.clearRect(0, 0, dest, dest);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(photo, cx - src / 2, cy - src / 2, src, src, 0, 0, dest, dest);
-    const p = dest / src;
+    const scale = dest / src;
+    ctx.beginPath();
+    ctx.arc(dest / 2, dest / 2, radius * scale, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(dest / 2 - p / 2, dest / 2 - p / 2, p, p);
+    ctx.stroke();
   }
 
   function clearOverlay() {
@@ -197,6 +238,18 @@ function ColorPicker({
     const o = overlayRef.current?.getContext("2d");
     if (!o) return;
     o.clearRect(0, 0, CW, CH);
+    // Live brush-size preview under the cursor, before any click — this is
+    // the actual answer to "the area feels too small/granular": you see
+    // exactly what will be averaged before you commit to it.
+    if (hoverRef.current) {
+      o.beginPath();
+      o.arc(hoverRef.current.x, hoverRef.current.y, radius, 0, Math.PI * 2);
+      o.strokeStyle = "rgba(255,255,255,0.55)";
+      o.lineWidth = 1.5;
+      o.setLineDash([4, 3]);
+      o.stroke();
+      o.setLineDash([]);
+    }
     samples.forEach((s) => {
       o.beginPath();
       o.arc(s.nx * CW, s.ny * CH, 7, 0, Math.PI * 2);
@@ -215,21 +268,30 @@ function ColorPicker({
     }
     if (current) {
       const x = current.nx * CW, y = current.ny * CH;
+      // The actual sampled circle, solid, at the committed point.
+      o.beginPath();
+      o.arc(x, y, radius, 0, Math.PI * 2);
+      o.strokeStyle = "rgba(255,255,255,0.95)";
+      o.lineWidth = 2;
+      o.stroke();
       o.strokeStyle = "rgba(255,255,255,0.95)";
       o.lineWidth = 1.5;
       o.beginPath();
-      o.moveTo(x - 11, y); o.lineTo(x - 4, y);
-      o.moveTo(x + 4, y); o.lineTo(x + 11, y);
-      o.moveTo(x, y - 11); o.lineTo(x, y - 4);
-      o.moveTo(x, y + 4); o.lineTo(x, y + 11);
+      o.moveTo(x - 5, y); o.lineTo(x + 5, y);
+      o.moveTo(x, y - 5); o.lineTo(x, y + 5);
       o.stroke();
     }
   }
-  useEffect(drawOverlay, [samples, reference, current]);
+  useEffect(drawOverlay, [samples, reference, current, radius]);
 
   function onMove(e: React.MouseEvent) {
     const p = evtToCanvas(e);
-    if (p.x < 0 || p.y < 0 || p.x >= CW || p.y >= CH) return;
+    if (p.x < 0 || p.y < 0 || p.x >= CW || p.y >= CH) {
+      hoverRef.current = null;
+      return;
+    }
+    hoverRef.current = p;
+    drawOverlay();
     drawLoupe(p.x, p.y);
     if (!pixelsRef.current) return;
     const rgb = sampleAt(p.x, p.y);
@@ -243,7 +305,8 @@ function ColorPicker({
     if (mode === "reference") {
       setReference({ rgb, material: refMaterial, nx, ny });
     } else {
-      setCurrent({ rgb, nx, ny });
+      const maxDeltaE = sampleConsistency(p.x, p.y, radius, rgb);
+      setCurrent({ rgb, nx, ny, maxDeltaE });
       setError(null);
     }
   }
@@ -381,6 +444,25 @@ function ColorPicker({
             </button>
           </div>
 
+          <div className="cp-radius-row">
+            <label htmlFor="cp-radius" className="muted" style={{ fontSize: "0.8rem", margin: 0 }}>
+              Sample size — bigger smooths out noise, but can blur across two structures
+            </label>
+            <div className="cp-radius-control">
+              <input
+                id="cp-radius"
+                type="range"
+                min={MIN_RADIUS}
+                max={MAX_RADIUS}
+                value={radius}
+                onChange={(e) => setRadius(Number(e.target.value))}
+              />
+              <span className="muted" style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}>
+                {radius * 2}px
+              </span>
+            </div>
+          </div>
+
           <div className="cp-loupe-row">
             <canvas ref={loupeRef} width={116} height={116} className="cp-loupe" />
             <div>
@@ -396,6 +478,18 @@ function ColorPicker({
                 <div className="hex">{currentUsedHex}</div>
                 <div className="muted" style={{ fontSize: "0.8rem" }}>
                   {gain ? `raw ${rgbToHex(current.rgb)} · white-balanced` : "uncorrected"}
+                </div>
+                <div style={{ fontSize: "0.78rem", marginTop: "0.25rem" }}>
+                  {current.maxDeltaE < 8 ? (
+                    <span className="muted">Consistent patch (ΔE {current.maxDeltaE.toFixed(1)})</span>
+                  ) : current.maxDeltaE < 18 ? (
+                    <span className="muted">Some variance (ΔE {current.maxDeltaE.toFixed(1)})</span>
+                  ) : (
+                    <span style={{ color: "var(--danger)" }}>
+                      High variance (ΔE {current.maxDeltaE.toFixed(1)}) — try a smaller circle or a
+                      flatter spot
+                    </span>
+                  )}
                 </div>
                 <div className="cp-tag-row">
                   <select value={elementCode} onChange={(e) => setElementCode(e.target.value)}>

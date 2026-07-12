@@ -1346,6 +1346,12 @@ td {
   border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer;
 }
 .cp-mode.selected { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.cp-radius-row { display: flex; flex-direction: column; gap: 0.35rem; }
+.cp-radius-control { display: flex; align-items: center; gap: 0.6rem; }
+.cp-radius-control input[type="range"] {
+  flex: 1; width: auto; padding: 0; background: none; border: none;
+  accent-color: var(--accent-text);
+}
 .cp-loupe-row { display: flex; align-items: center; gap: 0.8rem; }
 .cp-loupe { width: 116px; height: 116px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg); flex: none; image-rendering: pixelated; }
 .color-picker .hex { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; font-weight: 600; }
