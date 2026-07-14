@@ -1,18 +1,18 @@
 # Progress & Handoff
 
-*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-12, branch `main`.*
+*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-14, branch `main`.*
 
 **Branch note (2026-07-12):** `claude/repo-setup-wmc6wq` (the branch this doc used to say to work on) fell 9 commits behind `main` — it was a strict prefix, nothing unique to lose — and this session fast-forwarded to `main` and has worked there directly since. Work directly on `main` going forward unless told otherwise; there's no reason to recreate or return to that branch.
 
 Read `README.md` and `docs/reef-platform-spec.md` first for product context; `docs/schema-decisions.md` for why the schema looks the way it does; `docs/future-considerations.md` for product ideas raised but not yet scheduled (e.g. affiliate-link staleness).
 
-## ⚠️ Pending migration (2026-07-12, latest session): coral categories above genus — `sql/supabase/24_coral_categories.sql` NOT YET APPLIED
+## ✅ Applied (2026-07-12/14, latest session): coral categories above genus + fold-out wiki index
 
-The Supabase MCP connector disconnected partway through this session and never reconnected, so this migration is written but **not run against the live database yet**. Apply it (Supabase SQL Editor, or MCP once it reconnects) before or right after this code deploys.
+`sql/supabase/24_coral_categories.sql` has been run against the live database (user applied it via the Supabase SQL Editor after the Supabase MCP connector disconnected mid-session and never reconnected) and confirmed live in the browser: `/wiki` now shows six fold-out categories with the full 27-genus split intact — **Small Polyp Stony (SPS)** 6 genera, **Large Polyp Stony (LPS)** 11, **Mushroom** 3, **Leather** 2, **Zoanthid** 2, **Soft Coral** 3.
 
-- The schema always had a `category` rank above genus (`taxon_root_is_category` check in `coral_trait_schema.sql`), but every genus was seeded under one single hidden bucket (slug `coral`, `is_visible=false`) — never real taxonomy. This migration adds six real categories and re-parents each of the 27 genera to the one it actually belongs to: **Small Polyp Stony (SPS)**, **Large Polyp Stony (LPS)**, **Mushroom**, **Leather**, **Zoanthid**, **Soft Coral** (the last one is the catch-all for polyp-form octocorals — Xenia, Clavularia, Briareum — that aren't true leathers). See the migration file for the exact per-genus mapping and reasoning.
+- The schema always had a `category` rank above genus (`taxon_root_is_category` check in `coral_trait_schema.sql`), but every genus was seeded under one single hidden bucket (slug `coral`, `is_visible=false`) — never real taxonomy. This migration adds the six real categories and re-parents each genus to the one it actually belongs to (Soft Coral is the catch-all for polyp-form octocorals — Xenia, Clavularia, Briareum — that aren't true leathers). See the migration file for the exact per-genus mapping and reasoning.
 - `lib/wiki.ts` `getGenusCategories()` reads this grouping; `app/wiki/page.tsx` renders one `<details>` fold-out per category (open by default), genus cards inside, ordered SPS → LPS → Mushroom → Leather → Zoanthid → Soft Coral (`CATEGORY_ORDER` in `lib/wiki.ts`, since `taxon_nodes` has no ordering column).
-- **Deliberately resilient to the migration not being applied yet**: if no genus has a real category parent (exactly today's live-DB state), the wiki index falls back to the old flat genus grid instead of showing "no genera seeded" — verified live this session (temporarily stubbed fake category data to confirm the fold-out UI itself renders/collapses correctly, then reverted before committing; the fallback path is what's actually live right now since the migration hasn't run).
+- Still in place as a safety net, now dormant: if a genus is ever left without a real category parent, `app/wiki/page.tsx` falls back to the old flat genus grid instead of showing "no genera seeded." That path was what was actually live between the code deploy and the migration being applied, and was verified against the real unmigrated database at the time.
 - **Not touched**: the old hidden `coral` category and the `genus-unknown` placeholder are left exactly where they are (genus-unknown needs *some* category parent per the check constraint, and it's hidden, so it doesn't matter which).
 
 ## ✅ Applied (2026-07-12, later session): dashboard parameter log + graph modal
@@ -170,17 +170,23 @@ Working from a reference zoanthid color-guide chart (a flower-diagram style: sol
 
 Explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status (2026-07-12): color-ID redesign shipped and live; a handful of loose ends
+## Status (2026-07-14): categorized wiki + dashboard parameter log/graph shipped and live; a handful of loose ends
 
-Everything through the 2026-07-12 color-ID redesign (above) is applied to the live Supabase project, committed (`4afb99b`), and pushed to `origin/main` — Vercel deploys from `main`, so it should be live there shortly after a push (confirm the Vercel dashboard shows a successful deploy of that commit if picking this up fresh). Pick any of the following — nothing here is blocking anything else:
+Everything above (categorized wiki index, dashboard parameter log + graph modal, photo-snapshot carry-forward, freshness-badge removal) is applied to the live Supabase project and pushed to `origin/main` — Vercel deploys from `main`, so it should be live there shortly after a push (confirm the Vercel dashboard shows a successful deploy if picking this up fresh; run `git log origin/main..main` to check for anything unpushed first).
 
-1. **Verify the `/identify` propose-flow live** — log in (or get sign-off to create/clean up a throwaway test account) and confirm: typing a candidate coral name shows its real reference color key + wiki-page link, and the personal photo-color-sampler works against an uploaded photo with no network POST. Everything else from the redesign is already browser-verified live; this one piece isn't.
-2. **Fix the duplicate-RLS-policy replay bug** — a background task was already spun off for this (`sql/supabase/11_affiliate_links.sql` has 3 `CREATE POLICY` statements that collide with earlier same-named policies in `02_rls_policies.sql`, missing a `DROP POLICY IF EXISTS` guard). Cosmetic on the live DB; only blocks a from-scratch migration replay. Check whether that task chip was already picked up before redoing it.
-3. **Anatomy-guide diagrams** — still not built (one reference image per template showing where each color region is on a real coral). More useful now that the templates actually match real anatomy.
-4. **Seed data accuracy** — most corals' hex colors are still provisional placeholders pending a cited-source pass (spec §9 open decision); this is now easier to do incrementally per-color since colors aren't gated behind a rigid element checklist.
-5. **The "I see these colors + %" self-ID matcher** — deliberately deferred (see `docs/future-considerations.md`'s 2026-07-12 entry). Schema has `color_ranges.approx_percent` ready; no matching logic exists yet, and needs real design decisions (perceptual color distance, percentage tolerance, ranking/display) before it's buildable.
-6. **UI polish backlog** — see the section above (image sizing, photo-picker thumbnails, missing `alt` text on coral photos).
-7. **Next feature**, candidates already scoped/discussed:
+**Also worth checking first thing in a fresh session:** the Supabase MCP connector disconnected mid-session on 2026-07-12/14 and never reconnected on its own — try a tool call (e.g. `list_tables`) early on to see if it's back, since several items below need it. If it's still down, the Supabase SQL Editor is the fallback (as it was for `24_coral_categories.sql`).
+
+Pick any of the following — nothing here is blocking anything else:
+
+1. **Add a `/wiki/[category]` detail page**, or category-level filtering elsewhere (e.g. `/identify`'s search) — the six real categories (SPS/LPS/Mushroom/Leather/Zoanthid/Soft Coral) exist now (`sql/supabase/24_coral_categories.sql`) but only the wiki index groups by them so far.
+2. **Live-exercise the dashboard's >5-row cull and the photo-snapshot carry-forward** — both are code-complete and typecheck clean (2026-07-12) but weren't click-through verified past 3 sequential form submissions in that session (browser-automation friction, not a reproduced app bug). Worth a real pass: log 6+ parameter readings on one tank and confirm only 5 show, then upload a photo and confirm its snapshot pulls the right per-parameter carried-forward values.
+3. **Verify the `/identify` propose-flow live** — log in (or get sign-off to create/clean up a throwaway test account) and confirm: typing a candidate coral name shows its real reference color key + wiki-page link, and the personal photo-color-sampler works against an uploaded photo with no network POST. Everything else from the 2026-07-12 color-ID redesign is already browser-verified live; this one piece isn't.
+4. **Fix the duplicate-RLS-policy replay bug** — a background task was already spun off for this (`sql/supabase/11_affiliate_links.sql` has 3 `CREATE POLICY` statements that collide with earlier same-named policies in `02_rls_policies.sql`, missing a `DROP POLICY IF EXISTS` guard). Cosmetic on the live DB; only blocks a from-scratch migration replay. Check whether that task chip was already picked up before redoing it.
+5. **Anatomy-guide diagrams** — still not built (one reference image per template showing where each color region is on a real coral). More useful now that the templates actually match real anatomy.
+6. **Seed data accuracy** — most corals' hex colors are still provisional placeholders pending a cited-source pass (spec §9 open decision); this is now easier to do incrementally per-color since colors aren't gated behind a rigid element checklist.
+7. **The "I see these colors + %" self-ID matcher** — deliberately deferred (see `docs/future-considerations.md`'s 2026-07-12 entry). Schema has `color_ranges.approx_percent` ready; no matching logic exists yet, and needs real design decisions (perceptual color distance, percentage tolerance, ranking/display) before it's buildable.
+8. **UI polish backlog** — see the section above (image sizing, photo-picker thumbnails).
+9. **Next feature**, candidates already scoped/discussed:
    - Alias-approval / moderation queue — `coral_aliases` proposals from the ID flow now accumulate with `status='proposed'` and nothing ever reviews them; the spec's sitemap always called for a separate admin/moderator queue for this.
    - Vendor-availability matching against wishlists — the bigger idea `want_list` was originally scoped for (spec §5.4 Door 2); see `docs/future-considerations.md` — needs real design decisions (notification model, what each side sees) before scheduling.
    - Automated affiliate-link health checks / WYSIWYG TTL-expiration — future-considerations.md ideas 4-5, not built; the vendor-uploaded-photo flow and report-flagging (ideas 6a, 3) are.
