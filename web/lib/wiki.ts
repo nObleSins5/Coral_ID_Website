@@ -100,6 +100,62 @@ export async function getGenera(): Promise<
   return genera.map((g) => ({ ...g, morph_count: counts.get(g.id) ?? 0 }));
 }
 
+export type GenusCategory = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+// Display order for the wiki index's fold-out sections — not alphabetical
+// (SPS/LPS/Soft Coral would scatter), and not stored on the row itself since
+// taxon_nodes has no ordering column. See sql/supabase/24_coral_categories.sql
+// for why these six exist instead of one generic "soft coral" bucket.
+const CATEGORY_ORDER = ["sps", "lps", "mushroom", "leather", "zoanthid", "soft-coral"];
+
+// Genus -> category grouping for the wiki index (one fold-out per category,
+// genera as its contents) — the "coral" category root used to be one single
+// hidden bucket; 24_coral_categories.sql re-parented every genus to the real
+// one it belongs to.
+export async function getGenusCategories(): Promise<
+  (GenusCategory & { genera: (Genus & { morph_count: number })[] })[]
+> {
+  const supabase = createPublicClient();
+
+  const [{ data: categories }, { data: genera }, { data: morphs }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "category")
+      .eq("is_visible", true),
+    supabase
+      .from("taxon_nodes")
+      .select("id, parent_id, name, slug, scientific_name")
+      .eq("rank_code", "genus")
+      .eq("is_visible", true)
+      .order("name"),
+    supabase.from("taxon_nodes").select("parent_id").eq("rank_code", "morph"),
+  ]);
+
+  const morphCounts = new Map<string, number>();
+  for (const m of morphs ?? []) {
+    if (!m.parent_id) continue;
+    morphCounts.set(m.parent_id, (morphCounts.get(m.parent_id) ?? 0) + 1);
+  }
+
+  const generaByCategory = new Map<string, (Genus & { morph_count: number })[]>();
+  for (const g of (genera ?? []) as (Genus & { parent_id: string | null })[]) {
+    if (!g.parent_id) continue;
+    const list = generaByCategory.get(g.parent_id) ?? [];
+    list.push({ ...g, morph_count: morphCounts.get(g.id) ?? 0 });
+    generaByCategory.set(g.parent_id, list);
+  }
+
+  return (categories ?? [])
+    .map((c) => ({ ...c, genera: generaByCategory.get(c.id) ?? [] }))
+    .filter((c) => c.genera.length > 0)
+    .sort((a, b) => CATEGORY_ORDER.indexOf(a.slug) - CATEGORY_ORDER.indexOf(b.slug));
+}
+
 export async function getGenusBySlug(slug: string): Promise<Genus | null> {
   const supabase = createPublicClient();
   const { data } = await supabase

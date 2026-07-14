@@ -244,6 +244,38 @@ td {
   font-size: 0.85rem;
 }
 
+/* Wiki index: one fold-out per coral category (SPS/LPS/Mushroom/Leather/
+   Zoanthid/Soft Coral), genus cards as its contents. */
+.category-section {
+  margin-bottom: 1.5rem;
+}
+.category-section:last-child {
+  margin-bottom: 0;
+}
+.category-summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1.15rem;
+  list-style: none;
+  padding: 0.15rem 0;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+}
+.category-summary::-webkit-details-marker {
+  display: none;
+}
+.category-summary::before {
+  content: "▸ ";
+  color: var(--muted);
+}
+.category-section[open] > .category-summary::before {
+  content: "▾ ";
+}
+.category-section .genus-grid {
+  margin-bottom: 0;
+}
+
 .morph-list {
   display: flex;
   flex-direction: column;

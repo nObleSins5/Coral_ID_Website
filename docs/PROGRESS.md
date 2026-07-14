@@ -6,6 +6,15 @@
 
 Read `README.md` and `docs/reef-platform-spec.md` first for product context; `docs/schema-decisions.md` for why the schema looks the way it does; `docs/future-considerations.md` for product ideas raised but not yet scheduled (e.g. affiliate-link staleness).
 
+## ⚠️ Pending migration (2026-07-12, latest session): coral categories above genus — `sql/supabase/24_coral_categories.sql` NOT YET APPLIED
+
+The Supabase MCP connector disconnected partway through this session and never reconnected, so this migration is written but **not run against the live database yet**. Apply it (Supabase SQL Editor, or MCP once it reconnects) before or right after this code deploys.
+
+- The schema always had a `category` rank above genus (`taxon_root_is_category` check in `coral_trait_schema.sql`), but every genus was seeded under one single hidden bucket (slug `coral`, `is_visible=false`) — never real taxonomy. This migration adds six real categories and re-parents each of the 27 genera to the one it actually belongs to: **Small Polyp Stony (SPS)**, **Large Polyp Stony (LPS)**, **Mushroom**, **Leather**, **Zoanthid**, **Soft Coral** (the last one is the catch-all for polyp-form octocorals — Xenia, Clavularia, Briareum — that aren't true leathers). See the migration file for the exact per-genus mapping and reasoning.
+- `lib/wiki.ts` `getGenusCategories()` reads this grouping; `app/wiki/page.tsx` renders one `<details>` fold-out per category (open by default), genus cards inside, ordered SPS → LPS → Mushroom → Leather → Zoanthid → Soft Coral (`CATEGORY_ORDER` in `lib/wiki.ts`, since `taxon_nodes` has no ordering column).
+- **Deliberately resilient to the migration not being applied yet**: if no genus has a real category parent (exactly today's live-DB state), the wiki index falls back to the old flat genus grid instead of showing "no genera seeded" — verified live this session (temporarily stubbed fake category data to confirm the fold-out UI itself renders/collapses correctly, then reverted before committing; the fallback path is what's actually live right now since the migration hasn't run).
+- **Not touched**: the old hidden `coral` category and the `genus-unknown` placeholder are left exactly where they are (genus-unknown needs *some* category parent per the check constraint, and it's hidden, so it doesn't matter which).
+
 ## ✅ Applied (2026-07-12, later session): dashboard parameter log + graph modal
 
 No schema change — `parameter_readings` was already append-only with no cull, so this is display-layer only.
