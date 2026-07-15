@@ -1,9 +1,13 @@
 -- =============================================================================
 -- Phase 0 seed — curated easy-ID corals (PROVISIONAL)
 -- =============================================================================
--- ~36 common, easy-to-identify hobby corals across the naming hierarchy
+-- 100+ common, easy-to-identify hobby corals across the naming hierarchy
 -- (Coral category -> genus -> morph), each with care guidance and a signature
 -- element coloration, so the wiki / Door 1 features have real content.
+-- Started at ~36 (2026-07-06); expanded to 100+ (2026-07-15, still spanning
+-- the same 27 genera rather than adding new ones) to give the identify-MVP
+-- color-match funnel a real spread to match against ahead of a deeper
+-- real-photo testing pass.
 --
 -- ⚠ PARTIALLY PROVISIONAL DATA. Genus/morph names are real hobby names, and
 -- care_difficulty/light/flow/growth_form per morph are reasoned per-morph
@@ -83,7 +87,83 @@ FROM (VALUES
     ('seriatopora','Bird''s Nest','birds-nest','moderate','high','high','branching','Upper rock','Thin-branched pink birdsnest.'),
     ('stylophora','Milka Stylophora','milka-stylophora','moderate','high','high','branching','Mid to upper rock','Pastel purple cats-paw stylophora.'),
     ('pocillopora','Pocillopora','pocillopora','easy','high','high','branching','Mid to upper rock','Hardy pink-brown cauliflower coral.'),
-    ('pavona','Pavona Cactus','pavona-cactus','moderate','medium','medium','foliose','Mid rock','Folded green cactus/lettuce coral.')
+    ('pavona','Pavona Cactus','pavona-cactus','moderate','medium','medium','foliose','Mid rock','Folded green cactus/lettuce coral.'),
+    -- =========================================================================
+    -- Expansion pass (2026-07-15) — same provisional-data caveats as above
+    -- (real hobby names, placeholder hexes). Broadens coverage across all 27
+    -- existing genera rather than adding new ones, so the identify-MVP color
+    -- funnel has a real spread to match against. See docs/PROGRESS.md.
+    -- =========================================================================
+    -- SPS
+    ('acropora','Miyagi Tort Acropora','miyagi-tort-acropora','difficult','high','high','tabling','Upper rock, high flow','Deep purple tabling Acro with green polyps.'),
+    ('acropora','Homewrecker Acropora','homewrecker-acropora','difficult','high','high','branching','Upper rock','Blue-purple branches with hot-pink polyps.'),
+    ('acropora','Pink Lemonade Acropora','pink-lemonade-acropora','moderate','high','high','branching','Upper rock','Pink base fading to yellow branch tips.'),
+    ('acropora','Nuclear Green Acropora','nuclear-green-acropora','moderate','high','high','branching','Upper rock','Extremely bright, uniform neon-green staghorn.'),
+    ('acropora','Ultra Fiji Purple Acropora','ultra-fiji-purple-acropora','difficult','high','high','branching','Upper rock, high flow','Deep purple branches with blue growth tips.'),
+    ('acropora','Sunset Acropora','sunset-acropora','difficult','high','high','tabling','Upper rock','Orange-pink tabling Acro with cream polyps.'),
+    ('acropora','Bali Slimer','bali-slimer','moderate','high','high','branching','Upper rock','Two-tone green-and-gold staghorn.'),
+    ('montipora','Superman Montipora','superman-montipora','moderate','high','medium','plating_laminar','Mid to upper rock','Blue plating skin with red polyps.'),
+    ('montipora','Rainbow Montipora','rainbow-montipora','moderate','high','medium','encrusting','Mid rock','Multicolor encrusting cap — purple, green and pink patches.'),
+    ('montipora','Miami Hurricane Montipora','miami-hurricane-montipora','moderate','high','medium','plating_laminar','Mid to upper rock','Orange-red plate with green polyps.'),
+    ('montipora','Confetti Montipora','confetti-montipora','moderate','high','medium','encrusting','Mid rock','Speckled cream-and-purple encrusting montipora.'),
+    ('montipora','Undata Montipora','undata-montipora','moderate','high','high','digitate','Upper rock','Thick green digitate growth, hardier than most digitata.'),
+    ('seriatopora','Green Bird''s Nest','green-birds-nest','moderate','high','high','branching','Upper rock','Thin-branched green birdsnest.'),
+    ('seriatopora','Pink Tipped Bird''s Nest','pink-tipped-birds-nest','moderate','high','high','branching','Upper rock','Pale branches with hot-pink growth tips.'),
+    ('stylophora','Pink Cats Paw Stylophora','pink-cats-paw-stylophora','moderate','high','high','branching','Mid to upper rock','Classic bubblegum-pink cats-paw stylophora.'),
+    ('stylophora','Green Stylophora','green-stylophora','moderate','high','high','branching','Mid to upper rock','Hardy green cats-paw stylophora.'),
+    ('pocillopora','Pink Cauliflower Pocillopora','pink-cauliflower-pocillopora','easy','high','high','branching','Mid to upper rock','Vivid pink cauliflower coral.'),
+    ('pocillopora','Green Cauliflower Pocillopora','green-cauliflower-pocillopora','easy','high','high','branching','Mid to upper rock','Green-brown cauliflower coral.'),
+    ('pavona','Pavona Danai','pavona-danai','moderate','medium','medium','plating_laminar','Mid rock','Chunky green-brown plating pavona.'),
+    ('pavona','Pavona Duerdeni','pavona-duerdeni','moderate','medium','medium','massive','Mid rock','Bumpy massive pavona, tan-green.'),
+    -- LPS
+    ('euphyllia','Green Torch','green-torch','moderate','medium','low','branching','Mid rock, space to sweep','Green torch coral with sweeper tentacles.'),
+    ('euphyllia','Purple Hammer','purple-hammer','easy','medium','low','branching','Mid rock','Deep purple hammer coral.'),
+    ('euphyllia','Orange Frogspawn','orange-frogspawn','easy','medium','low','branching','Mid rock','Orange-tipped branching frogspawn.'),
+    ('duncanopsammia','Whisker Coral','whisker-coral','easy','medium','medium','branching','Low to mid rock','Duncan-like polyps with long clear-white "whisker" tentacles.'),
+    ('caulastraea','Green Trumpet Coral','green-trumpet-coral','easy','medium','low','branching','Low to mid rock','All-green trumpet-shaped corallites.'),
+    ('caulastraea','Neon Candy Cane','neon-candy-cane','easy','medium','low','branching','Low to mid rock','Bright green-and-purple striped trumpet coral.'),
+    ('micromussa','Rainbow Micromussa','rainbow-micromussa','easy','low','low','submassive','Low rock / sand','Multicolor acan-type with red, orange and green discs.'),
+    ('micromussa','Purple People Eater Micromussa','purple-people-eater-micromussa','easy','low','low','submassive','Low rock / sand','Deep purple oral discs.'),
+    ('micromussa','War Micromussa','war-micromussa','easy','low','low','submassive','Low rock / sand','Red rim, green center, high contrast.'),
+    ('micromussa','Bubblegum Micromussa','bubblegum-micromussa','easy','low','low','submassive','Low rock / sand','Solid pink oral discs.'),
+    ('blastomussa','Blasto Wellsi','blasto-wellsi','easy','low','low','submassive','Low rock / sand','Larger-polyp blastomussa, orange-red.'),
+    ('blastomussa','Green Blastomussa','green-blastomussa','easy','low','low','submassive','Low rock / sand','All-green blasto merletti variant.'),
+    ('trachyphyllia','Green Trachyphyllia','green-trachyphyllia','easy','low','low','massive','Sand bed','Open brain coral, uniform green flesh.'),
+    ('lobophyllia','Rainbow Lobophyllia','rainbow-lobophyllia','easy','low','low','massive','Low rock / sand','Multicolor fleshy brain coral.'),
+    ('lobophyllia','Green Lobophyllia','green-lobophyllia','easy','low','low','massive','Low rock / sand','Solid green fleshy brain coral.'),
+    ('dipsastraea','Rainbow Favia','rainbow-favia','moderate','medium','low','massive','Mid rock','Multicolor favia with distinct corallite rings.'),
+    ('goniopora','Green Goniopora','green-goniopora','moderate','medium','medium','massive','Sand bed','Long green flowing polyps.'),
+    ('goniopora','Pink Goniopora','pink-goniopora','moderate','medium','medium','massive','Sand bed','Pastel-pink flowerpot coral.'),
+    ('turbinaria','Green Cup Turbinaria','green-cup-turbinaria','easy','medium','medium','plating_laminar','Mid rock','Green cup/scroll coral.'),
+    ('cycloseris','Red Plate Coral','red-plate-coral','easy','low','low','massive','Sand bed','Free-living disc coral, deep red.'),
+    -- Mushroom
+    ('discosoma','Green Hairy Mushroom','green-hairy-mushroom','easy','low','low','encrusting','Low rock / sand','Green discosoma with fine tentacle fringe.'),
+    ('discosoma','Purple People Eater Mushroom','purple-mushroom','easy','low','low','encrusting','Low rock / sand','Deep purple discosoma.'),
+    ('discosoma','Rainbow Mushroom','rainbow-mushroom','easy','low','low','encrusting','Low rock / sand','Multicolor speckled discosoma.'),
+    ('rhodactis','Red Rhodactis','red-rhodactis','moderate','low','low','encrusting','Low rock / sand','Deep-red bounce mushroom.'),
+    ('rhodactis','Green Bullseye Mushroom','green-bullseye-mushroom','moderate','low','low','encrusting','Low rock / sand','Green mushroom with a distinct darker center ring.'),
+    ('ricordea','Rainbow Ricordea','rainbow-ricordea','moderate','medium','low','encrusting','Low rock','Multicolor yuma ricordea — orange, pink and green patches.'),
+    ('ricordea','Blue Ricordea Florida','blue-ricordea-florida','easy','medium','low','encrusting','Low rock / sand','Uniform electric-blue Caribbean ricordea.'),
+    -- Leather
+    ('sarcophyton','Green Toadstool Leather','green-toadstool-leather','easy','medium','low','massive','Mid rock','Green-capped toadstool leather.'),
+    ('sarcophyton','Neon Green Sarcophyton','neon-sarcophyton','easy','medium','low','massive','Mid rock','Bright neon-green toadstool cap.'),
+    ('sinularia','Flower Tree Leather','flower-tree-leather','easy','medium','medium','branching','Mid rock','Tan-brown branching leather with flower-like polyps.'),
+    ('sinularia','Devil''s Hand Leather','devils-hand-leather','easy','medium','medium','branching','Mid rock','Broad-lobed brown leather coral resembling a hand.'),
+    -- Zoanthid
+    ('zoanthus','Superman Zoa','superman-zoa','easy','medium','medium','encrusting','Low to mid rock','Blue face with a bold red skirt.'),
+    ('zoanthus','Eagle Eye Zoa','eagle-eye-zoa','easy','medium','medium','encrusting','Low to mid rock','Yellow-green face with an orange ring.'),
+    ('zoanthus','Radioactive Dragon Eye Zoa','radioactive-dragon-eye-zoa','easy','medium','medium','encrusting','Low to mid rock','Neon-green face, near-black skirt.'),
+    ('zoanthus','Purple People Eater Zoa','purple-people-eater-zoa','easy','medium','medium','encrusting','Low to mid rock','Solid deep-purple polyps.'),
+    ('zoanthus','Pink Panther Zoa','pink-panther-zoa','easy','medium','medium','encrusting','Low to mid rock','Pink face with a cream skirt.'),
+    ('zoanthus','Blue Hornet Zoa','blue-hornet-zoa','easy','medium','medium','encrusting','Low to mid rock','Blue-grey face with yellow skirt banding.'),
+    ('palythoa','President Lincoln Paly','president-lincoln-paly','easy','medium','medium','encrusting','Low rock','Deep brown-red polyps with a cream rim.'),
+    ('palythoa','Space Monster Paly','space-monster-paly','easy','medium','medium','encrusting','Low rock','Dark-green polyps with a purple-ringed mouth.'),
+    ('palythoa','Atomic Green Paly','atomic-green-paly','easy','medium','medium','encrusting','Low rock','Uniform bright-green polyps.'),
+    -- Soft coral
+    ('xenia','Red Xenia','red-xenia','easy','medium','medium','branching','Mid rock','Pulsing xenia with a reddish stalk.'),
+    ('xenia','Blue Xenia','blue-xenia','easy','medium','medium','branching','Mid rock','Pulsing xenia with a blue-grey cast.'),
+    ('clavularia','Green Clove Polyps','green-clove-polyps','easy','low','medium','encrusting','Low rock','All-green eight-tentacle clove polyps.'),
+    ('briareum','Purple Star Polyps','purple-star-polyps','easy','low','medium','encrusting','Low rock / bare bottom','Fast-spreading mat with reddish-purple polyps.')
 ) AS m(genus_slug, name, slug, diff, light, flow, gf, placement, descr)
 JOIN taxon_nodes g ON g.slug = m.genus_slug
 ON CONFLICT (slug) DO NOTHING;
@@ -177,6 +257,95 @@ SELECT public.seed_coral_color('milka-stylophora','base_body','Pastel purple.','
 SELECT public.seed_coral_color('pocillopora','base_body','Pink-brown.','solid','Pink-brown',ARRAY['#B5726F']);
 SELECT public.seed_coral_color('pavona-cactus','base_body','Folded green blades.','solid','Green',ARRAY['#6FA84B']);
 
+-- Expansion pass (2026-07-15) colorations — same provisional-placeholder
+-- caveat as everything above.
+-- SPS
+SELECT public.seed_coral_color('miyagi-tort-acropora','growth_tip','Purple tips.','solid','Purple tips',ARRAY['#4B0082']);
+SELECT public.seed_coral_color('miyagi-tort-acropora','coenosarc_skin','Green polyps.','solid','Green polyps',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('homewrecker-acropora','coenosarc_skin','Blue-purple base.','solid','Blue-purple',ARRAY['#5B4FCF']);
+SELECT public.seed_coral_color('homewrecker-acropora','radial_corallite','Hot-pink polyps.','solid','Pink polyps',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('pink-lemonade-acropora','coenosarc_skin','Pink fading to yellow.','range','Pink to yellow',ARRAY['#FF69B4','#FFD700']);
+SELECT public.seed_coral_color('nuclear-green-acropora','coenosarc_skin','Neon green.','solid','Neon green',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('ultra-fiji-purple-acropora','coenosarc_skin','Deep purple.','solid','Purple',ARRAY['#800080']);
+SELECT public.seed_coral_color('ultra-fiji-purple-acropora','growth_tip','Blue tips.','solid','Blue tips',ARRAY['#1E90FF']);
+SELECT public.seed_coral_color('sunset-acropora','coenosarc_skin','Orange to pink.','range','Orange to pink',ARRAY['#FF8C00','#FF69B4']);
+SELECT public.seed_coral_color('sunset-acropora','radial_corallite','Cream polyps.','solid','Cream polyps',ARRAY['#FFF3D6']);
+SELECT public.seed_coral_color('bali-slimer','coenosarc_skin','Green to gold.','range','Green to gold',ARRAY['#2E8B57','#FFD700']);
+SELECT public.seed_coral_color('superman-montipora','coenosarc_skin','Blue plating skin.','solid','Blue',ARRAY['#1E90FF']);
+SELECT public.seed_coral_color('superman-montipora','radial_corallite','Red polyps.','solid','Red polyps',ARRAY['#E23B3B']);
+SELECT public.seed_coral_color('rainbow-montipora','coenosarc_skin','Purple, green and pink patches.','rainbow','Rainbow monti',ARRAY['#800080','#2E8B57','#FF69B4']);
+SELECT public.seed_coral_color('miami-hurricane-montipora','coenosarc_skin','Orange plate.','solid','Orange',ARRAY['#FF8C00']);
+SELECT public.seed_coral_color('miami-hurricane-montipora','radial_corallite','Green polyps.','solid','Green polyps',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('confetti-montipora','coenosarc_skin','Cream base, purple speckles.','spotted','Confetti',ARRAY['#FFF3D6','#800080']);
+SELECT public.seed_coral_color('undata-montipora','coenosarc_skin','Thick green growth.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('green-birds-nest','base_body','Green branches.','solid','Green',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('pink-tipped-birds-nest','base_body','Pale cream base.','solid','Cream base',ARRAY['#FFF3D6']);
+SELECT public.seed_coral_color('pink-tipped-birds-nest','growth_tip','Pink tips.','solid','Pink tips',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('pink-cats-paw-stylophora','base_body','Bubblegum pink.','solid','Pink',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('green-stylophora','base_body','Hardy green.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('pink-cauliflower-pocillopora','base_body','Vivid pink.','solid','Pink',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('green-cauliflower-pocillopora','base_body','Green-brown.','solid','Green-brown',ARRAY['#6FA84B']);
+SELECT public.seed_coral_color('pavona-danai','base_body','Green-brown plate.','solid','Green-brown',ARRAY['#5B7A3A']);
+SELECT public.seed_coral_color('pavona-duerdeni','base_body','Tan-green, bumpy.','solid','Tan-green',ARRAY['#6FA84B']);
+-- LPS
+SELECT public.seed_coral_color('green-torch','tentacle','Green tips.','solid','Green tips',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('purple-hammer','tentacle','Deep purple.','solid','Purple',ARRAY['#7A2FBE']);
+SELECT public.seed_coral_color('orange-frogspawn','tentacle','Orange tips.','solid','Orange tips',ARRAY['#FF8C00']);
+SELECT public.seed_coral_color('whisker-coral','tentacle','Clear-white whiskers.','solid','White',ARRAY['#FFFFFF']);
+SELECT public.seed_coral_color('whisker-coral','mouth_oral_disc','Green disc.','solid','Green disc',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('green-trumpet-coral','corallite','All-green corallites.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('neon-candy-cane','corallite','Green-purple stripes.','banded','Green-purple stripes',ARRAY['#39FF14','#800080']);
+SELECT public.seed_coral_color('rainbow-micromussa','mouth_oral_disc','Red, orange and green.','rainbow','Rainbow',ARRAY['#E23B3B','#FF8C00','#2E8B57']);
+SELECT public.seed_coral_color('purple-people-eater-micromussa','mouth_oral_disc','Deep purple.','solid','Purple',ARRAY['#800080']);
+SELECT public.seed_coral_color('war-micromussa','mouth_oral_disc','Red to green.','range','Red to green',ARRAY['#E23B3B','#2E8B57']);
+SELECT public.seed_coral_color('bubblegum-micromussa','mouth_oral_disc','Solid pink.','solid','Pink',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('blasto-wellsi','mouth_oral_disc','Orange-red.','solid','Orange-red',ARRAY['#C0392B']);
+SELECT public.seed_coral_color('green-blastomussa','mouth_oral_disc','All-green.','solid','Green',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('green-trachyphyllia','mouth_oral_disc','Uniform green flesh.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('rainbow-lobophyllia','mouth_oral_disc','Multicolor flesh.','rainbow','Rainbow',ARRAY['#E23B3B','#FFD700','#2E8B57']);
+SELECT public.seed_coral_color('green-lobophyllia','mouth_oral_disc','Solid green flesh.','solid','Green',ARRAY['#5B7A3A']);
+SELECT public.seed_coral_color('rainbow-favia','corallite','Multicolor rings.','rainbow','Rainbow',ARRAY['#E23B3B','#FFD700','#2E8B57','#1E90FF']);
+SELECT public.seed_coral_color('green-goniopora','tentacle','Long green polyps.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('pink-goniopora','tentacle','Pastel pink polyps.','solid','Pink',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('green-cup-turbinaria','base_body','Green cup.','solid','Green',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('red-plate-coral','mouth_oral_disc','Deep red disc.','solid','Red',ARRAY['#E23B3B']);
+-- Mushroom
+SELECT public.seed_coral_color('green-hairy-mushroom','oral_disc_center','Green disc.','solid','Green',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('purple-mushroom','oral_disc_center','Deep purple.','solid','Purple',ARRAY['#800080']);
+SELECT public.seed_coral_color('rainbow-mushroom','oral_disc_center','Multicolor speckles.','spotted','Rainbow speckle',ARRAY['#FF8C00','#2E8B57']);
+SELECT public.seed_coral_color('red-rhodactis','oral_disc_center','Deep red.','solid','Red',ARRAY['#B02222']);
+SELECT public.seed_coral_color('green-bullseye-mushroom','oral_disc_center','Green with a dark center ring.','ringed','Bullseye',ARRAY['#2E8B57','#3B2A1A']);
+SELECT public.seed_coral_color('rainbow-ricordea','oral_disc_center','Orange, pink and green patches.','rainbow','Rainbow',ARRAY['#FF8C00','#FF69B4','#2E8B57']);
+SELECT public.seed_coral_color('blue-ricordea-florida','oral_disc_center','Electric blue.','solid','Blue',ARRAY['#1E90FF']);
+-- Leather
+SELECT public.seed_coral_color('green-toadstool-leather','base_body','Green cap.','solid','Green',ARRAY['#6FA84B']);
+SELECT public.seed_coral_color('neon-sarcophyton','base_body','Neon-green cap.','solid','Neon green',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('flower-tree-leather','base_body','Tan-brown.','solid','Tan-brown',ARRAY['#C8A96B']);
+SELECT public.seed_coral_color('devils-hand-leather','base_body','Brown lobes.','solid','Brown',ARRAY['#8B4513']);
+-- Zoanthid
+SELECT public.seed_coral_color('superman-zoa','oral_disc_center','Blue face.','solid','Blue face',ARRAY['#1E90FF']);
+SELECT public.seed_coral_color('superman-zoa','skirt_1','Red skirt.','solid','Red skirt',ARRAY['#E23B3B']);
+SELECT public.seed_coral_color('eagle-eye-zoa','oral_disc_center','Yellow-green face.','solid','Yellow-green face',ARRAY['#7CB342']);
+SELECT public.seed_coral_color('eagle-eye-zoa','skirt_1','Orange ring.','solid','Orange ring',ARRAY['#FF8C00']);
+SELECT public.seed_coral_color('radioactive-dragon-eye-zoa','oral_disc_center','Neon-green face.','solid','Neon-green face',ARRAY['#39FF14']);
+SELECT public.seed_coral_color('radioactive-dragon-eye-zoa','skirt_1','Near-black skirt.','solid','Near-black skirt',ARRAY['#1C1A06']);
+SELECT public.seed_coral_color('purple-people-eater-zoa','oral_disc_center','Deep purple.','solid','Purple',ARRAY['#7A2FBE']);
+SELECT public.seed_coral_color('pink-panther-zoa','oral_disc_center','Pink face.','solid','Pink face',ARRAY['#FF69B4']);
+SELECT public.seed_coral_color('pink-panther-zoa','skirt_1','Cream skirt.','solid','Cream skirt',ARRAY['#FFF3D6']);
+SELECT public.seed_coral_color('blue-hornet-zoa','oral_disc_center','Blue-grey face.','solid','Blue-grey face',ARRAY['#546E7A']);
+SELECT public.seed_coral_color('blue-hornet-zoa','skirt_1','Yellow skirt.','solid','Yellow skirt',ARRAY['#FFD700']);
+SELECT public.seed_coral_color('president-lincoln-paly','oral_disc_center','Brown-red.','solid','Brown-red',ARRAY['#8B4513']);
+SELECT public.seed_coral_color('president-lincoln-paly','skirt_1','Cream rim.','solid','Cream rim',ARRAY['#FFF3D6']);
+SELECT public.seed_coral_color('space-monster-paly','oral_disc_center','Dark green.','solid','Dark green',ARRAY['#2E8B57']);
+SELECT public.seed_coral_color('space-monster-paly','skirt_1','Purple ring.','solid','Purple ring',ARRAY['#7A2FBE']);
+SELECT public.seed_coral_color('atomic-green-paly','oral_disc_center','Bright green.','solid','Green',ARRAY['#39FF14']);
+-- Soft coral
+SELECT public.seed_coral_color('red-xenia','base_body','Red-brown stalk.','solid','Red-brown stalk',ARRAY['#8B4513']);
+SELECT public.seed_coral_color('red-xenia','tentacle','Cream polyps.','solid','Cream polyps',ARRAY['#E8E0C8']);
+SELECT public.seed_coral_color('blue-xenia','tentacle','Blue-grey cast.','solid','Blue-grey',ARRAY['#546E7A']);
+SELECT public.seed_coral_color('green-clove-polyps','tentacle','All-green.','solid','Green',ARRAY['#4CAF50']);
+SELECT public.seed_coral_color('purple-star-polyps','tentacle','Reddish-purple polyps.','solid','Reddish-purple',ARRAY['#B5726F']);
+
 DROP FUNCTION public.seed_coral_color(text, text, text, text, text, text[], text);
 
 -- =============================================================================
@@ -205,7 +374,16 @@ WHERE slug IN (
     'fire-and-ice-zoa','utter-chaos-zoa','rasta-zoa','grandis-paly',
     'green-star-polyps','toadstool-leather','green-finger-leather',
     'pulsing-xenia','clove-polyps','red-mushroom','og-bounce-mushroom',
-    'ricordea-yuma','ricordea-florida'
+    'ricordea-yuma','ricordea-florida',
+    -- Expansion pass (2026-07-15) — mushroom/leather/zoanthid/soft-coral
+    'green-hairy-mushroom','purple-mushroom','rainbow-mushroom',
+    'red-rhodactis','green-bullseye-mushroom','rainbow-ricordea',
+    'blue-ricordea-florida','green-toadstool-leather','neon-sarcophyton',
+    'flower-tree-leather','devils-hand-leather','superman-zoa',
+    'eagle-eye-zoa','radioactive-dragon-eye-zoa','purple-people-eater-zoa',
+    'pink-panther-zoa','blue-hornet-zoa','president-lincoln-paly',
+    'space-monster-paly','atomic-green-paly','red-xenia','blue-xenia',
+    'green-clove-polyps','purple-star-polyps'
 );
 
 -- LPS: moderate, fairly stable range; most want low-to-moderate nutrients.
@@ -224,7 +402,15 @@ WHERE slug IN (
     -- §6), not part of the 36 morphs seeded above, but it's the same
     -- Micromussa/Acan-type LPS profile as sunset-micromussa and shipped live
     -- with the same NULL recommended-parameters gap.
-    'rainbow-acan'
+    'rainbow-acan',
+    -- Expansion pass (2026-07-15)
+    'green-torch','purple-hammer','orange-frogspawn','whisker-coral',
+    'green-trumpet-coral','neon-candy-cane','rainbow-micromussa',
+    'purple-people-eater-micromussa','war-micromussa','bubblegum-micromussa',
+    'blasto-wellsi','green-blastomussa','green-trachyphyllia',
+    'rainbow-lobophyllia','green-lobophyllia','rainbow-favia',
+    'green-goniopora','pink-goniopora','green-cup-turbinaria',
+    'red-plate-coral'
 );
 
 -- SPS: narrower, more stable range; low nutrients, but not zero.
@@ -238,7 +424,15 @@ UPDATE taxon_nodes SET
 WHERE slug IN (
     'red-cap-montipora','green-digitata','sunset-montipora',
     'walt-disney-acropora','green-slimer','tricolor-valida','birds-nest',
-    'milka-stylophora','pocillopora','pavona-cactus'
+    'milka-stylophora','pocillopora','pavona-cactus',
+    -- Expansion pass (2026-07-15)
+    'miyagi-tort-acropora','homewrecker-acropora','pink-lemonade-acropora',
+    'nuclear-green-acropora','ultra-fiji-purple-acropora','sunset-acropora',
+    'bali-slimer','superman-montipora','rainbow-montipora',
+    'miami-hurricane-montipora','confetti-montipora','undata-montipora',
+    'green-birds-nest','pink-tipped-birds-nest','pink-cats-paw-stylophora',
+    'green-stylophora','pink-cauliflower-pocillopora',
+    'green-cauliflower-pocillopora','pavona-danai','pavona-duerdeni'
 );
 
 -- Reusable "not sure which genus" bucket for /identify's brand-new-morph

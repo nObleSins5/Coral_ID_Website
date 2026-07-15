@@ -1,6 +1,6 @@
 # Progress & Handoff
 
-*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-14 (identify-MVP Phase 1 session), branch `main`.*
+*Working checkpoint for resuming this project in a fresh session — start here instead of replaying chat history. Written 2026-07-06, last updated 2026-07-15 (seed data expanded to 101 corals), branch `main`.*
 
 **Branch note (2026-07-12):** `claude/repo-setup-wmc6wq` (the branch this doc used to say to work on) fell 9 commits behind `main` — it was a strict prefix, nothing unique to lose — and this session fast-forwarded to `main` and has worked there directly since. Work directly on `main` going forward unless told otherwise; there's no reason to recreate or return to that branch.
 
@@ -214,6 +214,25 @@ Continuation of Phase 2 directly above, once the user added a real `ANTHROPIC_AP
 
 **Verified**: typecheck/lint clean, all 41 tests still pass (the fix only touched how the funnel *applies* the already-validated extraction result, not the validation/parsing logic itself, so no test changes were needed). Live-tested via the actual upload flow with real reference photos both before and after the fix, confirmed via `read_console_messages` (no errors) at each step.
 
+## ✅ Applied (2026-07-15): expanded seed data from 37 to 101 corals across all 27 genera
+
+Requested to give the identify-MVP color-match funnel (and the user's own upcoming real-photo testing pass) a real spread to match against, instead of 37 corals — several genera only had 1-2 morphs, which meant most funnel queries had almost nothing to rank against.
+
+**64 new morphs added** (`sql/seed/phase0_corals.sql`), same provisional-placeholder-hex caveat as the original 36 — real, recognizable reef-hobby trade names, not invented science, consistent with the file's existing "PARTIALLY PROVISIONAL DATA" framing. **Every one of the 27 existing genera got at least one new morph** (none left untouched), weighted toward genera with a genuinely larger real-world naming culture: Acropora +7 (10 total), Zoanthus +6 (9 total), Montipora +5 (8 total), down to +1 each for the more niche genera (Duncanopsammia, Turbinaria, Cycloseris, etc.) — no new genera added, distribution only. Each new morph got: care/light/flow/growth-form, a placement + one-line description, 1-3 `seed_coral_color` calls using the genus's real anatomy-template positions (e.g. zoanthid_paly morphs use `oral_disc_center`/`skirt_1`, branching_sps morphs use `coenosarc_skin`/`growth_tip`/etc. — not arbitrary), and a slug added to whichever of the three recommended-parameters buckets (softies/LPS/SPS) matches its category, so no new morph ships with an all-dashes parameter table.
+
+**Verified against a scratch local Postgres** (same method as the migration verification earlier in this doc): loaded `coral_trait_schema.sql` + the updated `phase0_corals.sql` fresh —
+- **101 total morphs** (37 + 64), confirmed via direct count.
+- **Zero morphs with a NULL recommended-parameter** — this is the strongest possible check against the biggest real risk (a typo'd slug in one of the three `WHERE slug IN (...)` bucket lists silently affecting 0 rows): every single new slug referenced across all three parameter blocks actually matched an inserted row.
+- **Zero genera with 0 morphs**, and a per-genus count table confirmed the intended spread (2 to 10 morphs per genus, none stuck at the old 1).
+- **Zero morphs with 0 color_ranges** (130 color_ranges / 172 color_stops total) — every new genus-slug reference in the morph INSERT also had to resolve via an inner JOIN to actually land a row, so a typo'd genus slug would have shown up as a lower-than-101 count; it didn't.
+- **Every new hex re-run through the real `hexToFamily` binner** (not eyeballed) — all 35 unique hexes in the dataset classify into a sensible, non-null family; spot-checked several against their intended label.
+- **Idempotent**: re-ran the full seed file a second time, counts (101 morphs / 130 ranges / 172 stops) were byte-identical.
+- Scratch DB torn down after.
+
+**Not yet applied to the live Supabase project** — same connector/credentials blocker as the two pending migrations already noted below. Unlike those, this is pure seed data (`sql/seed/phase0_corals.sql` is designed to be safely re-run in full each time — `ON CONFLICT DO NOTHING` on inserts, label-guarded on colorations), so applying it live is just: **re-run the whole file** against the live project (via the Supabase SQL Editor or MCP connector) — no separate numbered migration needed for this one.
+
+**Not done, and correctly so**: no attempt was made to spin up a full local PostgREST+RLS replica to render this in the actual running Next.js app — the wiki/funnel code already reads these tables generically (no hardcoded coral-count assumptions, confirmed by code read) and was live browser-tested against the smaller dataset earlier this session, so the real risk here was in the *data* (typos, wrong genus links, bad position labels), which the SQL-level checks above cover thoroughly. Worth an actual browser pass once this is live on Supabase.
+
 ## Known, deferred polish (not urgent) — a UI pass backlog
 
 - **Image display sizing** — photos render "very large" in places (hero image and/or gallery cards need tighter max-height/cropping rules). Not addressed by the 2026-07-08 design pass (that pass was color/type tokens, not layout/sizing) — still open.
@@ -222,15 +241,16 @@ Continuation of Phase 2 directly above, once the user added a real `ANTHROPIC_AP
 
 Explicitly deferred by the user for a later dedicated design pass — not bugs.
 
-## Status (2026-07-14, later session): identify-MVP Phases 1 + 2 shipped and accuracy-checked; two pending migrations
+## Status (2026-07-15): identify-MVP Phases 1 + 2 shipped and accuracy-checked; seed expanded to 101 corals; three things pending on the live DB
 
-Everything in the four "Applied (2026-07-14)" sections above (color-match funnel + landing CTA, the Rasta Zoanthid color correction, the vision-LLM photo pre-fill, and the post-key bug fix) is code-complete, tested, and — **once committed and pushed** — live on `origin/main` (Vercel deploys from `main`; confirm with `git log origin/main..main` if picking this up fresh, in case a push didn't happen at the end of the session that wrote this).
+Everything in the "Applied" sections above (color-match funnel + landing CTA, the Rasta Zoanthid color correction, the vision-LLM photo pre-fill, the post-key bug fix, and the 37→101 seed expansion) is code-complete, tested, and — **once committed and pushed** — live on `origin/main` (Vercel deploys from `main`; confirm with `git log origin/main..main` if picking this up fresh, in case a push didn't happen at the end of the session that wrote this).
 
-**Two things are NOT yet live on the actual Supabase project** (both written, both verified against a scratch local Postgres — see their own sections above for how — but neither applied, since no MCP connector and no elevated DB credentials were available this session):
+**Three things are NOT yet live on the actual Supabase project** (all written, all verified against a scratch local Postgres — see their own sections above for how — but none applied, since no MCP connector and no elevated DB credentials were available across these sessions):
 1. `sql/supabase/25_correct_rasta_zoa_colors.sql` — corrects Rasta Zoanthid's documented colors.
 2. `sql/supabase/26_color_lighting_condition.sql` — adds `color_ranges.lighting_condition`, must run **after** 25 is applied (it backfills `'actinic'` onto the two rows 25 creates; harmless no-op if run before, but apply in numeric order regardless).
+3. **The expanded `sql/seed/phase0_corals.sql` itself** (37→101 corals) — this one isn't a numbered migration, just re-run the whole seed file (it's designed to be idempotent/safe to re-run in full).
 
-**First thing to do in a fresh session with the connector back**: apply both in order, then spot-check `/coral/zoanthus/rasta-zoa` shows "Orange face" / "Olive-green skirt" live.
+**First thing to do in a fresh session with the connector back**: apply 25, then 26, then re-run the seed file, then spot-check `/coral/zoanthus/rasta-zoa` shows "Orange face" / "Olive-green skirt" and `/wiki` shows the fuller genus counts (e.g. Acropora should show 10 morphs, not 3) live.
 
 **`ANTHROPIC_API_KEY` is now set and confirmed working locally** (`.env.local`). The accuracy check that was outstanding is done — see the bug-fix entry above. **Still needed**: add the same key to Vercel's env vars (Settings → Environment Variables, **Production** scope checked — see the earlier Supabase-var gotcha this doc already documents for exactly this kind of miss) so the photo-assist works in prod, not just locally. One soft, non-blocking limitation remains: the model tends to over-call colors (5-6 guessed vs. 2-3 real), which dilutes ranking but doesn't hide anything and is self-correctable via the existing "tap to adjust" chips. Worth tightening the vision prompt if this pattern holds up across more photos, but not urgent.
 
@@ -243,7 +263,7 @@ This session completed a 3-phase identify-MVP plan (chat history has the full pr
 
 Pick any of the following — nothing here is blocking anything else:
 
-1. **Apply the two pending migrations** (see above) — smallest, most concrete next step.
+1. **Apply the three pending live-DB items** (see above: migrations 25 + 26, then re-run the seed file) — smallest, most concrete next step.
 2. **Add `ANTHROPIC_API_KEY` to Vercel's env vars** (Production scope) — set locally and confirmed working, not yet in prod.
 3. **Watch for the color-over-calling pattern** on a few more real photos and tighten the vision prompt in `app/identify/vision-actions.ts` if it's consistent — see above. Not urgent (self-correctable today).
 4. **Cited-source color pass on the other 32 corals** — the seed color-accuracy audit deliberately only fixed what a real photo could confirm (1 of 37). The remaining 32 need actual research (reef forums/vendor listings) or a real uploaded photo to pixel-check against; don't fabricate citations.
