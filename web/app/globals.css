@@ -595,33 +595,166 @@ td {
   display: inline-block;
 }
 
-.detail-grid {
+/* --- Morph page: specimen plate --------------------------------------
+   The flagship layout. One panel, field-guide style: the coral photograph
+   is the plate, the element color key is its printed legend. The photo
+   column is wider — the coral is the loudest thing on the page. */
+
+.morph-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.morph-sci-name {
+  font-size: 1rem;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted);
+  margin-left: 0.6rem;
+}
+
+.specimen-plate {
   display: grid;
-  /* Photo column intentionally wider than the color-key column — the coral
-     photo is the product's stated "loudest thing on the page"; the key is
-     reference material, not the star. */
-  grid-template-columns: 1.3fr 1fr;
-  gap: 1.5rem;
-  align-items: start;
+  grid-template-columns: 1.4fr 1fr;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.plate-photo {
+  border-right: 1px solid var(--border);
+  display: flex;
+}
+.plate-photo .photo-tile.plate {
+  border: none;
+  border-radius: 0;
+  aspect-ratio: auto;
+  width: 100%;
+  min-height: 320px;
+  max-height: 480px;
+}
+.plate-photo .color-tile {
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  min-height: 320px;
+}
+.plate-legend {
+  padding: 1.1rem 1.25rem 1.25rem;
+  min-width: 0;
+}
+.plate-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.plate-caption {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+}
+.plate-help {
+  margin: 0.85rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 @media (max-width: 760px) {
-  .detail-grid {
+  .specimen-plate {
     grid-template-columns: 1fr;
+  }
+  .plate-photo {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
   .element-row {
     grid-template-columns: 1fr;
   }
 }
 
-.morph-actions-row {
+/* Quiet toolbar under the plate — buttons inline; an expanded form takes
+   its own full-width row (same trick as .collection-actions-row). */
+.morph-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.morph-action-bar .action-bar-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-right: 0.25rem;
+}
+.morph-action-bar .add-photo-form,
+.morph-action-bar form {
+  flex-basis: 100%;
+}
+
+/* Recommended parameters as a full-width spec strip — label-over-value
+   cells with tabular numerals, reading like instrument readouts. */
+.param-strip {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.param-cell {
+  padding: 0.85rem 1.1rem;
+  border-right: 1px solid var(--border);
+}
+.param-cell:nth-child(3n) {
+  border-right: none;
+}
+.param-cell:nth-child(n + 4) {
+  border-top: 1px solid var(--border);
+}
+.param-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.param-value {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.param-placement {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+.param-placement .param-label {
+  display: inline;
+  margin-right: 0.5rem;
 }
 @media (max-width: 760px) {
-  .morph-actions-row {
-    grid-template-columns: 1fr;
+  .param-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .param-cell:nth-child(3n) {
+    border-right: 1px solid var(--border);
+  }
+  .param-cell:nth-child(2n) {
+    border-right: none;
+  }
+  .param-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
   }
 }
 
@@ -799,17 +932,6 @@ td {
   text-decoration: underline;
   font-size: inherit;
   cursor: pointer;
-}
-
-.collection-actions-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6rem;
-}
-.collection-actions-row .add-photo-form,
-.collection-actions-row form {
-  flex-basis: 100%;
 }
 
 .wishlist-button {

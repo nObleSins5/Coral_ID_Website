@@ -93,12 +93,19 @@ export default async function MorphPage({
         {morph.name}
       </p>
 
-      <h1 style={{ marginBottom: "0.15rem" }}>{morph.name}</h1>
-      {morph.scientific_name ? (
-        <p className="muted" style={{ fontStyle: "italic", marginTop: 0 }}>
-          {morph.scientific_name}
-        </p>
-      ) : null}
+      <div className="morph-title-row">
+        <h1>
+          {morph.name}
+          {morph.scientific_name && morph.scientific_name !== morph.name ? (
+            <span className="morph-sci-name">{morph.scientific_name}</span>
+          ) : null}
+        </h1>
+        <WishlistButton
+          taxonNodeId={morph.id}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+        />
+      </div>
 
       <div className="morph-row-pills" style={{ marginBottom: "1.25rem" }}>
         <CareDifficultyPill code={morph.care_difficulty_code} />
@@ -111,47 +118,13 @@ export default async function MorphPage({
         ) : null}
       </div>
 
-      {/* Both calls to action sit right under the identity/pills row, ahead
-          of the params/color-key reference block — a hobbyist deciding
-          "I have this coral" shouldn't have to scroll past a data table to
-          act on it. Each form collapses to a single button until clicked. */}
-      <div className="morph-actions-row">
-        <div className="card">
-          <h2 style={{ marginTop: 0 }}>My collection</h2>
-          <div className="collection-actions-row">
-            <AddSpecimenForm
-              taxonNodeId={morph.id}
-              taxonName={morph.name}
-              genusSlug={genus.slug}
-              morphSlug={morph.slug}
-              photos={photos.map((p) => ({
-                id: p.id,
-                url: p.url,
-                uploader_user_id: p.uploader_user_id,
-              }))}
-            />
-            <WishlistButton
-              taxonNodeId={morph.id}
-              genusSlug={genus.slug}
-              morphSlug={morph.slug}
-            />
-          </div>
-        </div>
-
-        <div className="card" id="add-photo-section">
-          <h2 style={{ marginTop: 0 }}>Community photos</h2>
-          <AddPhotoForm
-            taxonNodeId={morph.id}
-            genusSlug={genus.slug}
-            morphSlug={morph.slug}
-          />
-        </div>
-      </div>
-
-      <div className="detail-grid">
-        <div>
+      {/* The specimen plate — the coral itself leads the page, styled like a
+          field-guide plate: photograph on the left, the color legend beside
+          it. Everything actionable comes after this reference block. */}
+      <section className="specimen-plate">
+        <div className="plate-photo">
           {heroPhoto ? (
-            <div className="photo-tile large">
+            <div className="photo-tile plate">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={heroPhoto.url} alt={`${morph.name} — most-voted community photo`} />
               <span className="freshness-badge">
@@ -162,57 +135,79 @@ export default async function MorphPage({
               </span>
             </div>
           ) : (
-            <ColorTile colors={colors} label="Placeholder — no photos yet" large />
+            <ColorTile colors={colors} label="No photos yet" large />
           )}
-          {morph.description ? <p>{morph.description}</p> : null}
-          {morph.placement ? (
-            <p className="muted">
-              <strong className="muted">Placement:</strong> {morph.placement}
-            </p>
-          ) : null}
-
-          <h2>Recommended parameters</h2>
-          <table className="param-table">
-            <tbody>
-              <tr>
-                <td>Alkalinity</td>
-                <td>{paramRange(morph.rec_alkalinity_dkh_min, morph.rec_alkalinity_dkh_max, "dKH")}</td>
-              </tr>
-              <tr>
-                <td>Calcium</td>
-                <td>{paramRange(morph.rec_calcium_ppm_min, morph.rec_calcium_ppm_max, "ppm")}</td>
-              </tr>
-              <tr>
-                <td>Magnesium</td>
-                <td>{paramRange(morph.rec_magnesium_ppm_min, morph.rec_magnesium_ppm_max, "ppm")}</td>
-              </tr>
-              <tr>
-                <td>Nitrate</td>
-                <td>{paramRange(morph.rec_nitrate_ppm_min, morph.rec_nitrate_ppm_max, "ppm")}</td>
-              </tr>
-              <tr>
-                <td>Phosphate</td>
-                <td>{paramRange(morph.rec_phosphate_ppm_min, morph.rec_phosphate_ppm_max, "ppm")}</td>
-              </tr>
-              <tr>
-                <td>Temperature</td>
-                <td>{paramRange(morph.rec_temperature_c_min, morph.rec_temperature_c_max, "°C")}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
-
-        <div>
-          <h2 style={{ marginTop: 0 }}>Element color key</h2>
-          <p className="muted" style={{ marginTop: "-0.5rem" }}>
-            Compare each part of your coral against these documented colors.
-          </p>
+        <div className="plate-legend">
+          <p className="plate-eyebrow">Element color key</p>
+          {morph.description ? (
+            <p className="plate-caption">{morph.description}</p>
+          ) : null}
           <ElementColorKey
             colorRanges={morph.color_ranges}
             suggestedPositions={templateElementCodes.length > 0 ? templateElementCodes : undefined}
           />
+          <p className="plate-help">
+            Compare each part of your coral against these documented colors.
+          </p>
         </div>
+      </section>
+
+      {/* Quiet toolbar — logging actions sit below the reference plate.
+          Each control collapses to a single button until clicked; an
+          expanded form drops to its own full-width row. */}
+      <div className="morph-action-bar" id="add-photo-section">
+        <span className="action-bar-label">Keep track of yours</span>
+        <AddSpecimenForm
+          taxonNodeId={morph.id}
+          taxonName={morph.name}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+          photos={photos.map((p) => ({
+            id: p.id,
+            url: p.url,
+            uploader_user_id: p.uploader_user_id,
+          }))}
+        />
+        <AddPhotoForm
+          taxonNodeId={morph.id}
+          genusSlug={genus.slug}
+          morphSlug={morph.slug}
+        />
       </div>
+
+      <h2>Recommended parameters</h2>
+      <section className="param-strip">
+        <div className="param-cell">
+          <span className="param-label">Alkalinity</span>
+          <span className="param-value">{paramRange(morph.rec_alkalinity_dkh_min, morph.rec_alkalinity_dkh_max, "dKH")}</span>
+        </div>
+        <div className="param-cell">
+          <span className="param-label">Calcium</span>
+          <span className="param-value">{paramRange(morph.rec_calcium_ppm_min, morph.rec_calcium_ppm_max, "ppm")}</span>
+        </div>
+        <div className="param-cell">
+          <span className="param-label">Magnesium</span>
+          <span className="param-value">{paramRange(morph.rec_magnesium_ppm_min, morph.rec_magnesium_ppm_max, "ppm")}</span>
+        </div>
+        <div className="param-cell">
+          <span className="param-label">Nitrate</span>
+          <span className="param-value">{paramRange(morph.rec_nitrate_ppm_min, morph.rec_nitrate_ppm_max, "ppm")}</span>
+        </div>
+        <div className="param-cell">
+          <span className="param-label">Phosphate</span>
+          <span className="param-value">{paramRange(morph.rec_phosphate_ppm_min, morph.rec_phosphate_ppm_max, "ppm")}</span>
+        </div>
+        <div className="param-cell">
+          <span className="param-label">Temperature</span>
+          <span className="param-value">{paramRange(morph.rec_temperature_c_min, morph.rec_temperature_c_max, "°C")}</span>
+        </div>
+        {morph.placement ? (
+          <p className="param-placement">
+            <span className="param-label">Placement</span> {morph.placement}
+          </p>
+        ) : null}
+      </section>
 
       <h2>All community photos</h2>
       {photos.length === 0 ? (
