@@ -22,27 +22,40 @@ const LIGHTING_CAVEAT: Record<string, string> = {
 };
 
 // Identify-MVP Phase 2 — optional photo upload that pre-fills the funnel's
-// own shape/color state via a vision model (see app/identify/vision-actions.ts).
+// own color picks via a vision model (see app/identify/vision-actions.ts).
 // The photo is never persisted; everything it fills in stays exactly as
 // editable as if the user had tapped it themselves, and is presented as a
 // suggestion, not a verdict — the user still confirms via the same chips.
+//
+// Deliberately does NOT auto-apply the model's shape/category guess (only
+// surfaces it as text) — colors only ever affect *ranking* (scoreCoralMatch
+// degrades gracefully on a miss), but category is a hard FILTER in the
+// funnel below, so a wrong category guess doesn't just misrank the right
+// answer, it silently removes it from the results entirely. Confirmed live
+// during Phase 2 verification: Rasta Zoanthid's own reference photo got
+// guessed as "Large Polyp Stony" (a defensible mistake — a top-down zoa
+// colony can visually read as LPS), which made the correct coral vanish
+// from an otherwise-correct color match. The user still sees the guess and
+// can apply it themselves in Step 1 if they agree.
 function PhotoTraitAssist({
   categories,
   onExtracted,
 }: {
   categories: FunnelCategory[];
-  onExtracted: (result: { categorySlug: string | null; families: ColorFamily[] }) => void;
+  onExtracted: (families: ColorFamily[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [lighting, setLighting] = useState<string | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
+  const [suggestedCategoryName, setSuggestedCategoryName] = useState<string | null>(null);
 
   function handleFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setLighting(null);
+    setSuggestedCategoryName(null);
     const formData = new FormData();
     formData.set("photo", file);
     startTransition(async () => {
@@ -56,9 +69,9 @@ function PhotoTraitAssist({
         setError("Couldn't pick out clear colors in that photo — try a closer, well-lit shot, or pick manually below.");
         return;
       }
-      const validCategory = categories.some((c) => c.slug === categorySlug) ? categorySlug : null;
-      onExtracted({ categorySlug: validCategory, families });
+      onExtracted(families);
       setAppliedCount(families.length);
+      setSuggestedCategoryName(categories.find((c) => c.slug === categorySlug)?.name ?? null);
       if (lightingGuess === "actinic" || lightingGuess === "mixed") setLighting(lightingGuess);
     });
   }
@@ -66,7 +79,7 @@ function PhotoTraitAssist({
   if (!open) {
     return (
       <button type="button" className="funnel-assist-toggle" onClick={() => setOpen(true)}>
-        📷 Or upload a photo — we&apos;ll guess the shape and colors for you
+        📷 Or upload a photo — we&apos;ll guess the colors for you
       </button>
     );
   }
@@ -87,8 +100,15 @@ function PhotoTraitAssist({
       {error && <p className="error funnel-assist-status">{error}</p>}
       {!pending && !error && appliedCount > 0 && (
         <p className="funnel-assist-status funnel-assist-success">
-          Set the shape and {appliedCount} color{appliedCount === 1 ? "" : "s"} below — tap any chip to
-          adjust before matching.
+          Set {appliedCount} color{appliedCount === 1 ? "" : "s"} below — tap any chip to adjust before
+          matching.
+          {suggestedCategoryName ? (
+            <>
+              {" "}
+              We also think the shape might be <strong>{suggestedCategoryName}</strong> — shape guesses are
+              less reliable, so tap it in Step 1 above yourself if that looks right.
+            </>
+          ) : null}
         </p>
       )}
       {lighting && <p className="muted funnel-assist-status">{LIGHTING_CAVEAT[lighting]}</p>}
@@ -119,14 +139,7 @@ export function CoralIdentifyFunnel({
     setColors((prev) => (prev.includes(f) ? prev.filter((c) => c !== f) : [...prev, f]));
   }
 
-  function applyExtracted({
-    categorySlug,
-    families,
-  }: {
-    categorySlug: string | null;
-    families: ColorFamily[];
-  }) {
-    if (categorySlug) setCategory(categorySlug);
+  function applyExtracted(families: ColorFamily[]) {
     setColors(COLOR_FAMILIES.map((f) => f.code).filter((c) => families.includes(c)));
   }
 
