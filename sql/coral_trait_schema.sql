@@ -355,6 +355,15 @@ CREATE TABLE color_ranges (
     -- Rough visual proportion (0-100), for the deferred "I see these colors
     -- + %" self-ID matcher — not yet populated or consumed by any matcher.
     approx_percent     numeric CHECK (approx_percent >= 0 AND approx_percent <= 100),
+    -- What lighting the color was actually observed under. Reef lighting is
+    -- commonly actinic (blue-shifted) and materially changes a coral's
+    -- apparent color from how it reads under daylight/white light — see
+    -- PRODUCT.md's multi-lighting reference note. NULL = not recorded
+    -- (true for every color entered before this column existed). Sibling to
+    -- approx_percent: both go here so future color entry (moderator or
+    -- AI-assisted, see identify-MVP Phase 2) has somewhere to put this
+    -- instead of silently dropping it, even though nothing backfills it yet.
+    lighting_condition text CHECK (lighting_condition IN ('daylight', 'actinic', 'mixed', 'unsure')),
     sort_order         smallint NOT NULL DEFAULT 0,
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now()

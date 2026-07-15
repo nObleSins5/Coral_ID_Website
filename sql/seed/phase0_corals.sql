@@ -92,9 +92,13 @@ ON CONFLICT (slug) DO NOTHING;
 -- a suggested position label (element_types.code) — NULL is valid ("just a
 -- distinct color, no specific region claimed"). Colors hang directly off
 -- the taxon, not through element_profiles (2026-07-12 decoupling).
+-- p_lighting (added for 26_color_lighting_condition.sql) is optional and
+-- defaults to NULL/unrecorded — only pass it when it's a directly observable
+-- fact about a real reference photo (e.g. rasta-zoa below), never a guess.
 CREATE OR REPLACE FUNCTION public.seed_coral_color(
     p_slug text, p_element text, p_desc text,
-    p_pattern text, p_label text, p_hexes text[]
+    p_pattern text, p_label text, p_hexes text[],
+    p_lighting text DEFAULT NULL
 ) RETURNS void LANGUAGE plpgsql AS $$
 DECLARE v_taxon uuid; v_range uuid; i int;
 BEGIN
@@ -103,8 +107,8 @@ BEGIN
     IF EXISTS (SELECT 1 FROM color_ranges WHERE taxon_node_id = v_taxon AND label = p_label) THEN
         RETURN;
     END IF;
-    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label, notes)
-        VALUES (v_taxon, NULLIF(p_element, ''), p_pattern, p_label, NULLIF(p_desc, ''))
+    INSERT INTO color_ranges (taxon_node_id, position_label, color_pattern_code, label, notes, lighting_condition)
+        VALUES (v_taxon, NULLIF(p_element, ''), p_pattern, p_label, NULLIF(p_desc, ''), p_lighting)
         RETURNING id INTO v_range;
     FOR i IN 1 .. array_length(p_hexes, 1) LOOP
         INSERT INTO color_stops (color_range_id, ordinal, hex) VALUES (v_range, i - 1, upper(p_hexes[i]));
@@ -126,9 +130,12 @@ SELECT public.seed_coral_color('utter-chaos-zoa',NULL,'A 4th distinct skirt colo
 -- Corrected 2026-07-14 from the coral's own confirmed reference photo
 -- (pixel-sampled, not externally cited) — the photo shows an orange/gold
 -- face and an olive-green skirt with zero red present. See
--- sql/supabase/25_correct_rasta_zoa_colors.sql.
-SELECT public.seed_coral_color('rasta-zoa','oral_disc_center','Orange face.','solid','Orange face',ARRAY['#F28C00']);
-SELECT public.seed_coral_color('rasta-zoa','skirt_1','Olive-green skirt.','solid','Olive-green skirt',ARRAY['#5B7A3A']);
+-- sql/supabase/25_correct_rasta_zoa_colors.sql. lighting_condition is
+-- 'actinic' because the reference photo's black background + fluorescing
+-- colors are the standard visual signature of blue-LED reef photography, a
+-- directly observable fact about that photo (see 26_color_lighting_condition.sql).
+SELECT public.seed_coral_color('rasta-zoa','oral_disc_center','Orange face.','solid','Orange face',ARRAY['#F28C00'],'actinic');
+SELECT public.seed_coral_color('rasta-zoa','skirt_1','Olive-green skirt.','solid','Olive-green skirt',ARRAY['#5B7A3A'],'actinic');
 SELECT public.seed_coral_color('grandis-paly','oral_disc_center','Dark center.','solid','Dark center',ARRAY['#3B2A1A']);
 SELECT public.seed_coral_color('grandis-paly','skirt_1','Concentric rings within the skirt.','ringed','Grandis rings',ARRAY['#2E8B57','#FF8C00']);
 SELECT public.seed_coral_color('green-star-polyps','tentacle','Neon green polyps.','solid','Neon green',ARRAY['#39FF14']);
@@ -170,7 +177,7 @@ SELECT public.seed_coral_color('milka-stylophora','base_body','Pastel purple.','
 SELECT public.seed_coral_color('pocillopora','base_body','Pink-brown.','solid','Pink-brown',ARRAY['#B5726F']);
 SELECT public.seed_coral_color('pavona-cactus','base_body','Folded green blades.','solid','Green',ARRAY['#6FA84B']);
 
-DROP FUNCTION public.seed_coral_color(text, text, text, text, text, text[]);
+DROP FUNCTION public.seed_coral_color(text, text, text, text, text, text[], text);
 
 -- =============================================================================
 -- Recommended parameters (seed data accuracy pass, 2026-07-08)

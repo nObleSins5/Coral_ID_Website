@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   COLOR_FAMILIES,
   familyLabel,
@@ -8,10 +8,93 @@ import {
   type ColorFamily,
 } from "@/lib/color-match";
 import type { ColorMatchCoral, FunnelCategory } from "@/lib/wiki";
+import { extractCoralTraitsFromPhoto } from "@/app/identify/vision-actions";
 
 const SWATCH: Record<ColorFamily, string> = Object.fromEntries(
   COLOR_FAMILIES.map((f) => [f.code, f.swatch]),
 ) as Record<ColorFamily, string>;
+
+const LIGHTING_CAVEAT: Record<string, string> = {
+  actinic:
+    "Looks like this was shot under blue/actinic reef lighting, which shifts how colors read — the colors above are our best guess, but daylight might look different.",
+  mixed:
+    "This photo mixes lighting types, which can shift how colors read — treat the colors above as a starting point.",
+};
+
+// Identify-MVP Phase 2 — optional photo upload that pre-fills the funnel's
+// own shape/color state via a vision model (see app/identify/vision-actions.ts).
+// The photo is never persisted; everything it fills in stays exactly as
+// editable as if the user had tapped it themselves, and is presented as a
+// suggestion, not a verdict — the user still confirms via the same chips.
+function PhotoTraitAssist({
+  categories,
+  onExtracted,
+}: {
+  categories: FunnelCategory[];
+  onExtracted: (result: { categorySlug: string | null; families: ColorFamily[] }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [lighting, setLighting] = useState<string | null>(null);
+  const [appliedCount, setAppliedCount] = useState(0);
+
+  function handleFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setLighting(null);
+    const formData = new FormData();
+    formData.set("photo", file);
+    startTransition(async () => {
+      const response = await extractCoralTraitsFromPhoto(formData);
+      if ("error" in response) {
+        setError(response.error);
+        return;
+      }
+      const { categorySlug, families, lighting: lightingGuess } = response.result;
+      if (families.length === 0) {
+        setError("Couldn't pick out clear colors in that photo — try a closer, well-lit shot, or pick manually below.");
+        return;
+      }
+      const validCategory = categories.some((c) => c.slug === categorySlug) ? categorySlug : null;
+      onExtracted({ categorySlug: validCategory, families });
+      setAppliedCount(families.length);
+      if (lightingGuess === "actinic" || lightingGuess === "mixed") setLighting(lightingGuess);
+    });
+  }
+
+  if (!open) {
+    return (
+      <button type="button" className="funnel-assist-toggle" onClick={() => setOpen(true)}>
+        📷 Or upload a photo — we&apos;ll guess the shape and colors for you
+      </button>
+    );
+  }
+
+  return (
+    <div className="funnel-assist">
+      <label htmlFor="funnel-assist-photo" className="funnel-assist-label">
+        Upload a photo of your coral
+      </label>
+      <input
+        id="funnel-assist-photo"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        disabled={pending}
+        onChange={(e) => handleFile(e.target.files?.[0])}
+      />
+      {pending && <p className="muted funnel-assist-status">Looking at your photo…</p>}
+      {error && <p className="error funnel-assist-status">{error}</p>}
+      {!pending && !error && appliedCount > 0 && (
+        <p className="funnel-assist-status funnel-assist-success">
+          Set the shape and {appliedCount} color{appliedCount === 1 ? "" : "s"} below — tap any chip to
+          adjust before matching.
+        </p>
+      )}
+      {lighting && <p className="muted funnel-assist-status">{LIGHTING_CAVEAT[lighting]}</p>}
+    </div>
+  );
+}
 
 // The guided "identify by the colors you see" funnel — the site's primary
 // front door. A beginner picks the coral's rough shape (optional) and the
@@ -36,6 +119,17 @@ export function CoralIdentifyFunnel({
     setColors((prev) => (prev.includes(f) ? prev.filter((c) => c !== f) : [...prev, f]));
   }
 
+  function applyExtracted({
+    categorySlug,
+    families,
+  }: {
+    categorySlug: string | null;
+    families: ColorFamily[];
+  }) {
+    if (categorySlug) setCategory(categorySlug);
+    setColors(COLOR_FAMILIES.map((f) => f.code).filter((c) => families.includes(c)));
+  }
+
   const ranked = useMemo(() => {
     if (colors.length === 0) return [];
     const inCategory = category
@@ -55,6 +149,8 @@ export function CoralIdentifyFunnel({
 
   return (
     <div className="funnel">
+      <PhotoTraitAssist categories={categories} onExtracted={applyExtracted} />
+
       {/* Step 1 — shape (optional) */}
       <div className="funnel-step">
         <div className="funnel-step-head">
