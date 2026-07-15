@@ -51,7 +51,7 @@ a:hover {
 .site-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 1.5rem;
   padding: 0.9rem 1.25rem;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
@@ -59,9 +59,70 @@ a:hover {
 .site-header .brand {
   font-weight: 700;
   color: var(--text);
+  white-space: nowrap;
+}
+.site-header nav {
+  margin-left: auto;
+  white-space: nowrap;
 }
 .site-header nav a {
   margin-left: 1rem;
+}
+
+.header-search {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 320px;
+}
+.header-search input {
+  width: 100%;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+  border-radius: 999px;
+  background: var(--bg);
+}
+.header-search input:focus {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 1px;
+}
+.header-search-results {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 20;
+}
+.header-search-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.header-search-result:hover,
+.header-search-result.active {
+  background: var(--bg);
+}
+@media (max-width: 640px) {
+  .site-header {
+    flex-wrap: wrap;
+  }
+  .header-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
 }
 /* The nav's one auth-dependent item (AuthNavLink) is a form+button when
    signed in, not an <a> — styled to read identically to its sibling links. */

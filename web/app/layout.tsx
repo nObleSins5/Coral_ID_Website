@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { AuthNavLink } from "@/components/auth-nav-link";
+import { HeaderSearch } from "@/components/header-search";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -26,6 +27,7 @@ export default function RootLayout({
           <a href="/" className="brand">
             Reef Platform
           </a>
+          <HeaderSearch />
           <nav>
             <a href="/identify">Identify</a>
             <a href="/wiki">Wiki</a>
