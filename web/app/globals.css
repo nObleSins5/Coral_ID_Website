@@ -833,7 +833,207 @@ td {
   width: 40%;
 }
 
-/* --- Identify (/identify) --- */
+/* --- Identify funnel (/identify) --- */
+
+.identify-lede {
+  max-width: 60ch;
+}
+
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 1.25rem 0 2.5rem;
+}
+.funnel-step {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+.funnel-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+.funnel-step-num {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: grid;
+  place-items: center;
+}
+.funnel-step-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.funnel-step-hint {
+  margin: 0.1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.funnel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.funnel-chip {
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.funnel-chip:hover {
+  border-color: var(--accent-text);
+}
+.funnel-chip.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+
+.funnel-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.5rem;
+}
+.funnel-color {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+.funnel-color:hover {
+  border-color: var(--accent-text);
+}
+.funnel-color.selected {
+  border-color: var(--accent-text);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--accent-text);
+  font-weight: 500;
+}
+.funnel-color-dot {
+  flex: 0 0 auto;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.funnel-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.9rem;
+}
+.funnel-result {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.funnel-result:hover {
+  border-color: var(--accent-text);
+  box-shadow: var(--shadow);
+  text-decoration: none;
+}
+.funnel-result-photo {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.funnel-result-photo img,
+.funnel-result-tile {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.funnel-result-body {
+  padding: 0.6rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.funnel-result-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.funnel-result-families {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.funnel-fam {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem 0.1rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.funnel-fam.matched {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.funnel-fam-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.funnel-result-missed {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.funnel-result-cta {
+  margin-top: 0.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.funnel-empty {
+  margin: 0;
+}
+.funnel-fallback-line {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.identify-community {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
 
 .identify-list {
   display: flex;

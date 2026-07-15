@@ -1,5 +1,6 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import type { ColorRange } from "@/components/coral-ui";
+import { familiesForColorRanges, type ColorFamily } from "@/lib/color-match";
 
 // Read-only data access for the public coral wiki (genus -> morph browse tree).
 // Species is intentionally not a browse level — see sql/supabase/04_normalize_taxonomy.sql.
@@ -487,7 +488,100 @@ export async function getFeaturedMorphs(limit = 4): Promise<FeaturedMorph[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Unidentified-ID flow (Door 1's primary entry point — /identify)
+// Guided "identify by the colors you see" funnel (/identify)
+// ---------------------------------------------------------------------------
+
+// A morph flattened for the color-match funnel: its category (for the
+// shape-first filter), documented color families (binned server-side from the
+// hexes so the client never needs the binning logic), a hero photo when one
+// exists, and the raw hexes for the shortlist card's color chips.
+export type ColorMatchCoral = {
+  id: string;
+  name: string;
+  slug: string;
+  genusName: string;
+  genusSlug: string;
+  categorySlug: string | null;
+  categoryName: string | null;
+  care_difficulty_code: string | null;
+  families: ColorFamily[];
+  hexes: string[];
+  heroUrl: string | null;
+};
+
+// Every morph with enough shape/color/photo context to drive the funnel.
+// Corals with no documented colors are still returned (families: []) so the
+// count is honest and a shape-only filter can still surface them — the
+// scorer just won't rank them for a color query.
+export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
+  const supabase = createPublicClient();
+
+  const [{ data: morphs }, { data: genera }, { data: categories }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select(`id, name, slug, parent_id, care_difficulty_code, ${ELEMENT_SELECT}`)
+      .eq("rank_code", "morph")
+      .order("name"),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug, parent_id, care_difficulty_code")
+      .eq("rank_code", "genus"),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "category")
+      .eq("is_visible", true),
+  ]);
+
+  const genusById = new Map((genera ?? []).map((g) => [g.id, g]));
+  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
+
+  type MorphRow = {
+    id: string;
+    name: string;
+    slug: string;
+    parent_id: string | null;
+    care_difficulty_code: string | null;
+    color_ranges: ColorRange[];
+  };
+  const morphRows = (morphs as unknown as MorphRow[]) ?? [];
+  const heroUrls = await getHeroPhotoUrlsForTaxa(morphRows.map((m) => m.id));
+
+  const result: ColorMatchCoral[] = [];
+  for (const m of morphRows) {
+    const genus = m.parent_id ? genusById.get(m.parent_id) : undefined;
+    if (!genus) continue; // orphaned/placeholder morph — skip
+    const category = genus.parent_id ? categoryById.get(genus.parent_id) : undefined;
+    const ranges = m.color_ranges ?? [];
+    const hexes = ranges.flatMap((r) => r.color_stops.map((s) => s.hex));
+    result.push({
+      id: m.id,
+      name: m.name,
+      slug: m.slug,
+      genusName: genus.name,
+      genusSlug: genus.slug,
+      categorySlug: category?.slug ?? null,
+      categoryName: category?.name ?? null,
+      care_difficulty_code: m.care_difficulty_code ?? genus.care_difficulty_code,
+      families: familiesForColorRanges(ranges),
+      hexes,
+      heroUrl: heroUrls.get(m.id) ?? null,
+    });
+  }
+  return result;
+}
+
+// The six visible categories for the funnel's shape-first step, in the same
+// display order the wiki index uses.
+export type FunnelCategory = { slug: string; name: string };
+
+export async function getFunnelCategories(): Promise<FunnelCategory[]> {
+  const cats = await getGenusCategories();
+  return cats.map((c) => ({ slug: c.slug, name: c.name }));
+}
+
+// ---------------------------------------------------------------------------
+// Unidentified-ID flow (community fallback — /identify)
 // ---------------------------------------------------------------------------
 
 export type SearchableMorph = {

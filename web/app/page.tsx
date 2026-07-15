@@ -26,14 +26,13 @@ export default async function Home() {
             Know your coral by its actual colors — not a guess.
           </h1>
           <p className="hero-sub">
-            The Coral Registry compares your photo against real,
-            element-by-element trait data — sampled hex colors, growth form,
-            care difficulty — instead of another feed of lookalike photos to
-            scroll through.
+            Tell us the shape and the colors you see — that&apos;s it. The Coral
+            Registry matches what you describe against real, element-by-element
+            trait data, instead of making you scroll a feed of lookalike photos.
           </p>
           <div className="hero-actions">
             <a className="btn-primary-link" href="/identify">
-              Identify a coral →
+              Identify it in 60 seconds →
             </a>
             <a className="btn-secondary-link" href="/wiki">
               Browse the wiki

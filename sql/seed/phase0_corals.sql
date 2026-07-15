@@ -48,7 +48,7 @@ FROM (VALUES
     -- Softies
     ('zoanthus','Fire & Ice Zoanthid','fire-and-ice-zoa','easy','medium','medium','encrusting','Low to mid rock','Blue-faced zoanthid with an orange-red skirt.'),
     ('zoanthus','Utter Chaos Zoanthid','utter-chaos-zoa','easy','medium','medium','encrusting','Low to mid rock','Multicolor zoanthid — purple, red, gold and green.'),
-    ('zoanthus','Rasta Zoanthid','rasta-zoa','easy','medium','medium','encrusting','Low to mid rock','Green face with a red-orange skirt.'),
+    ('zoanthus','Rasta Zoanthid','rasta-zoa','easy','medium','medium','encrusting','Low to mid rock','Orange face with an olive-green skirt.'),
     ('palythoa','Grandis Paly','grandis-paly','easy','medium','medium','encrusting','Low rock','Large paly with concentric ring coloration.'),
     ('briareum','Green Star Polyps','green-star-polyps','easy','low','medium','encrusting','Low rock / bare bottom','Fast-spreading neon-green polyp mat.'),
     ('sarcophyton','Toadstool Leather','toadstool-leather','easy','medium','low','massive','Mid rock','Mushroom-shaped leather with a tan cap.'),
@@ -123,8 +123,12 @@ SELECT public.seed_coral_color('utter-chaos-zoa','skirt_1',NULL,'solid','Skirt �
 SELECT public.seed_coral_color('utter-chaos-zoa','skirt_2',NULL,'solid','Skirt — red',ARRAY['#E23B3B']);
 SELECT public.seed_coral_color('utter-chaos-zoa','skirt_3',NULL,'solid','Skirt — gold',ARRAY['#FFD700']);
 SELECT public.seed_coral_color('utter-chaos-zoa',NULL,'A 4th distinct skirt color beyond the 3 suggested slots.','solid','Skirt — green',ARRAY['#2E8B57']);
-SELECT public.seed_coral_color('rasta-zoa','oral_disc_center','Green face.','solid','Green face',ARRAY['#2E8B57']);
-SELECT public.seed_coral_color('rasta-zoa','skirt_1','Red-orange skirt.','solid','Red skirt',ARRAY['#E23B3B']);
+-- Corrected 2026-07-14 from the coral's own confirmed reference photo
+-- (pixel-sampled, not externally cited) — the photo shows an orange/gold
+-- face and an olive-green skirt with zero red present. See
+-- sql/supabase/25_correct_rasta_zoa_colors.sql.
+SELECT public.seed_coral_color('rasta-zoa','oral_disc_center','Orange face.','solid','Orange face',ARRAY['#F28C00']);
+SELECT public.seed_coral_color('rasta-zoa','skirt_1','Olive-green skirt.','solid','Olive-green skirt',ARRAY['#5B7A3A']);
 SELECT public.seed_coral_color('grandis-paly','oral_disc_center','Dark center.','solid','Dark center',ARRAY['#3B2A1A']);
 SELECT public.seed_coral_color('grandis-paly','skirt_1','Concentric rings within the skirt.','ringed','Grandis rings',ARRAY['#2E8B57','#FF8C00']);
 SELECT public.seed_coral_color('green-star-polyps','tentacle','Neon green polyps.','solid','Neon green',ARRAY['#39FF14']);
