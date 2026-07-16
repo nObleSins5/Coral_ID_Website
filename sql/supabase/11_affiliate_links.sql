@@ -88,6 +88,8 @@ CREATE POLICY affiliate_links_owner_write ON public.affiliate_links
     USING (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()))
     WITH CHECK (coral_photo_id IN (SELECT id FROM public.coral_photos WHERE uploader_user_id = auth.uid()));
 
+ALTER TABLE public.affiliate_link_reports ENABLE ROW LEVEL SECURITY;
+
 CREATE POLICY affiliate_link_reports_insert ON public.affiliate_link_reports
     FOR INSERT TO authenticated
     WITH CHECK (user_id = auth.uid());
