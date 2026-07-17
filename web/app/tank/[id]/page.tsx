@@ -6,6 +6,7 @@ import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridView } from "@/components/tank-grid-view";
 import { TankStatusBlock } from "@/components/tank-status-block";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { columnLabel } from "@/lib/grid";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 import { getTankStatus } from "@/lib/tank-callouts";
@@ -114,6 +115,10 @@ export default async function TankPage({
   const tiers = tankRow.tier_count ?? 1;
   const columns = tankRow.grid_columns;
   const rows = tankRow.grid_rows;
+  const hasGrid = !!(columns && rows);
+  const hasCoral = specimenList.length > 0;
+  const hasEquipment = tankStatus.equipmentLogged;
+  const onboardingDone = hasGrid && hasCoral && hasEquipment;
 
   const tierGrids = Array.from({ length: tiers }, (_, i) => i + 1).map((z) => (
     <div className="tank-grid-tier" key={z}>
@@ -170,9 +175,20 @@ export default async function TankPage({
         <a href={`/tank/${tankRow.id}/husbandry`}>Equipment &amp; dosing</a>
       </p>
 
-      <TankStatusBlock status={tankStatus} husbandryHref={`/tank/${tankRow.id}/husbandry`} />
+      {hasGrid ? (
+        onboardingDone ? (
+          <TankStatusBlock status={tankStatus} husbandryHref={`/tank/${tankRow.id}/husbandry`} />
+        ) : (
+          <OnboardingChecklist
+            hasCoral={hasCoral}
+            hasEquipment={hasEquipment}
+            addCoralHref="#add-coral-section"
+            husbandryHref={`/tank/${tankRow.id}/husbandry`}
+          />
+        )
+      ) : null}
 
-      {!columns || !rows ? (
+      {!hasGrid ? (
         <ConfigureGridForm tankId={tankRow.id} />
       ) : (
         <>
@@ -182,7 +198,7 @@ export default async function TankPage({
             <ResetGridButton tankId={tankRow.id} />
           </div>
 
-          <h2>Unplaced specimens</h2>
+          <h2 id="add-coral-section">Unplaced specimens</h2>
           <div style={{ marginBottom: "1rem" }}>
             <QuickAddSpecimen
               tankId={tankRow.id}

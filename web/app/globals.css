@@ -1905,3 +1905,52 @@ td {
 .tank-callout a {
   color: var(--accent-text);
 }
+
+/* Onboarding checklist (/tank/[id]) — mutually exclusive with the tank
+   status block; a plain list, no progress bar/gamification. */
+.onboarding-checklist {
+  margin-bottom: 1.25rem;
+}
+.onboarding-checklist-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.onboarding-checklist-item {
+  font-size: 0.9rem;
+}
+.onboarding-checklist-item.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.onboarding-checklist-item a {
+  color: var(--accent-text);
+}
+
+/* Dashboard tank card — rebuilt as a doorway, not a self-contained widget
+   (docs/onboard-first-coral-journey-brief.md). */
+.tank-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+.tank-card-open {
+  display: inline-block;
+  padding: 0.6rem 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.tank-card-open:hover {
+  color: var(--accent-text);
+  text-decoration: none;
+}
+.tank-card-meta {
+  margin-top: 0;
+  font-size: 0.9rem;
+}

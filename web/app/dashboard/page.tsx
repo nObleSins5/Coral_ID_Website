@@ -2,13 +2,43 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createTank, logParameters, removeFromWishlist } from "./actions";
 import { ParameterGraphButton, type GraphPoint } from "@/components/parameter-graph-button";
+import { getTankStatus } from "@/lib/tank-callouts";
 
 type Tank = {
   id: string;
   name: string;
   tank_type: string | null;
   volume: number | null;
+  grid_columns: number | null;
+  grid_rows: number | null;
 };
+
+type EquipmentRow = {
+  tank_id: string;
+  equipment_type_code: string;
+  brand: string | null;
+  model: string | null;
+};
+
+// A short, quiet summary of what's actually logged — "AI Prime 16HD · 2
+// pumps", or null if nothing's logged yet (omitted from the card entirely
+// rather than shown as "Nothing logged", per the onboard brief).
+function equipmentSummary(rows: EquipmentRow[]): string | null {
+  const lights = rows.filter((r) => r.equipment_type_code === "light");
+  const pumps = rows.filter((r) => r.equipment_type_code === "flow");
+  const parts: string[] = [];
+  if (lights.length === 1) {
+    parts.push([lights[0].brand, lights[0].model].filter(Boolean).join(" ") || "1 light");
+  } else if (lights.length > 1) {
+    parts.push(`${lights.length} lights`);
+  }
+  if (pumps.length === 1) {
+    parts.push([pumps[0].brand, pumps[0].model].filter(Boolean).join(" ") || "1 pump");
+  } else if (pumps.length > 1) {
+    parts.push(`${pumps.length} pumps`);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
 
 type Reading = {
   id: string;
@@ -70,7 +100,7 @@ export default async function Dashboard() {
 
   const { data: tanks } = await supabase
     .from("tanks")
-    .select("id, name, tank_type, volume")
+    .select("id, name, tank_type, volume, grid_columns, grid_rows")
     .order("created_at", { ascending: true });
 
   // Recent readings per tank (RLS scopes to the caller's tanks). Fetched,
@@ -94,6 +124,38 @@ export default async function Dashboard() {
   }
 
   const tankList = (tanks ?? []) as Tank[];
+
+  // Grid occupancy, equipment summary, and callout counts — the data that
+  // turns each card into a doorway instead of a self-contained widget (see
+  // docs/onboard-first-coral-journey-brief.md). Same RLS-scoped,
+  // no-explicit-tank-filter pattern as the readings query above.
+  const [{ data: gridSlots }, { data: occupancySpecimens }, { data: equipmentRows }, tankStatuses] =
+    await Promise.all([
+      supabase.from("grid_slots").select("id, tank_id"),
+      supabase.from("specimens").select("tank_id, grid_slot_id").is("deleted_at", null),
+      supabase
+        .from("equipment")
+        .select("tank_id, equipment_type_code, brand, model")
+        .is("removed_on", null),
+      Promise.all(tankList.map((t) => getTankStatus(supabase, t.id))),
+    ]);
+
+  const slotCountByTank = new Map<string, number>();
+  for (const s of gridSlots ?? []) {
+    slotCountByTank.set(s.tank_id, (slotCountByTank.get(s.tank_id) ?? 0) + 1);
+  }
+  const placedCountByTank = new Map<string, number>();
+  for (const s of occupancySpecimens ?? []) {
+    if (!s.grid_slot_id) continue;
+    placedCountByTank.set(s.tank_id, (placedCountByTank.get(s.tank_id) ?? 0) + 1);
+  }
+  const equipmentByTank = new Map<string, EquipmentRow[]>();
+  for (const e of (equipmentRows ?? []) as EquipmentRow[]) {
+    const arr = equipmentByTank.get(e.tank_id);
+    if (arr) arr.push(e);
+    else equipmentByTank.set(e.tank_id, [e]);
+  }
+  const statusByTank = new Map(tankList.map((t, i) => [t.id, tankStatuses[i]]));
 
   const { data: wishlist } = await supabase
     .from("want_list")
@@ -153,15 +215,32 @@ export default async function Dashboard() {
         tankList.map((tank) => {
           const tankReadings = readingsByTank.get(tank.id) ?? [];
           const log = tankReadings.slice(0, LOG_ROWS_VISIBLE);
+          const hasGrid = !!(tank.grid_columns && tank.grid_rows);
+          const slotCount = slotCountByTank.get(tank.id) ?? 0;
+          const placedCount = placedCountByTank.get(tank.id) ?? 0;
+          const equipSummary = equipmentSummary(equipmentByTank.get(tank.id) ?? []);
+          const calloutCount = statusByTank.get(tank.id)?.callouts.length ?? 0;
           return (
             <div className="card" key={tank.id}>
-              <h2 style={{ marginTop: 0 }}>
-                <a href={`/tank/${tank.id}`}>{tank.name}</a>{" "}
-                <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>
-                  {tank.tank_type ? `· ${tank.tank_type}` : ""}
-                  {tank.volume ? ` · ${tank.volume} gal` : ""}
-                </span>
-              </h2>
+              <div className="tank-card-header">
+                <h2 style={{ margin: 0, minWidth: 0 }}>
+                  <a className="tank-card-open" href={`/tank/${tank.id}`}>
+                    Open {tank.name}
+                    {" →"}
+                  </a>
+                </h2>
+                {calloutCount > 0 ? (
+                  <span className="pill" style={{ flexShrink: 0 }}>
+                    {calloutCount} callout{calloutCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="muted tank-card-meta">
+                {tank.tank_type ? `${tank.tank_type} · ` : ""}
+                {tank.volume ? `${tank.volume} gal · ` : ""}
+                {hasGrid ? `${placedCount}/${slotCount} placed` : "No grid yet"}
+                {equipSummary ? ` · ${equipSummary}` : ""}
+              </p>
 
               {log.length > 0 ? (
                 <table>

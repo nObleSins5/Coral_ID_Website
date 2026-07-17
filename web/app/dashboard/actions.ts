@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buildGridSlots, MAX_GRID_SLOTS } from "@/lib/grid";
 
@@ -49,6 +50,12 @@ export async function createTank(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
+
+  // Every successful creation lands the user straight in the new tank —
+  // consistent for a first tank or a fifth, and it's exactly where they'd
+  // click next anyway (docs/onboard-first-coral-journey-brief.md).
+  // redirect() throws, so nothing after this line runs on success.
+  if (!error && tank) redirect(`/tank/${tank.id}`);
 }
 
 // Log one parameter reading (spec workflow — the core five, pure/append-only).

@@ -76,6 +76,12 @@ export type TankStatus = {
   latestReading: LatestReading | null;
   callouts: TankCallout[];
   contributingCoralCount: number;
+  // Any light OR flow equipment logged at all, regardless of whether the
+  // tank's corals actually demand it — separate from the demand-tier-gated
+  // equipment_gap callouts above. Used by the onboarding checklist's
+  // completion gate (docs/onboard-first-coral-journey-brief.md), which cares
+  // about "has this tank logged any equipment yet," not "is it sufficient."
+  equipmentLogged: boolean;
 };
 
 const TIER_RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };
@@ -206,7 +212,12 @@ export function buildTankStatus(
     ...paramCallouts,
   ];
 
-  return { latestReading, callouts, contributingCoralCount: contributing.length };
+  return {
+    latestReading,
+    callouts,
+    contributingCoralCount: contributing.length,
+    equipmentLogged: equipment.light || equipment.flow,
+  };
 }
 
 // --- Data loading -----------------------------------------------------------
