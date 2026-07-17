@@ -149,7 +149,7 @@ export default async function TankPage({
                       <img src={photoUrl} alt="" className="tank-grid-cell-thumb" />
                     ) : null}
                     <a href={`/specimen/${specimen.id}`}>
-                      {specimen.name || specimen.taxon_nodes?.name || "Specimen"}
+                      {specimen.name || specimen.taxon_nodes?.name || "Unnamed coral"}
                     </a>
                   </>
                 ) : (
@@ -198,7 +198,7 @@ export default async function TankPage({
             <ResetGridButton tankId={tankRow.id} />
           </div>
 
-          <h2 id="add-coral-section">Unplaced specimens</h2>
+          <h2 id="add-coral-section">Not yet in the grid</h2>
           <div style={{ marginBottom: "1rem" }}>
             <QuickAddSpecimen
               tankId={tankRow.id}
@@ -207,13 +207,15 @@ export default async function TankPage({
               genera={allGenera}
             />
           </div>
-          {unplaced.length === 0 ? (
-            <p className="muted">Everything in this tank is placed in the grid.</p>
+          {specimenList.length === 0 ? (
+            <p className="muted">No corals in this tank yet — add one above.</p>
+          ) : unplaced.length === 0 ? (
+            <p className="muted">All your corals are placed in the grid.</p>
           ) : (
             <div className="card">
               {unplaced.map((s) => {
                 const href = taxonHref(s);
-                const label = s.name || s.taxon_nodes?.name || "Specimen";
+                const label = s.name || s.taxon_nodes?.name || "Unnamed coral";
                 return (
                   <div className="unplaced-specimen-row" key={s.id}>
                     <div>

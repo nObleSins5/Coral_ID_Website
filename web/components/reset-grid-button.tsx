@@ -34,10 +34,10 @@ export function ResetGridButton({ tankId }: { tankId: string }) {
   return (
     <div className="card reset-grid-confirm">
       <p style={{ marginTop: 0 }}>
-        Reset this tank&apos;s grid? Every specimen will be unplaced back into
-        the unplaced-specimens list, and the current layout will be deleted
-        so you can set it up again. This can&apos;t be undone — you may want
-        to screenshot the grid first.
+        Reset this tank&apos;s grid? Every coral will be moved out of its slot
+        and back into the &quot;Not yet in the grid&quot; list, and the
+        current layout will be deleted so you can set it up again. This
+        can&apos;t be undone — you may want to screenshot the grid first.
       </p>
       <div className="form-actions">
         <button type="button" className="btn-danger" onClick={handleConfirm} disabled={pending}>

@@ -62,11 +62,11 @@ export async function configureGrid(
   return {};
 }
 
-// Unwinds a configured grid entirely: unplaces every specimen (back to the
-// "unplaced specimens" bucket) and deletes the slot layout, so the tank goes
-// back through ConfigureGridForm. The one-shot-at-creation design (see
-// configureGrid above) still holds — this is a deliberate reset, not a
-// resize, and the client-side confirm warns the user before calling it.
+// Unwinds a configured grid entirely: clears every specimen's grid_slot_id
+// (back to the "Not yet in the grid" list) and deletes the slot layout, so
+// the tank goes back through ConfigureGridForm. The one-shot-at-creation
+// design (see configureGrid above) still holds — this is a deliberate reset,
+// not a resize, and the client-side confirm warns the user before calling it.
 export async function resetGrid(formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient();
   const {

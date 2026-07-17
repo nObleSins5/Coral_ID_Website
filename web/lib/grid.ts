@@ -14,10 +14,13 @@ export function columnLabel(n: number): string {
   return label;
 }
 
-// e.g. (3, 5, 1, tierCount=1) -> "C5"; (3, 5, 2, tierCount=3) -> "C5 · L2".
+// e.g. (3, 5, 1, tierCount=1) -> "C5"; (3, 5, 2, tierCount=3) -> "C5 · Tier 2".
+// "Tier" (not "L") to match the tier-picker UI's own vocabulary
+// (TankGridView's "Tier 1"/"Tier 2" buttons) — a slot dropdown and the grid
+// it points into used to speak two different dialects for the same concept.
 export function slotLabel(x: number, y: number, z: number, tierCount: number): string {
   const base = `${columnLabel(x)}${y}`;
-  return tierCount > 1 ? `${base} · L${z}` : base;
+  return tierCount > 1 ? `${base} · Tier ${z}` : base;
 }
 
 export type NewGridSlot = {

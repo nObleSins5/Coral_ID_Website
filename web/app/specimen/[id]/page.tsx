@@ -92,7 +92,7 @@ export default async function SpecimenPage({
       .map((s) => ({ id: s.id, label: s.label }));
   }
 
-  const label = row.name || row.taxon_nodes?.name || "Specimen";
+  const label = row.name || row.taxon_nodes?.name || "Unnamed coral";
 
   return (
     <div>

@@ -23,9 +23,8 @@ export function ConfigureGridForm({ tankId }: { tankId: string }) {
       <input type="hidden" name="tank_id" value={tankId} />
       <p className="muted" style={{ marginTop: 0 }}>
         This tank doesn&apos;t have a grid yet. Choose a layout — pick enough
-        room to grow into. You can reset it later, but that unplaces every
-        specimen back into the unplaced list, so it&apos;s not something to
-        do casually.
+        room to grow into. You can reset it later, but that moves every coral
+        out of its slot, so it&apos;s not something to do casually.
       </p>
       <div className="row">
         <div>

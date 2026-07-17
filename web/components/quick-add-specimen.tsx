@@ -20,7 +20,7 @@ function SlotPicker({ emptySlots }: { emptySlots: Slot[] }) {
     <>
       <label htmlFor="quick-add-slot">Place in slot (optional)</label>
       <select id="quick-add-slot" name="grid_slot_id" defaultValue="">
-        <option value="">Leave unplaced</option>
+        <option value="">Don&apos;t place yet</option>
         {emptySlots.map((s) => (
           <option key={s.id} value={s.id}>
             {s.label}
@@ -31,7 +31,7 @@ function SlotPicker({ emptySlots }: { emptySlots: Slot[] }) {
   );
 }
 
-// Inline search + quick-add for the tank grid page's "Unplaced specimens"
+// Inline search + quick-add for the tank grid page's "Not yet in the grid"
 // section — add a coral (known, private-nickname, or propose-new) and
 // optionally place it, all without navigating to the wiki and back.
 export function QuickAddSpecimen({
