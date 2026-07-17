@@ -241,6 +241,20 @@ Requested to give the identify-MVP color-match funnel (and the user's own upcomi
 
 Explicitly deferred by the user for a later dedicated design pass — not bugs.
 
+## ✅ Applied (2026-07-17): identify-page fixes — photo preview, funnel state loss, CTA mismatch
+
+Three user-reported issues on `/identify`'s guided color-match funnel (`components/coral-identify-funnel.tsx`):
+
+1. **No way to see the uploaded photo at a usable size.** `PhotoTraitAssist` (the "upload a photo, we'll guess the colors" assist) sent the file straight to the vision-extraction server action and never rendered it at all — no thumbnail, no preview, nothing. Added a client-only preview (`URL.createObjectURL`, revoked on replace/unmount — the photo is still never persisted, unchanged from the existing ephemeral-by-design contract) at up to 320px, plus a tap-to-enlarge lightbox (`PhotoLightbox`, reusing the same modal/Escape/focus-trap pattern as `ParameterGraphButton`) for real-size comparison against the ranked results below.
+2. **"Compare & confirm →" didn't compare or confirm anything — it just navigated to the wiki page.** Relabeled to "View full profile & photos →" (and the adjacent hint text) to match what actually happens; no in-place comparison was built (that would be a materially bigger feature — a "compare" step that stays on `/identify` — not attempted here).
+3. **Funnel progress (shape + color picks) was lost on browser Back after clicking through to a result.** Shape/colors are now synced into the URL (`?shape=...&colors=...`) via `window.history.replaceState` — deliberately **not** `next/navigation`'s `router.replace`/`push`, since this route is `force-dynamic` and a router-driven update would re-run the page's full server data fetch (corals, categories, the entire community queue) on every single chip tap. `history.replaceState` only touches the address bar; the browser's real Back navigation is what triggers the (correct, expected) server re-fetch, which re-hydrates the funnel from the URL on mount. Also makes a mid-funnel state shareable/bookmarkable.
+
+**Live-verified**: chip taps update the URL with no network request (confirmed via server request log — zero new GETs fire on tap); a fresh direct load of a state-bearing URL restores shape+colors and shows the correct ranked results immediately; click-through to a result then browser Back restores the exact prior picks. **Not live-tested**: the photo preview/lightbox itself — this session's browser tooling has no file-upload capability (same standing limitation noted throughout this doc), so it's verified by code/pattern review only (reuses the proven `ParameterGraphButton` modal contract), not a real upload.
+
+**One transient false alarm worth recording**: mid-session, wrapping the funnel in `<Suspense>` (to satisfy `useSearchParams`'s prerendering guidance) caused a real bug — Next's streaming SSR reordered the funnel to render as a DOM sibling *after* the community section instead of before it. Removed the `Suspense` wrapper entirely once confirmed unnecessary (this route is `force-dynamic`, never prerendered, so the guidance doesn't apply) — not present in the shipped code.
+
+Typecheck/lint clean, all 50 tests still passing (no test changes needed — pure UI/behavior, no new pure-function logic), zero `detect.mjs` findings.
+
 ## ✅ Applied (2026-07-16): the three pending live-DB items, via a reconnected Supabase MCP + one real RLS bug found and fixed
 
 Connector was down across 2026-07-12 through 07-15; reconnected this session (project-scoped `claude mcp add` + OAuth) and all three previously-pending items applied directly to `jbfjzkhjbsrnwnmrydba`:

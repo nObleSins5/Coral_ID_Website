@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   COLOR_FAMILIES,
   familyLabel,
@@ -9,6 +10,47 @@ import {
 } from "@/lib/color-match";
 import type { ColorMatchCoral, FunnelCategory } from "@/lib/wiki";
 import { extractCoralTraitsFromPhoto } from "@/app/identify/vision-actions";
+
+// A larger look at the user's own uploaded photo, purely client-side (the
+// photo is never persisted — see PhotoTraitAssist below) — for actually
+// comparing fine color/pattern detail against the ranked results' reference
+// photos, which a thumbnail-sized preview can't support.
+function PhotoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const titleId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-panel photo-lightbox-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3 id={titleId} style={{ margin: 0 }}>
+            Your photo
+          </h3>
+          <button type="button" ref={closeRef} className="modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="Your uploaded coral photo, enlarged" className="photo-lightbox-img" />
+      </div>
+    </div>
+  );
+}
 
 const SWATCH: Record<ColorFamily, string> = Object.fromEntries(
   COLOR_FAMILIES.map((f) => [f.code, f.swatch]),
@@ -50,12 +92,19 @@ function PhotoTraitAssist({
   const [lighting, setLighting] = useState<string | null>(null);
   const [appliedCount, setAppliedCount] = useState(0);
   const [suggestedCategoryName, setSuggestedCategoryName] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Object URLs are memory-held by the browser until revoked — clean up the
+  // previous one whenever a new photo replaces it, and on unmount.
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
 
   function handleFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setLighting(null);
     setSuggestedCategoryName(null);
+    setPhotoUrl(URL.createObjectURL(file));
     const formData = new FormData();
     formData.set("photo", file);
     startTransition(async () => {
@@ -96,6 +145,20 @@ function PhotoTraitAssist({
         disabled={pending}
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
+      {photoUrl ? (
+        <button
+          type="button"
+          className="funnel-assist-preview-trigger"
+          onClick={() => setLightboxOpen(true)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photoUrl} alt="Your uploaded coral photo" className="funnel-assist-preview" />
+          <span className="funnel-assist-preview-hint">Tap to enlarge</span>
+        </button>
+      ) : null}
+      {lightboxOpen && photoUrl ? (
+        <PhotoLightbox src={photoUrl} onClose={() => setLightboxOpen(false)} />
+      ) : null}
       {pending && <p className="muted funnel-assist-status">Looking at your photo…</p>}
       {error && <p className="error funnel-assist-status">{error}</p>}
       {!pending && !error && appliedCount > 0 && (
@@ -130,8 +193,31 @@ export function CoralIdentifyFunnel({
   corals: ColorMatchCoral[];
   categories: FunnelCategory[];
 }) {
-  const [category, setCategory] = useState<string | null>(null); // slug, or null = any
-  const [colors, setColors] = useState<ColorFamily[]>([]);
+  const searchParams = useSearchParams();
+
+  // Shape + colors are read from the URL on mount and kept in sync as they
+  // change, so clicking through to a result's wiki page and hitting the
+  // browser Back button restores the exact same picks instead of a blank
+  // funnel. Sync uses the raw History API (not next/navigation's router),
+  // deliberately — this page is force-dynamic, so router.replace/push would
+  // re-run the page's server data fetches (corals, categories, the whole
+  // community queue) on every single chip click. history.replaceState only
+  // updates the address bar, no navigation, no re-fetch.
+  const [category, setCategory] = useState<string | null>(() => searchParams.get("shape")); // slug, or null = any
+  const [colors, setColors] = useState<ColorFamily[]>(() => {
+    const raw = searchParams.get("colors");
+    if (!raw) return [];
+    const known = new Set(COLOR_FAMILIES.map((f) => f.code));
+    return raw.split(",").filter((c): c is ColorFamily => known.has(c as ColorFamily));
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (category) params.set("shape", category);
+    if (colors.length > 0) params.set("colors", colors.join(","));
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `/identify?${qs}` : "/identify");
+  }, [category, colors]);
 
   const colorSet = useMemo(() => new Set(colors), [colors]);
 
@@ -235,7 +321,7 @@ export function CoralIdentifyFunnel({
               </h2>
               <p className="funnel-step-hint">
                 {ranked.length > 0
-                  ? "Ranked by how well the colors line up. Open one to compare it side by side."
+                  ? "Ranked by how well the colors line up. Open one to see its full reference photos and colors."
                   : `Nothing in ${category ? "this group" : "the registry"} has that exact color mix documented yet.`}
               </p>
             </div>
@@ -282,7 +368,7 @@ export function CoralIdentifyFunnel({
                         No {match.missed.map(familyLabel).join(", ").toLowerCase()} documented for this one
                       </p>
                     )}
-                    <span className="funnel-result-cta">Compare &amp; confirm →</span>
+                    <span className="funnel-result-cta">View full profile &amp; photos →</span>
                   </div>
                 </a>
               ))}
