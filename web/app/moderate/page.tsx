@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUsernamesFor } from "@/lib/wiki";
+import { getUsernamesFor, getAllMorphsForSearch } from "@/lib/wiki";
 import {
   AliasModerationRow,
   ProductModerationRow,
   CommentModerationRow,
 } from "@/components/moderation-row";
+import { ColorModeration } from "@/components/color-moderation";
 
 type AliasRow = {
   id: string;
@@ -114,6 +115,11 @@ export default async function ModerateQueue() {
     .select("code, label");
   const categoryLabelByCode = new Map((categories ?? []).map((c) => [c.code, c.label]));
 
+  const [morphs, { data: elementTypes }] = await Promise.all([
+    getAllMorphsForSearch(),
+    supabase.from("element_types").select("code, label").order("code"),
+  ]);
+
   const usernames = await getUsernamesFor(
     [
       ...aliasRows.map((a) => a.proposed_by_user_id),
@@ -129,6 +135,9 @@ export default async function ModerateQueue() {
         Review community-proposed trade names and husbandry products before
         they go public.
       </p>
+
+      <h2>Coral colors</h2>
+      <ColorModeration morphs={morphs} elementTypes={elementTypes ?? []} />
 
       <h2>Coral aliases</h2>
       {aliasRows.length === 0 ? (

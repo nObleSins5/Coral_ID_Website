@@ -1991,3 +1991,53 @@ td {
   margin-top: 0;
   font-size: 0.9rem;
 }
+
+/* Moderator color entry (/moderate — Coral colors section). Dense, plain
+   admin tooling, no decoration; matches the alias/product review sections'
+   register. See docs/color-percent-feature-brief.md. */
+.color-mod {
+  margin-bottom: 1.25rem;
+}
+.color-mod-results {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 0.4rem;
+}
+.color-mod-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.color-mod-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.9rem;
+  background: var(--bg);
+}
+.color-mod-swatches {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0.6rem;
+}
+.color-mod-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+}
+.color-mod-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+.color-mod-row-actions button {
+  margin-top: 0;
+}

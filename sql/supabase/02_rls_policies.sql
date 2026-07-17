@@ -180,6 +180,18 @@ CREATE POLICY husbandry_products_moderator_update ON public.husbandry_products
     USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
     WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
 
+-- Moderator write access for canonical color data (sql/supabase/27_color_moderation.sql)
+-- — FOR ALL, not just UPDATE, since color entry needs INSERT (a new color for
+-- a taxon with none yet) and DELETE too, unlike the review-only tables above.
+CREATE POLICY color_ranges_moderator_write ON public.color_ranges
+    FOR ALL TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+CREATE POLICY color_stops_moderator_write ON public.color_stops
+    FOR ALL TO authenticated
+    USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator))
+    WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND is_moderator));
+
 -- A user can read back their OWN proposed product (not yet approved, so the
 -- public_read policy above doesn't cover it) — needed so husbandry/equipment
 -- logging can display a just-proposed product's name immediately, not just
