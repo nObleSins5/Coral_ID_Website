@@ -1881,3 +1881,27 @@ td {
   cursor: pointer;
 }
 .modal-close:hover { color: var(--accent-text); }
+
+/* Tank status block (/tank/[id]) — a quiet status LINE under the tank
+   subtitle, not a card/widget. Silence (no chips) is the all-clear signal;
+   see docs/tank-callout-engine-brief.md. */
+.tank-status-line {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+.tank-callout-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.tank-callout {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+.tank-callout a {
+  color: var(--accent-text);
+}

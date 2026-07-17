@@ -5,8 +5,10 @@ import { PlaceSpecimenControl } from "@/components/place-specimen-control";
 import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridView } from "@/components/tank-grid-view";
+import { TankStatusBlock } from "@/components/tank-status-block";
 import { columnLabel } from "@/lib/grid";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
+import { getTankStatus } from "@/lib/tank-callouts";
 
 type Tank = {
   id: string;
@@ -88,7 +90,11 @@ export default async function TankPage({
       : { data: [] as { id: string; url: string }[] };
   const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
 
-  const [allMorphs, allGenera] = await Promise.all([getAllMorphsForSearch(), getGenera()]);
+  const [allMorphs, allGenera, tankStatus] = await Promise.all([
+    getAllMorphsForSearch(),
+    getGenera(),
+    getTankStatus(supabase, id),
+  ]);
 
   const specimenBySlot = new Map(
     specimenList.filter((s) => s.grid_slot_id).map((s) => [s.grid_slot_id as string, s]),
@@ -163,6 +169,8 @@ export default async function TankPage({
         {" · "}
         <a href={`/tank/${tankRow.id}/husbandry`}>Equipment &amp; dosing</a>
       </p>
+
+      <TankStatusBlock status={tankStatus} husbandryHref={`/tank/${tankRow.id}/husbandry`} />
 
       {!columns || !rows ? (
         <ConfigureGridForm tankId={tankRow.id} />

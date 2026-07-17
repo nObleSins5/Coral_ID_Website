@@ -45,7 +45,7 @@ export type MorphDetail = MorphSummary & {
 const ELEMENT_SELECT =
   "color_ranges ( position_label, color_pattern_code, label, approx_percent, color_stops ( hex, ordinal ) )";
 
-type CareFields = {
+export type CareFields = {
   care_difficulty_code: string | null;
   light_level_code: string | null;
   flow_level_code: string | null;
@@ -60,7 +60,7 @@ type CareFields = {
 // Only fills in a field the morph itself left null; a morph that's a genuine
 // exception to its genus keeps its own value. See
 // docs/future-considerations.md ("Genus-level care defaults...").
-function withGenusCareDefaults<T extends CareFields>(
+export function withGenusCareDefaults<T extends CareFields>(
   morph: T,
   genusDefaults: CareFields | null | undefined,
 ): T {
