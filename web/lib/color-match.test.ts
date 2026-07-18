@@ -136,4 +136,43 @@ describe("scoreCoralMatch", () => {
   it("treats an empty user selection as a non-match", () => {
     expect(scoreCoralMatch([], ["red"]).score).toBe(0);
   });
+
+  it("gives a small bonus when the user's dominant color matches the coral's documented dominant color", () => {
+    const user: ColorFamily[] = ["red", "green"];
+    const withoutBonus = scoreCoralMatch(user, ["red", "green"]);
+    const withBonus = scoreCoralMatch(user, ["red", "green"], {
+      userDominantFamily: "red",
+      coralDominantFamily: "red",
+    });
+    expect(withBonus.score).toBeGreaterThan(withoutBonus.score);
+  });
+  it("does not apply the dominant-color bonus on a mismatch", () => {
+    const user: ColorFamily[] = ["red", "green"];
+    const base = scoreCoralMatch(user, ["red", "green"]);
+    const mismatched = scoreCoralMatch(user, ["red", "green"], {
+      userDominantFamily: "red",
+      coralDominantFamily: "green",
+    });
+    expect(mismatched.score).toBeCloseTo(base.score);
+  });
+  it("gives a small bonus when a noticed pattern is documented on the coral", () => {
+    const user: ColorFamily[] = ["red", "green"];
+    const withoutBonus = scoreCoralMatch(user, ["red", "green"]);
+    const withBonus = scoreCoralMatch(user, ["red", "green"], {
+      userPatterns: ["spotted"],
+      coralPatterns: ["spotted", "solid"],
+    });
+    expect(withBonus.score).toBeGreaterThan(withoutBonus.score);
+  });
+  it("stays conservative — bonuses never outrank a genuinely stronger coverage match", () => {
+    const user: ColorFamily[] = ["red", "green"];
+    const weakButBonused = scoreCoralMatch(user, ["red"], {
+      userDominantFamily: "red",
+      coralDominantFamily: "red",
+      userPatterns: ["spotted"],
+      coralPatterns: ["spotted"],
+    });
+    const strongCoverage = scoreCoralMatch(user, ["red", "green"]);
+    expect(strongCoverage.score).toBeGreaterThan(weakButBonused.score);
+  });
 });

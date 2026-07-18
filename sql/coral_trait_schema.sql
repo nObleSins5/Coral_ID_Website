@@ -86,7 +86,11 @@ INSERT INTO element_types (code, label, allows_color, allows_shape, allows_size,
     ('skirt_1',          'Skirt color 1',                      true,  false, false, false, 12),
     ('skirt_2',          'Skirt color 2',                      true,  false, false, false, 13),
     ('skirt_3',          'Skirt color 3',                      true,  false, false, false, 14),
-    ('stalk',            'Stalk / capitulum base',              true,  false, false, false, 15);
+    ('stalk',            'Stalk / capitulum base',              true,  false, false, false, 15),
+    -- Some mushrooms show a distinct bubble-textured patch on the skirt;
+    -- most don't (see 29_anatomy_template_refinements.sql) — an optional
+    -- anatomy step, not a required one.
+    ('bubble_tip',       'Bubble on skirt',                     true,  false, false, true,  16);
 
 -- Colony-level morphology (describes the whole colony, not one colored part).
 CREATE TABLE growth_forms (
@@ -140,6 +144,10 @@ INSERT INTO anatomy_template_elements (template_code, element_type_code, sort_or
     ('branching_sps', 'axial_corallite',   2),
     ('branching_sps', 'radial_corallite',  3),
     ('branching_sps', 'growth_tip',        4),
+    -- Tentacles aren't usually shown extended in trade photos, but their
+    -- color still contributes to the coral's overall look (29_anatomy_
+    -- template_refinements.sql).
+    ('branching_sps', 'tentacle',          5),
     ('lps_corallite', 'coenosarc_skin',    1),
     ('lps_corallite', 'corallite',         2),
     ('lps_corallite', 'mouth_oral_disc',   3),
@@ -160,6 +168,10 @@ INSERT INTO anatomy_template_elements (template_code, element_type_code, sort_or
     ('mushroom_coral',     'skirt_1',          2),
     ('mushroom_coral',     'skirt_2',          3),
     ('mushroom_coral',     'skirt_3',          4),
+    -- Optional — not every mushroom shows a bubbled skirt patch (29_anatomy_
+    -- template_refinements.sql); the funnel/moderator UI must allow marking
+    -- this "not on this coral" rather than forcing a color pick.
+    ('mushroom_coral',     'bubble_tip',       5),
     ('leather_soft_coral', 'stalk',            1),
     ('leather_soft_coral', 'base_body',        2),
     ('leather_soft_coral', 'tentacle',         3),

@@ -4,20 +4,28 @@ import { useMemo, useState, useTransition } from "react";
 import type { SearchableMorph } from "@/lib/wiki";
 import {
   deleteColorRange,
+  getColorEntryModerationList,
   getColorRangesForModeration,
   upsertColorRange,
+  type ColorEntryModerationRow,
   type ColorRangeForModeration,
 } from "@/app/moderate/actions";
+import { stepsForTemplate } from "@/lib/anatomy-steps";
+import { ColorSwatch, type ColorRange as SwatchColorRange } from "@/components/coral-ui";
 
-const PATTERNS = [
-  { code: "solid", label: "Solid (single color)" },
-  { code: "range", label: "Range / gradient (from-to)" },
-  { code: "rainbow", label: "Rainbow / multicolor" },
-  { code: "banded", label: "Banded" },
-  { code: "spotted", label: "Spotted / speckled" },
-  { code: "mottled", label: "Mottled" },
-  { code: "tipped", label: "Tipped" },
-  { code: "ringed", label: "Ringed" },
+const PATTERNS: { code: string; label: string; hint: string }[] = [
+  { code: "solid", label: "Solid (single color)", hint: "One flat color, no blend." },
+  {
+    code: "range",
+    label: "Range / gradient (from-to)",
+    hint: "A gradual blend across the coral, like green fading to blue at the tips — enter 2 stops.",
+  },
+  { code: "rainbow", label: "Rainbow / multicolor", hint: "Several hard-edged, distinct colors side by side — not a blend." },
+  { code: "banded", label: "Banded", hint: "Regular repeating stripes." },
+  { code: "spotted", label: "Spotted / speckled", hint: "Small distinct dots of a second color over a base." },
+  { code: "mottled", label: "Mottled", hint: "Larger, soft-edged blotches of a second color." },
+  { code: "tipped", label: "Tipped", hint: "A blend from base color into a distinct tip color." },
+  { code: "ringed", label: "Ringed", hint: "Concentric rings of alternating color from a center point." },
 ];
 
 const LIGHTING = [
@@ -29,45 +37,151 @@ const LIGHTING = [
 
 type ElementType = { code: string; label: string };
 
-function hexesFor(range: ColorRangeForModeration | null): string {
-  if (!range) return "";
-  return range.color_stops.map((s) => s.hex).join(", ");
+function formatRelative(iso: string | null): string {
+  if (!iso) return "Never entered";
+  const then = new Date(iso).getTime();
+  const diffMs = Date.now() - then;
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+// "Which corals have I set up, and when did I last touch them" — see
+// getColorEntryModerationList in app/moderate/actions.ts. Sortable over the
+// small (~101-row) dataset client-side, same scale assumption as
+// getAllMorphsForSearch. Clicking a row jumps straight into the editor below
+// instead of requiring a re-search.
+function ColorEntryActivityList({ onSelectTaxonId }: { onSelectTaxonId: (id: string) => void }) {
+  const [rows, setRows] = useState<ColorEntryModerationRow[] | null>(null);
+  const [loading, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [onlyNeverEntered, setOnlyNeverEntered] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  function load() {
+    setLoaded(true);
+    startTransition(async () => {
+      const result = await getColorEntryModerationList();
+      if (result.error) setError(result.error);
+      else setRows(result.rows ?? []);
+    });
+  }
+
+  if (!loaded) {
+    return (
+      <button type="button" onClick={load}>
+        Show my corals &amp; last activity
+      </button>
+    );
+  }
+
+  const visible = onlyNeverEntered ? (rows ?? []).filter((r) => r.lastActivity === null) : rows ?? [];
+
+  return (
+    <div className="color-mod-activity">
+      {loading && rows === null ? <p className="muted">Loading…</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+      {rows ? (
+        <>
+          <label className="color-mod-activity-filter">
+            <input
+              type="checkbox"
+              checked={onlyNeverEntered}
+              onChange={(e) => setOnlyNeverEntered(e.target.checked)}
+            />
+            Only show never-entered corals
+          </label>
+          <div className="color-mod-activity-table">
+            <div className="color-mod-activity-row color-mod-activity-head">
+              <span>Coral</span>
+              <span>Genus</span>
+              <span>Colors</span>
+              <span>Last activity</span>
+            </div>
+            {visible.map((r) => (
+              <button
+                type="button"
+                key={r.id}
+                className="color-mod-activity-row"
+                onClick={() => onSelectTaxonId(r.id)}
+              >
+                <span>{r.name}</span>
+                <span className="muted">{r.genusName}</span>
+                <span>{r.colorCount}</span>
+                <span className={r.lastActivity ? "" : "muted"}>{formatRelative(r.lastActivity)}</span>
+              </button>
+            ))}
+            {visible.length === 0 ? <p className="muted">Nothing matches.</p> : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function hexesFor(range: ColorRangeForModeration | null): string[] {
+  if (!range || range.color_stops.length === 0) return [""];
+  return range.color_stops.map((s) => s.hex);
+}
+
+function isValidHex(h: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(h);
 }
 
 // One color_range as an editable row — new (no id yet) or existing. Each row
-// is its own form; saving one color doesn't touch the others. Stops are a
-// single comma-separated hex field (not a dynamic add/remove-stop widget) —
-// simplest thing that supports multi-stop patterns (range/rainbow/banded),
-// with a live swatch preview so a moderator can confirm what they typed.
+// is its own form; saving one color doesn't touch the others. Stops are now
+// a real add/remove list, each with a paired <input type="color"> + hex
+// text field (kept in sync both ways) instead of one comma-separated blob,
+// plus a live ColorSwatch preview — the exact component the wiki/funnel
+// render, so what the moderator sees is what actually ships.
 function ColorRangeRow({
   taxonId,
   range,
   elementTypes,
+  suggestedPosition,
   onSaved,
   onDeleted,
 }: {
   taxonId: string;
   range: ColorRangeForModeration | null;
   elementTypes: ElementType[];
+  suggestedPosition?: string;
   onSaved: () => void;
   onDeleted: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [hexInput, setHexInput] = useState(hexesFor(range));
+  const [stops, setStops] = useState<string[]>(hexesFor(range));
+  const [pattern, setPattern] = useState(range?.color_pattern_code ?? "solid");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const swatches = useMemo(
-    () =>
-      hexInput
-        .split(",")
-        .map((h) => h.trim())
-        .filter((h) => /^#[0-9A-Fa-f]{6}$/.test(h)),
-    [hexInput],
-  );
+  const validStops = stops.filter(isValidHex);
+  const previewRange: SwatchColorRange = {
+    position_label: range?.position_label ?? null,
+    color_pattern_code: pattern,
+    label: range?.label ?? null,
+    approx_percent: null,
+    color_stops: validStops.map((hex, ordinal) => ({ hex, ordinal })),
+  };
+  const patternInfo = PATTERNS.find((p) => p.code === pattern);
+
+  function setStop(i: number, hex: string) {
+    setStops((prev) => prev.map((s, idx) => (idx === i ? hex : s)));
+  }
+  function addStop() {
+    setStops((prev) => [...prev, "#FFFFFF"]);
+  }
+  function removeStop(i: number) {
+    setStops((prev) => prev.filter((_, idx) => idx !== i));
+  }
 
   function handleSubmit(formData: FormData) {
     setError(null);
+    formData.set("hexes", stops.filter((s) => s.trim()).join(","));
     startTransition(async () => {
       const result = await upsertColorRange(formData);
       if (result?.error) setError(result.error);
@@ -95,7 +209,7 @@ function ColorRangeRow({
       <div className="row">
         <div>
           <label>Position</label>
-          <select name="position_label" defaultValue={range?.position_label ?? ""}>
+          <select name="position_label" defaultValue={range?.position_label ?? suggestedPosition ?? ""}>
             <option value="">No specific position</option>
             {elementTypes.map((e) => (
               <option key={e.code} value={e.code}>
@@ -106,13 +220,19 @@ function ColorRangeRow({
         </div>
         <div>
           <label>Pattern</label>
-          <select name="color_pattern_code" defaultValue={range?.color_pattern_code ?? "solid"} required>
+          <select
+            name="color_pattern_code"
+            value={pattern}
+            onChange={(e) => setPattern(e.target.value)}
+            required
+          >
             {PATTERNS.map((p) => (
               <option key={p.code} value={p.code}>
                 {p.label}
               </option>
             ))}
           </select>
+          {patternInfo ? <p className="muted color-mod-pattern-hint">{patternInfo.hint}</p> : null}
         </div>
         <div>
           <label>Label</label>
@@ -120,19 +240,37 @@ function ColorRangeRow({
         </div>
       </div>
 
-      <label>Hex color(s)</label>
-      <input
-        name="hexes"
-        value={hexInput}
-        onChange={(e) => setHexInput(e.target.value)}
-        placeholder="#F28C00, #5B7A3A"
-        required
-      />
-      {swatches.length > 0 ? (
-        <div className="color-mod-swatches">
-          {swatches.map((hex, i) => (
-            <span key={i} className="color-mod-swatch" style={{ background: hex }} title={hex} />
-          ))}
+      <label>Colors</label>
+      <div className="color-mod-stops">
+        {stops.map((hex, i) => (
+          <div className="color-mod-stop" key={i}>
+            <input
+              type="color"
+              value={isValidHex(hex) ? hex : "#888888"}
+              onChange={(e) => setStop(i, e.target.value.toUpperCase())}
+              aria-label={`Color picker for stop ${i + 1}`}
+            />
+            <input
+              value={hex}
+              onChange={(e) => setStop(i, e.target.value)}
+              placeholder="#F28C00"
+              aria-label={`Hex for stop ${i + 1}`}
+            />
+            {stops.length > 1 ? (
+              <button type="button" className="btn-secondary" onClick={() => removeStop(i)}>
+                Remove
+              </button>
+            ) : null}
+          </div>
+        ))}
+        <button type="button" className="btn-secondary" onClick={addStop}>
+          + Add stop
+        </button>
+      </div>
+      {validStops.length > 0 ? (
+        <div className="color-mod-preview">
+          <ColorSwatch range={previewRange} title="Live preview" />
+          <span className="muted">Live preview — matches what ships to the wiki/funnel</span>
         </div>
       ) : null}
 
@@ -209,6 +347,92 @@ function ColorRangeRow({
   );
 }
 
+// Groups a taxon's ranges by the genus's anatomy_template_code's step
+// grouping (lib/anatomy-steps.ts) — same framework the identify funnel uses
+// — instead of one flat list, plus a running "% of coral" total per group
+// (soft hint, not a hard validation — percent is optional, and 0%/not-
+// recorded are different facts, see docs/color-percent-feature-brief.md §6).
+function GroupedRanges({
+  taxonId,
+  ranges,
+  anatomyTemplateCode,
+  elementTypes,
+  onSaved,
+  onDeleted,
+}: {
+  taxonId: string;
+  ranges: ColorRangeForModeration[];
+  anatomyTemplateCode: string | null;
+  elementTypes: ElementType[];
+  onSaved: () => void;
+  onDeleted: () => void;
+}) {
+  const steps = stepsForTemplate(anatomyTemplateCode);
+  if (steps.length === 0) {
+    return (
+      <>
+        {ranges.map((r) => (
+          <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+        ))}
+        <ColorRangeRow taxonId={taxonId} range={null} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+      </>
+    );
+  }
+
+  const byPosition = new Map<string, ColorRangeForModeration[]>();
+  for (const r of ranges) {
+    if (!r.position_label) continue;
+    const list = byPosition.get(r.position_label) ?? [];
+    list.push(r);
+    byPosition.set(r.position_label, list);
+  }
+  const grouped = new Set(steps.flatMap((s) => s.positions));
+  const other = ranges.filter((r) => !r.position_label || !grouped.has(r.position_label));
+
+  return (
+    <>
+      {steps.map((step) => {
+        const stepRanges = step.positions.flatMap((p) => byPosition.get(p) ?? []);
+        const total = stepRanges.reduce((sum, r) => sum + (r.approx_percent ?? 0), 0);
+        const hasAnyPercent = stepRanges.some((r) => r.approx_percent != null);
+        return (
+          <div className="color-mod-group" key={step.key}>
+            <div className="color-mod-group-head">
+              <h4 style={{ margin: 0 }}>
+                {step.label} {step.optional ? <span className="muted">(optional)</span> : null}
+              </h4>
+              {hasAnyPercent && (total < 90 || total > 110) ? (
+                <span className="muted color-mod-group-total">adds up to {total}%</span>
+              ) : null}
+            </div>
+            {stepRanges.map((r) => (
+              <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+            ))}
+            <ColorRangeRow
+              taxonId={taxonId}
+              range={null}
+              elementTypes={elementTypes}
+              suggestedPosition={step.positions[0]}
+              onSaved={onSaved}
+              onDeleted={onDeleted}
+            />
+          </div>
+        );
+      })}
+      {other.length > 0 ? (
+        <div className="color-mod-group">
+          <h4 className="muted" style={{ margin: 0 }}>
+            Other
+          </h4>
+          {other.map((r) => (
+            <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 // Search-a-taxon, then edit its color_ranges directly — the first UI-based
 // path for canonical color data (see docs/color-percent-feature-brief.md).
 // Search reuses the exact type-to-filter pattern already used by
@@ -223,9 +447,9 @@ export function ColorModeration({
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SearchableMorph | null>(null);
   const [ranges, setRanges] = useState<ColorRangeForModeration[] | null>(null);
+  const [anatomyTemplateCode, setAnatomyTemplateCode] = useState<string | null>(null);
   const [loading, startTransition] = useTransition();
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [addingNew, setAddingNew] = useState(false);
 
   const results = useMemo(() => {
     if (selected || query.trim().length < 2) return [];
@@ -238,14 +462,21 @@ export function ColorModeration({
   function loadRanges(taxon: SearchableMorph) {
     setSelected(taxon);
     setQuery("");
-    setAddingNew(false);
     setLoadError(null);
     setRanges(null);
     startTransition(async () => {
       const result = await getColorRangesForModeration(taxon.id);
       if (result.error) setLoadError(result.error);
-      else setRanges(result.ranges ?? []);
+      else {
+        setRanges(result.ranges ?? []);
+        setAnatomyTemplateCode(result.anatomyTemplateCode ?? null);
+      }
     });
+  }
+
+  function loadById(id: string) {
+    const taxon = morphs.find((m) => m.id === id);
+    if (taxon) loadRanges(taxon);
   }
 
   function refresh() {
@@ -256,7 +487,6 @@ export function ColorModeration({
     setSelected(null);
     setRanges(null);
     setLoadError(null);
-    setAddingNew(false);
   }
 
   return (
@@ -284,6 +514,7 @@ export function ColorModeration({
               ))}
             </div>
           ) : null}
+          <ColorEntryActivityList onSelectTaxonId={loadById} />
         </>
       ) : (
         <>
@@ -300,31 +531,14 @@ export function ColorModeration({
           {loadError ? <p className="error">{loadError}</p> : null}
 
           {ranges ? (
-            <>
-              {ranges.map((r) => (
-                <ColorRangeRow
-                  key={r.id}
-                  taxonId={selected.id}
-                  range={r}
-                  elementTypes={elementTypes}
-                  onSaved={refresh}
-                  onDeleted={refresh}
-                />
-              ))}
-              {addingNew ? (
-                <ColorRangeRow
-                  taxonId={selected.id}
-                  range={null}
-                  elementTypes={elementTypes}
-                  onSaved={refresh}
-                  onDeleted={refresh}
-                />
-              ) : (
-                <button type="button" onClick={() => setAddingNew(true)}>
-                  + Add a color
-                </button>
-              )}
-            </>
+            <GroupedRanges
+              taxonId={selected.id}
+              ranges={ranges}
+              anatomyTemplateCode={anatomyTemplateCode}
+              elementTypes={elementTypes}
+              onSaved={refresh}
+              onDeleted={refresh}
+            />
           ) : null}
         </>
       )}

@@ -1,6 +1,6 @@
 import { createPublicClient } from "@/lib/supabase/public";
 import type { ColorRange } from "@/components/coral-ui";
-import { familiesForColorRanges, type ColorFamily } from "@/lib/color-match";
+import { familiesForColorRanges, hexToFamily, type ColorFamily } from "@/lib/color-match";
 
 // Read-only data access for the public coral wiki (genus -> morph browse tree).
 // Species is intentionally not a browse level — see sql/supabase/04_normalize_taxonomy.sql.
@@ -507,7 +507,27 @@ export type ColorMatchCoral = {
   families: ColorFamily[];
   hexes: string[];
   heroUrl: string | null;
+  // Extended for the anatomy-stepper/pattern-step funnel redesign — see
+  // docs/color-percent-feature-brief.md §7 (ranking bonus) and lib/color-match.ts.
+  patterns: string[]; // distinct color_pattern_code values documented on this coral
+  dominantFamily: ColorFamily | null; // family of the color_range with the highest approx_percent, when any is recorded
 };
+
+// The color_range with the highest recorded approx_percent (ranges with no
+// percent are ignored — most of the registry today has none, and "unknown"
+// must not be treated as "dominant"), mapped to its primary stop's family.
+function dominantFamilyForRanges(ranges: ColorRange[]): ColorFamily | null {
+  let best: { family: ColorFamily; percent: number } | null = null;
+  for (const r of ranges) {
+    if (r.approx_percent == null) continue;
+    const primaryHex = [...r.color_stops].sort((a, b) => a.ordinal - b.ordinal)[0]?.hex;
+    if (!primaryHex) continue;
+    const family = hexToFamily(primaryHex);
+    if (!family) continue;
+    if (!best || r.approx_percent > best.percent) best = { family, percent: r.approx_percent };
+  }
+  return best?.family ?? null;
+}
 
 // Every morph with enough shape/color/photo context to drive the funnel.
 // Corals with no documented colors are still returned (families: []) so the
@@ -566,6 +586,8 @@ export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
       families: familiesForColorRanges(ranges),
       hexes,
       heroUrl: heroUrls.get(m.id) ?? null,
+      patterns: [...new Set(ranges.map((r) => r.color_pattern_code))],
+      dominantFamily: dominantFamilyForRanges(ranges),
     });
   }
   return result;
@@ -573,11 +595,163 @@ export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
 
 // The six visible categories for the funnel's shape-first step, in the same
 // display order the wiki index uses.
-export type FunnelCategory = { slug: string; name: string };
+export type FunnelGenus = { slug: string; name: string; anatomyTemplateCode: string | null };
+export type FunnelCategory = { slug: string; name: string; genera: FunnelGenus[] };
 
+// Categories with their genera nested (each genus carrying its real
+// anatomy_template_code) — drives both the funnel's optional "type" step and
+// its optional "genus" breakout step, plus which anatomy step-through
+// (lib/anatomy-steps.ts) applies once a genus is picked.
 export async function getFunnelCategories(): Promise<FunnelCategory[]> {
   const cats = await getGenusCategories();
-  return cats.map((c) => ({ slug: c.slug, name: c.name }));
+  const genusIds = cats.flatMap((c) => c.genera.map((g) => g.id));
+  if (genusIds.length === 0) return cats.map((c) => ({ slug: c.slug, name: c.name, genera: [] }));
+
+  const supabase = createPublicClient();
+  const { data: templates } = await supabase
+    .from("taxon_nodes")
+    .select("id, anatomy_template_code")
+    .in("id", genusIds);
+  const templateById = new Map((templates ?? []).map((t) => [t.id, t.anatomy_template_code as string | null]));
+
+  return cats.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    genera: c.genera.map((g) => ({
+      slug: g.slug,
+      name: g.name,
+      anatomyTemplateCode: templateById.get(g.id) ?? null,
+    })),
+  }));
+}
+
+// Up to `limit` real hero photos (most-voted per morph, same rule as
+// getHeroPhotoUrlsForTaxa elsewhere) across every morph in a category — the
+// identify funnel's "type" popup photo carousel. Order follows the morph
+// query's own order, not a true cross-taxon vote ranking (the live dataset
+// is too small today for that distinction to matter); PhotoCarousel pads any
+// remaining slots with illustrative art, never fake photography.
+export async function getCategoryShowcasePhotos(
+  categorySlug: string,
+  limit = 5,
+): Promise<{ url: string; alt: string }[]> {
+  const supabase = createPublicClient();
+  const { data: category } = await supabase
+    .from("taxon_nodes")
+    .select("id")
+    .eq("rank_code", "category")
+    .eq("slug", categorySlug)
+    .maybeSingle();
+  if (!category) return [];
+
+  const { data: genera } = await supabase
+    .from("taxon_nodes")
+    .select("id")
+    .eq("rank_code", "genus")
+    .eq("parent_id", category.id);
+  const genusIds = (genera ?? []).map((g) => g.id);
+  if (genusIds.length === 0) return [];
+
+  const { data: morphs } = await supabase
+    .from("taxon_nodes")
+    .select("id, name")
+    .eq("rank_code", "morph")
+    .in("parent_id", genusIds);
+  const morphRows = morphs ?? [];
+  if (morphRows.length === 0) return [];
+
+  const heroUrls = await getHeroPhotoUrlsForTaxa(morphRows.map((m) => m.id));
+  const photos: { url: string; alt: string }[] = [];
+  for (const m of morphRows) {
+    const url = heroUrls.get(m.id);
+    if (url) photos.push({ url, alt: `${m.name} — reference photo` });
+    if (photos.length >= limit) break;
+  }
+  return photos;
+}
+
+// Same idea as getCategoryShowcasePhotos, scoped to one genus — the funnel's
+// "genus" popup. Real photos are rare today (only Acropora/Zoanthus/Briareum
+// have any live); the caller falls back to the category's showcase when this
+// returns fewer than needed.
+export async function getGenusShowcasePhotos(
+  genusSlug: string,
+  limit = 5,
+): Promise<{ url: string; alt: string }[]> {
+  const genus = await getGenusBySlug(genusSlug);
+  if (!genus) return [];
+  const morphs = await getMorphsForGenus(genus.id);
+  const heroUrls = await getHeroPhotoUrlsForTaxa(morphs.map((m) => m.id));
+  const photos: { url: string; alt: string }[] = [];
+  for (const m of morphs) {
+    const url = heroUrls.get(m.id);
+    if (url) photos.push({ url, alt: `${m.name} — reference photo` });
+    if (photos.length >= limit) break;
+  }
+  return photos;
+}
+
+// A real coral in the registry that documents the given pattern, for the
+// funnel's pattern-recognition popup — links straight to its wiki page
+// instead of only showing a generic swatch example.
+export async function getPatternExampleCoral(
+  patternCode: string,
+): Promise<{ name: string; genusSlug: string; slug: string; hexes: string[] } | null> {
+  const supabase = createPublicClient();
+  const { data: ranges } = await supabase
+    .from("color_ranges")
+    .select("taxon_node_id, color_stops(hex, ordinal)")
+    .eq("color_pattern_code", patternCode)
+    .limit(1);
+  const row = ranges?.[0];
+  if (!row?.taxon_node_id) return null;
+
+  const { data: morph } = await supabase
+    .from("taxon_nodes")
+    .select("id, name, slug, parent_id")
+    .eq("id", row.taxon_node_id)
+    .maybeSingle();
+  if (!morph?.parent_id) return null;
+  const { data: genus } = await supabase
+    .from("taxon_nodes")
+    .select("slug")
+    .eq("id", morph.parent_id)
+    .maybeSingle();
+  if (!genus) return null;
+
+  const hexes = (row.color_stops as { hex: string; ordinal: number }[])
+    .sort((a, b) => a.ordinal - b.ordinal)
+    .map((s) => s.hex);
+  return { name: morph.name, genusSlug: genus.slug, slug: morph.slug, hexes };
+}
+
+const PATTERN_CODES = ["spotted", "mottled", "banded", "tipped", "ringed", "rainbow"];
+
+export type IdentifyShowcaseData = {
+  categoryPhotos: Record<string, { url: string; alt: string }[]>;
+  genusPhotos: Record<string, { url: string; alt: string }[]>;
+  patternExamples: Record<string, { name: string; genusSlug: string; slug: string; hexes: string[] } | null>;
+};
+
+// All the funnel's popup photo/example data, fetched once server-side and
+// passed down as props — same "all data arrives as props, scoring runs
+// client-side" posture the funnel already uses for corals/categories, kept
+// here rather than adding client-side server actions/loading states to every
+// popup for a still-small dataset.
+export async function getIdentifyShowcaseData(categories: FunnelCategory[]): Promise<IdentifyShowcaseData> {
+  const genusSlugs = categories.flatMap((c) => c.genera.map((g) => g.slug));
+
+  const [categoryEntries, genusEntries, patternEntries] = await Promise.all([
+    Promise.all(categories.map(async (c) => [c.slug, await getCategoryShowcasePhotos(c.slug)] as const)),
+    Promise.all(genusSlugs.map(async (slug) => [slug, await getGenusShowcasePhotos(slug)] as const)),
+    Promise.all(PATTERN_CODES.map(async (code) => [code, await getPatternExampleCoral(code)] as const)),
+  ]);
+
+  return {
+    categoryPhotos: Object.fromEntries(categoryEntries),
+    genusPhotos: Object.fromEntries(genusEntries),
+    patternExamples: Object.fromEntries(patternEntries),
+  };
 }
 
 // ---------------------------------------------------------------------------

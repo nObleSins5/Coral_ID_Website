@@ -154,24 +154,102 @@ export type ColorRangeForModeration = {
 // is_moderator, not public like everything in that file.
 export async function getColorRangesForModeration(
   taxonId: string,
-): Promise<{ ranges?: ColorRangeForModeration[]; error?: string }> {
+): Promise<{ ranges?: ColorRangeForModeration[]; anatomyTemplateCode?: string | null; error?: string }> {
   const gate = await requireModerator();
   if ("error" in gate) return { error: gate.error };
 
-  const { data, error } = await gate.supabase
-    .from("color_ranges")
-    .select(
-      "id, position_label, color_pattern_code, label, notes, approx_percent, lighting_condition, color_stops ( hex, ordinal )",
-    )
-    .eq("taxon_node_id", taxonId)
-    .order("sort_order");
+  const [{ data, error }, { data: taxon }] = await Promise.all([
+    gate.supabase
+      .from("color_ranges")
+      .select(
+        "id, position_label, color_pattern_code, label, notes, approx_percent, lighting_condition, color_stops ( hex, ordinal )",
+      )
+      .eq("taxon_node_id", taxonId)
+      .order("sort_order"),
+    gate.supabase.from("taxon_nodes").select("parent_id").eq("id", taxonId).maybeSingle(),
+  ]);
   if (error) return { error: error.message };
+
+  let anatomyTemplateCode: string | null = null;
+  if (taxon?.parent_id) {
+    const { data: genus } = await gate.supabase
+      .from("taxon_nodes")
+      .select("anatomy_template_code")
+      .eq("id", taxon.parent_id)
+      .maybeSingle();
+    anatomyTemplateCode = genus?.anatomy_template_code ?? null;
+  }
 
   const ranges = (data ?? []).map((r) => ({
     ...r,
     color_stops: [...r.color_stops].sort((a, b) => a.ordinal - b.ordinal),
   })) as ColorRangeForModeration[];
-  return { ranges };
+  return { ranges, anatomyTemplateCode };
+}
+
+export type ColorEntryModerationRow = {
+  id: string;
+  name: string;
+  genusName: string;
+  categoryName: string | null;
+  colorCount: number;
+  lastActivity: string | null; // ISO timestamp, null = never touched
+};
+
+// "Which corals have I set up, and when did I last touch them" — the
+// moderator's own activity list, so entry work can be picked up/resumed
+// without re-searching from scratch each time. Sorted most-recent-first by
+// default; the "never entered" case (lastActivity null) is a real, common
+// state worth surfacing distinctly, not an error (~101 seeded corals, most
+// with zero moderator-entered color data yet — see docs/PROGRESS.md).
+export async function getColorEntryModerationList(): Promise<{
+  rows?: ColorEntryModerationRow[];
+  error?: string;
+}> {
+  const gate = await requireModerator();
+  if ("error" in gate) return { error: gate.error };
+  const supabase = gate.supabase;
+
+  const [{ data: morphs }, { data: genera }, { data: categories }, { data: ranges }] = await Promise.all([
+    supabase.from("taxon_nodes").select("id, name, parent_id, updated_at").eq("rank_code", "morph"),
+    supabase.from("taxon_nodes").select("id, name, parent_id").eq("rank_code", "genus"),
+    supabase.from("taxon_nodes").select("id, name").eq("rank_code", "category"),
+    supabase.from("color_ranges").select("taxon_node_id, updated_at"),
+  ]);
+
+  const genusById = new Map((genera ?? []).map((g) => [g.id, g]));
+  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
+
+  const activityByTaxon = new Map<string, { count: number; lastActivity: string | null }>();
+  for (const r of ranges ?? []) {
+    const entry = activityByTaxon.get(r.taxon_node_id) ?? { count: 0, lastActivity: null };
+    entry.count += 1;
+    if (!entry.lastActivity || r.updated_at > entry.lastActivity) entry.lastActivity = r.updated_at;
+    activityByTaxon.set(r.taxon_node_id, entry);
+  }
+
+  const rows: ColorEntryModerationRow[] = (morphs ?? []).map((m) => {
+    const genus = m.parent_id ? genusById.get(m.parent_id) : undefined;
+    const category = genus?.parent_id ? categoryById.get(genus.parent_id) : undefined;
+    const activity = activityByTaxon.get(m.id);
+    return {
+      id: m.id,
+      name: m.name,
+      genusName: genus?.name ?? "—",
+      categoryName: category?.name ?? null,
+      colorCount: activity?.count ?? 0,
+      lastActivity: activity?.lastActivity ?? null,
+    };
+  });
+
+  rows.sort((a, b) => {
+    if (!a.lastActivity && !b.lastActivity) return a.name.localeCompare(b.name);
+    if (!a.lastActivity) return 1;
+    if (!b.lastActivity) return -1;
+    return b.lastActivity.localeCompare(a.lastActivity);
+  });
+
+  return { rows };
 }
 
 // Creates a new color_range (no id in formData) or replaces an existing

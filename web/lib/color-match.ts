@@ -151,10 +151,29 @@ export type CoralMatch = {
 // user didn't mention?) is a gentle tiebreaker so a focused 2-color match
 // ranks above a 6-color coral that merely happens to include those two.
 //
+// Optional ranking nudges (docs/color-percent-feature-brief.md §7) — small
+// and conservative by design, on top of the coverage/precision score above,
+// never enough to reorder a strong coverage match beneath a weak one:
+//   - dominant-color bonus: the user's own highest-percent pick (from the
+//     anatomy step-through's proportion input) matches the coral's own
+//     documented dominant color (color_ranges.approx_percent, when present).
+//   - pattern bonus: the user's noticed pattern (spotted/banded/etc.) is
+//     actually documented on the coral.
+export type MatchBonusInputs = {
+  userDominantFamily?: ColorFamily | null;
+  coralDominantFamily?: ColorFamily | null;
+  userPatterns?: string[];
+  coralPatterns?: string[];
+};
+
+const DOMINANT_BONUS = 0.05;
+const PATTERN_BONUS = 0.03;
+
 // A coral with zero of the user's colors scores 0 (caller filters these out).
 export function scoreCoralMatch(
   userFamilies: ColorFamily[],
   coralFamilies: ColorFamily[],
+  bonusInputs?: MatchBonusInputs,
 ): CoralMatch {
   const coralSet = new Set(coralFamilies);
   const matched: ColorFamily[] = [];
@@ -172,6 +191,21 @@ export function scoreCoralMatch(
   const precision = coralFamilies.length > 0 ? matched.length / coralFamilies.length : 0;
   // Coverage weighted 85% — finding all the user's colors is the point;
   // precision only breaks ties between equally-covering candidates.
-  const score = coverage * 0.85 + precision * 0.15;
+  let score = coverage * 0.85 + precision * 0.15;
+
+  if (
+    bonusInputs?.userDominantFamily &&
+    bonusInputs.coralDominantFamily &&
+    bonusInputs.userDominantFamily === bonusInputs.coralDominantFamily
+  ) {
+    score += DOMINANT_BONUS;
+  }
+  if (bonusInputs?.userPatterns?.length && bonusInputs.coralPatterns?.length) {
+    const coralPatternSet = new Set(bonusInputs.coralPatterns);
+    if (bonusInputs.userPatterns.some((p) => coralPatternSet.has(p))) {
+      score += PATTERN_BONUS;
+    }
+  }
+
   return { score, matched, missed };
 }

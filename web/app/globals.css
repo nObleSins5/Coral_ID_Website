@@ -1101,6 +1101,266 @@ td {
   color: var(--muted);
 }
 
+/* A chip with an info trigger is a <div class="funnel-chip"> wrapping two
+   sibling <button>s (funnel-chip-select + funnel-info-btn) — NOT a nested
+   button-in-button, which is invalid HTML (caught as a real hydration
+   mismatch while verifying this change). .funnel-chip is also still used
+   directly on plain <button>s with no info trigger ("Any / not sure" etc),
+   so both element types share the same pill visuals below. */
+.funnel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.funnel-chip-select {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.funnel-info-btn {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.funnel-info-btn:hover {
+  opacity: 1;
+}
+
+/* Characteristics popup (type/genus/pattern) — reuses .modal-panel. */
+.characteristics-panel {
+  max-width: 480px;
+}
+.characteristics-summary {
+  margin: 0 0 0.6rem;
+}
+.characteristics-traits {
+  margin: 0 0 0.9rem;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.pattern-popup-media {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pattern-popup-media .color-bar {
+  width: 100%;
+  height: 2.5rem;
+  border-radius: 8px;
+}
+.pattern-popup-link {
+  font-weight: 600;
+}
+
+/* Photo carousel — real photos first, illustrative ColorSwatch art fills
+   remaining slots (see components/photo-carousel.tsx). */
+.carousel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.carousel-stage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.carousel-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.carousel-fallback {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--bg);
+}
+.carousel-fallback .color-bar {
+  width: 70%;
+  height: 1.5rem;
+  border-radius: 6px;
+}
+.carousel-fallback-label {
+  font-size: 0.75rem;
+}
+.carousel-arrow {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 999px;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.carousel-arrow:hover {
+  border-color: var(--accent-text);
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+}
+.carousel-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  padding: 0;
+  cursor: pointer;
+}
+.carousel-dot.active {
+  background: var(--accent-text);
+  border-color: var(--accent-text);
+}
+.carousel-note {
+  margin: 0;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* Anatomy-aware color step-through — a right-hand progress rail on desktop,
+   a horizontal strip above the steps on mobile (same breakpoint the funnel
+   already verifies at, see docs/PROGRESS.md's 375px pass). */
+.funnel-anatomy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.funnel-anatomy-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  order: -1;
+}
+.funnel-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+.funnel-nav-item.done {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+.funnel-nav-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+.funnel-nav-item.done .funnel-nav-dot {
+  background: var(--accent-text);
+}
+.funnel-anatomy-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+@media (min-width: 900px) {
+  .funnel-anatomy {
+    flex-direction: row-reverse;
+    align-items: flex-start;
+  }
+  .funnel-anatomy-nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    order: 0;
+    position: sticky;
+    top: 1rem;
+    flex: 0 0 180px;
+  }
+  .funnel-anatomy-steps {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.funnel-skip-toggle {
+  margin: 0 0 0.6rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.funnel-skip-toggle.active {
+  border-style: solid;
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+
+/* Per-step color proportion input — invisible until 2+ colors are picked
+   for the same step (see components/color-percent-split.tsx). */
+.percent-split {
+  margin-top: 0.6rem;
+}
+.percent-split-hint {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+}
+.percent-split-two {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.percent-split-two input[type="range"] {
+  flex: 1 1 auto;
+}
+.percent-split-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.percent-split-many {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.percent-split-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+}
+.percent-split-stepper input[type="number"] {
+  width: 3.2rem;
+}
+
 .identify-community {
   border-top: 1px solid var(--border);
   padding-top: 1.5rem;
@@ -2022,17 +2282,6 @@ td {
   margin-bottom: 0.9rem;
   background: var(--bg);
 }
-.color-mod-swatches {
-  display: flex;
-  gap: 0.35rem;
-  margin: 0.4rem 0 0.6rem;
-}
-.color-mod-swatch {
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-}
 .color-mod-row-actions {
   display: flex;
   align-items: center;
@@ -2042,4 +2291,115 @@ td {
 }
 .color-mod-row-actions button {
   margin-top: 0;
+}
+
+/* Hex tool — real color-picker + hex text per stop, add/remove, live
+   ColorSwatch preview (see components/color-moderation.tsx). */
+.color-mod-stops {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0.6rem;
+}
+.color-mod-stop {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.color-mod-stop input[type="color"] {
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+.color-mod-stop input[type="text"],
+.color-mod-stop input:not([type]) {
+  flex: 1 1 auto;
+}
+.color-mod-pattern-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+}
+.color-mod-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+}
+.color-mod-preview .color-bar {
+  width: 4rem;
+  height: 1.5rem;
+  border-radius: 4px;
+}
+
+/* Anatomy-grouped entry form — same STEP_GROUPS framework as the identify
+   funnel (lib/anatomy-steps.ts), so a moderator edits the same body-part
+   regions a hobbyist steps through. */
+.color-mod-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--panel);
+}
+.color-mod-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.color-mod-group-total {
+  font-size: 0.78rem;
+}
+
+/* Moderator activity list — "which corals have I set up, and when did I
+   last touch them" (getColorEntryModerationList). */
+.color-mod-activity {
+  margin: 0.75rem 0 1.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.color-mod-activity-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.color-mod-activity-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.color-mod-activity-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.6fr 1fr;
+  gap: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.color-mod-activity-row:last-child {
+  border-bottom: none;
+}
+.color-mod-activity-head {
+  background: var(--panel);
+  font-weight: 600;
+  cursor: default;
+}
+.color-mod-activity-row:not(.color-mod-activity-head):hover {
+  background: var(--panel);
 }

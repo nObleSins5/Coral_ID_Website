@@ -4,6 +4,7 @@ import {
   getFunnelCategories,
   getGenera,
   getGenusOptionsForIdentify,
+  getIdentifyShowcaseData,
   getUnidentifiedQueue,
 } from "@/lib/wiki";
 import { CoralIdentifyFunnel } from "@/components/coral-identify-funnel";
@@ -29,17 +30,18 @@ export default async function IdentifyPage() {
     getGenera(),
     getGenusOptionsForIdentify(),
   ]);
+  const showcase = await getIdentifyShowcaseData(categories);
 
   return (
     <div>
       <h1>Identify a coral</h1>
       <p className="muted identify-lede">
-        Tell us what you see — the shape and the colors — and we&apos;ll match it against
-        the registry&apos;s real, element-by-element trait data. No coral-anatomy knowledge
-        needed.
+        Tell us what you see — the type, the genus if you know it, and the colors — and
+        we&apos;ll match it against the registry&apos;s real, element-by-element trait data.
+        No coral-anatomy knowledge needed.
       </p>
 
-      <CoralIdentifyFunnel corals={corals} categories={categories} />
+      <CoralIdentifyFunnel corals={corals} categories={categories} showcase={showcase} />
 
       <section id="community" className="identify-community">
         <h2>Still stuck? Ask the community</h2>
