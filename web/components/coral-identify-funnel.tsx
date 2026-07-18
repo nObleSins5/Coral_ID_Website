@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   COLOR_FAMILIES,
   familyLabel,
@@ -10,6 +10,8 @@ import {
 } from "@/lib/color-match";
 import type { ColorMatchCoral, FunnelCategory, IdentifyShowcaseData } from "@/lib/wiki";
 import { extractCoralTraitsFromPhoto } from "@/app/identify/vision-actions";
+import { uploadUnidentifiedPhoto } from "@/app/identify/actions";
+import { createClient } from "@/lib/supabase/client";
 import { resolveTemplateCode, stepsForTemplate, type AnatomyStep } from "@/lib/anatomy-steps";
 import {
   CATEGORY_CHARACTERISTICS,
@@ -105,6 +107,7 @@ function PhotoTraitAssist({
   categories: FunnelCategory[];
   onExtracted: (families: ColorFamily[]) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +115,18 @@ function PhotoTraitAssist({
   const [appliedCount, setAppliedCount] = useState(0);
   const [suggestedCategoryName, setSuggestedCategoryName] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [posting, startPosting] = useTransition();
+  const [postError, setPostError] = useState<string | null>(null);
+  const [posted, setPosted] = useState(false);
+
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
   // Object URLs are memory-held by the browser until revoked — clean up the
   // previous one whenever a new photo replaces it, and on unmount.
@@ -124,6 +138,9 @@ function PhotoTraitAssist({
     setLighting(null);
     setSuggestedCategoryName(null);
     setPhotoUrl(URL.createObjectURL(file));
+    setPhotoFile(file);
+    setPosted(false);
+    setPostError(null);
     const formData = new FormData();
     formData.set("photo", file);
     startTransition(async () => {
@@ -141,6 +158,28 @@ function PhotoTraitAssist({
       setAppliedCount(families.length);
       setSuggestedCategoryName(categories.find((c) => c.slug === categorySlug)?.name ?? null);
       if (lightingGuess === "actinic" || lightingGuess === "mixed") setLighting(lightingGuess);
+    });
+  }
+
+  // The photo stays local/ephemeral by default (never uploaded just for the
+  // AI-assist analysis above — same contract as before). This is a distinct,
+  // explicit action: reuses the already-selected file so a user who didn't
+  // get a confident match doesn't have to re-pick the same photo down in the
+  // community section — same upload path as that section's own form
+  // (uploadUnidentifiedPhoto), so it appears in the queue immediately.
+  function postToCommunity() {
+    if (!photoFile) return;
+    setPostError(null);
+    const formData = new FormData();
+    formData.set("photo", photoFile);
+    startPosting(async () => {
+      const result = await uploadUnidentifiedPhoto(formData);
+      if (result?.error) {
+        setPostError(result.error);
+        return;
+      }
+      setPosted(true);
+      router.refresh();
     });
   }
 
@@ -194,6 +233,26 @@ function PhotoTraitAssist({
         </p>
       )}
       {lighting && <p className="muted funnel-assist-status">{LIGHTING_CAVEAT[lighting]}</p>}
+
+      {photoFile && !posted ? (
+        <div className="funnel-assist-community">
+          {userId ? (
+            <button type="button" className="btn-secondary" disabled={posting} onClick={postToCommunity}>
+              {posting ? "Posting…" : "Not finding it? Post this photo for the community →"}
+            </button>
+          ) : (
+            <p className="muted funnel-assist-status">
+              <a href="/login">Log in</a> to post this same photo for the community to help identify.
+            </p>
+          )}
+          {postError && <p className="error funnel-assist-status">{postError}</p>}
+        </div>
+      ) : null}
+      {posted ? (
+        <p className="funnel-assist-status funnel-assist-success">
+          Posted — your photo is live in <a href="#community">the community queue</a> below.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -692,14 +751,16 @@ export function CoralIdentifyFunnel({
           const g = genusList.find((gg) => gg.slug === openPopup.slug);
           const content = g ? GENUS_CHARACTERISTICS[g.slug] : null;
           if (!g || !content) return null;
-          const genusPhotos = showcase.genusPhotos[g.slug] ?? [];
-          const photos = genusPhotos.length > 0 ? genusPhotos : (selectedCategory ? showcase.categoryPhotos[selectedCategory.slug] ?? [] : []);
+          // Only this genus's own real photos — falling back to the wider
+          // category's photos showed the wrong genus (e.g. Montipora's
+          // popup showing an Acropora photo), reported live. Everything
+          // else falls back to illustrative art via PhotoCarousel.
           return (
             <CharacteristicsPopup
               title={g.name}
               summary={content.summary}
               traits={content.traits}
-              photos={photos}
+              photos={showcase.genusPhotos[g.slug] ?? []}
               onClose={() => setOpenPopup(null)}
             />
           );
@@ -719,22 +780,36 @@ export function CoralIdentifyFunnel({
               traits={[]}
               media={
                 <div className="pattern-popup-media">
-                  <ColorSwatch
-                    range={{
-                      position_label: null,
-                      color_pattern_code: openPopup.code,
-                      label: null,
-                      approx_percent: null,
-                      color_stops: hexes.map((hex, ordinal) => ({ hex, ordinal })),
-                    }}
-                    title={PATTERN_LABEL[openPopup.code]}
-                  />
+                  <div className="carousel-fallback pattern-popup-swatch">
+                    <ColorSwatch
+                      range={{
+                        position_label: null,
+                        color_pattern_code: openPopup.code,
+                        label: null,
+                        approx_percent: null,
+                        color_stops: hexes.map((hex, ordinal) => ({ hex, ordinal })),
+                      }}
+                      title={PATTERN_LABEL[openPopup.code]}
+                    />
+                    <span className="carousel-fallback-label muted">
+                      {example ? `Illustrative — ${example.name}'s documented colors` : "Illustrative example"}
+                    </span>
+                  </div>
                   {example ? (
-                    <a className="pattern-popup-link" href={`/coral/${example.genusSlug}/${example.slug}`}>
-                      Real example: {example.name} →
+                    // Opens in a new tab — clicking through to the wiki page
+                    // must never risk losing funnel progress in the
+                    // original tab (reported live: it felt like progress
+                    // was lost when the link replaced the current page).
+                    <a
+                      className="pattern-popup-link"
+                      href={`/coral/${example.genusSlug}/${example.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Real example: {example.name} ↗
                     </a>
                   ) : (
-                    <p className="muted">Illustrative example — no real coral in the registry documents this pattern yet.</p>
+                    <p className="muted">No real coral in the registry documents this pattern yet — placeholder shown above.</p>
                   )}
                 </div>
               }

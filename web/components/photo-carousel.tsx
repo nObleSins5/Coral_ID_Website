@@ -66,15 +66,12 @@ export function PhotoCarousel({
 
   return (
     <div className="carousel">
+      {/* Arrows are absolutely positioned over the stage, not laid out in a
+          flex row beside the image — a flex row here previously let a wide
+          or oddly-sized image push the "next" arrow outside the card
+          (reported live). An overlay can never be pushed off regardless of
+          image size. */}
       <div className="carousel-stage">
-        <button
-          type="button"
-          className="carousel-arrow carousel-arrow-prev"
-          onClick={() => setIndex((i) => (i - 1 + slots) % slots)}
-          aria-label="Previous photo"
-        >
-          ‹
-        </button>
         {isRealPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shown[index].url} alt={shown[index].alt} className="carousel-img" />
@@ -84,6 +81,14 @@ export function PhotoCarousel({
             <span className="carousel-fallback-label muted">Illustrative example</span>
           </div>
         )}
+        <button
+          type="button"
+          className="carousel-arrow carousel-arrow-prev"
+          onClick={() => setIndex((i) => (i - 1 + slots) % slots)}
+          aria-label="Previous photo"
+        >
+          ‹
+        </button>
         <button
           type="button"
           className="carousel-arrow carousel-arrow-next"

@@ -880,6 +880,11 @@ td {
   color: var(--accent-text);
   font-weight: 500;
 }
+.funnel-assist-community {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
 /* Larger look at the user's own uploaded photo — for real color/pattern
    comparison, not just a "file selected" acknowledgment. */
 .funnel-assist-preview-trigger {
@@ -1156,12 +1161,13 @@ td {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
-.pattern-popup-media .color-bar {
+/* Sized/styled like the carousel's illustrative fallback card (not a thin
+   stripe) so a pattern's placeholder reads as a real illustration, not a
+   decorative bar — reported live as too thin to actually show the pattern. */
+.pattern-popup-swatch {
   width: 100%;
-  height: 2.5rem;
-  border-radius: 8px;
 }
 .pattern-popup-link {
   font-weight: 600;
@@ -1175,11 +1181,10 @@ td {
   gap: 0.5rem;
 }
 .carousel-stage {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  position: relative;
 }
 .carousel-img {
+  display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
@@ -1195,30 +1200,45 @@ td {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   background: var(--bg);
+  padding: 0.75rem;
 }
 .carousel-fallback .color-bar {
-  width: 70%;
-  height: 1.5rem;
+  width: 85%;
+  height: 55%;
   border-radius: 6px;
 }
 .carousel-fallback-label {
   font-size: 0.75rem;
 }
+/* Overlaid on top of the image/fallback (not laid out beside it in a flex
+   row) so no image size or aspect ratio can ever push an arrow out of the
+   card — the bug reported live. */
 .carousel-arrow {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--panel);
+  opacity: 0.9;
   border-radius: 999px;
   width: 2rem;
   height: 2rem;
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.carousel-arrow-prev {
+  left: 0.5rem;
+}
+.carousel-arrow-next {
+  right: 0.5rem;
 }
 .carousel-arrow:hover {
   border-color: var(--accent-text);
+  opacity: 1;
 }
 .carousel-dots {
   display: flex;
