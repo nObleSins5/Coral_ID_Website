@@ -358,6 +358,47 @@ export async function getHeroPhotoUrlsForTaxa(
   return heroUrlByTaxon;
 }
 
+// Up to `limit` photos per taxon, most-voted first (ties to newest) — same
+// hero-photo rule as getHeroPhotoUrlsForTaxa above, but keeping the whole
+// ranked list instead of collapsing to one. Used by the identify funnel's
+// per-result photo carousel so a result always leads with its real hero
+// photo, then whatever else the community has posted.
+export async function getTopPhotosForTaxa(
+  taxonIds: string[],
+  limit = 10,
+): Promise<Map<string, string[]>> {
+  const byTaxon = new Map<string, string[]>();
+  if (taxonIds.length === 0) return byTaxon;
+
+  const supabase = createPublicClient();
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, taxon_node_id, created_at")
+    .in("taxon_node_id", taxonIds)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+
+  const photoList = (photos ?? []).filter((p) => p.url && p.taxon_node_id);
+  if (photoList.length === 0) return byTaxon;
+
+  const voteCounts = await getAccurateVoteCounts(photoList.map((p) => p.id));
+
+  const byTaxonRanked = new Map<string, { url: string; votes: number }[]>();
+  for (const p of photoList) {
+    const taxonId = p.taxon_node_id as string;
+    const list = byTaxonRanked.get(taxonId) ?? [];
+    list.push({ url: p.url as string, votes: voteCounts.get(p.id) ?? 0 });
+    byTaxonRanked.set(taxonId, list);
+  }
+  for (const [taxonId, list] of byTaxonRanked) {
+    // created_at desc already gives newest-first as the stable tiebreak;
+    // a stable sort on votes desc preserves that ordering within each vote tier.
+    list.sort((a, b) => b.votes - a.votes);
+    byTaxon.set(taxonId, list.slice(0, limit).map((p) => p.url));
+  }
+  return byTaxon;
+}
+
 export type AffiliateLink = {
   id: string;
   vendor_name: string;
@@ -511,6 +552,8 @@ export type ColorMatchCoral = {
   // docs/color-percent-feature-brief.md §7 (ranking bonus) and lib/color-match.ts.
   patterns: string[]; // distinct color_pattern_code values documented on this coral
   dominantFamily: ColorFamily | null; // family of the color_range with the highest approx_percent, when any is recorded
+  colorRanges: ColorRange[]; // full position-labeled color data, for the result card's "where each color is" breakdown
+  photos: string[]; // up to 10 photo URLs, most-voted first (hero always first) — for the result card's carousel
 };
 
 // The color_range with the highest recorded approx_percent (ranges with no
@@ -565,7 +608,10 @@ export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
     color_ranges: ColorRange[];
   };
   const morphRows = (morphs as unknown as MorphRow[]) ?? [];
-  const heroUrls = await getHeroPhotoUrlsForTaxa(morphRows.map((m) => m.id));
+  // getTopPhotosForTaxa already returns most-voted-first (hero-equivalent
+  // rule), so photos[0] doubles as the existing single heroUrl without a
+  // second query.
+  const topPhotos = await getTopPhotosForTaxa(morphRows.map((m) => m.id));
 
   const result: ColorMatchCoral[] = [];
   for (const m of morphRows) {
@@ -574,6 +620,7 @@ export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
     const category = genus.parent_id ? categoryById.get(genus.parent_id) : undefined;
     const ranges = m.color_ranges ?? [];
     const hexes = ranges.flatMap((r) => r.color_stops.map((s) => s.hex));
+    const photos = topPhotos.get(m.id) ?? [];
     result.push({
       id: m.id,
       name: m.name,
@@ -585,9 +632,11 @@ export async function getCoralsForColorMatch(): Promise<ColorMatchCoral[]> {
       care_difficulty_code: m.care_difficulty_code ?? genus.care_difficulty_code,
       families: familiesForColorRanges(ranges),
       hexes,
-      heroUrl: heroUrls.get(m.id) ?? null,
+      heroUrl: photos[0] ?? null,
       patterns: [...new Set(ranges.map((r) => r.color_pattern_code))],
       dominantFamily: dominantFamilyForRanges(ranges),
+      colorRanges: ranges,
+      photos,
     });
   }
   return result;

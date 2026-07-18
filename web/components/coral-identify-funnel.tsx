@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   COLOR_FAMILIES,
   familyLabel,
+  hexToFamily,
   scoreCoralMatch,
   type ColorFamily,
 } from "@/lib/color-match";
 import type { ColorMatchCoral, FunnelCategory, IdentifyShowcaseData } from "@/lib/wiki";
 import { extractCoralTraitsFromPhoto } from "@/app/identify/vision-actions";
 import { uploadUnidentifiedPhoto } from "@/app/identify/actions";
+import { uploadCoralPhoto } from "@/app/coral/actions";
 import { createClient } from "@/lib/supabase/client";
 import { resolveTemplateCode, stepsForTemplate, type AnatomyStep } from "@/lib/anatomy-steps";
 import {
@@ -20,7 +22,8 @@ import {
 } from "@/lib/coral-characteristics";
 import { CharacteristicsPopup } from "@/components/characteristics-popup";
 import { ColorPercentSplit, type StepColorPick } from "@/components/color-percent-split";
-import { ColorSwatch } from "@/components/coral-ui";
+import { ColorSwatch, ELEMENT_LABEL, type ColorRange } from "@/components/coral-ui";
+import { PhotoCarousel } from "@/components/photo-carousel";
 
 // A larger look at the user's own uploaded photo, purely client-side (the
 // photo is never persisted — see PhotoTraitAssist below) — for actually
@@ -63,10 +66,6 @@ function PhotoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
   );
 }
 
-const SWATCH: Record<ColorFamily, string> = Object.fromEntries(
-  COLOR_FAMILIES.map((f) => [f.code, f.swatch]),
-) as Record<ColorFamily, string>;
-
 const PATTERN_LABEL: Record<string, string> = {
   spotted: "Spotted",
   mottled: "Mottled",
@@ -102,10 +101,17 @@ const LIGHTING_CAVEAT: Record<string, string> = {
 // can apply it themselves in Step 1 if they agree.
 function PhotoTraitAssist({
   categories,
+  userId,
   onExtracted,
+  onPhotoSelected,
 }: {
   categories: FunnelCategory[];
+  userId: string | null;
   onExtracted: (families: ColorFamily[]) => void;
+  // Lifts the selected File up to the parent funnel so the "Close matches"
+  // results can each offer a one-click "post my photo to this coral's wiki
+  // page" action once identification is complete — see PostToWikiControl.
+  onPhotoSelected: (file: File, url: string) => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -117,16 +123,9 @@ function PhotoTraitAssist({
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
   const [posting, startPosting] = useTransition();
   const [postError, setPostError] = useState<string | null>(null);
   const [posted, setPosted] = useState(false);
-
-  useEffect(() => {
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
 
   // Object URLs are memory-held by the browser until revoked — clean up the
   // previous one whenever a new photo replaces it, and on unmount.
@@ -137,10 +136,12 @@ function PhotoTraitAssist({
     setError(null);
     setLighting(null);
     setSuggestedCategoryName(null);
-    setPhotoUrl(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setPhotoUrl(url);
     setPhotoFile(file);
     setPosted(false);
     setPostError(null);
+    onPhotoSelected(file, url);
     const formData = new FormData();
     formData.set("photo", file);
     startTransition(async () => {
@@ -374,6 +375,17 @@ export function CoralIdentifyFunnel({
   const [openPopup, setOpenPopup] = useState<
     { kind: "category"; slug: string } | { kind: "genus"; slug: string } | { kind: "pattern"; code: string } | null
   >(null);
+  // Shared with the result cards below via PostToWikiControl — once a photo
+  // has been picked in the assist flow, any matched result can post that
+  // same photo straight to its wiki page, no re-upload needed.
+  const [userId, setUserId] = useState<string | null>(null);
+  const [assistPhotoFile, setAssistPhotoFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -505,7 +517,12 @@ export function CoralIdentifyFunnel({
 
   return (
     <div className="funnel">
-      <PhotoTraitAssist categories={categories} onExtracted={applyExtracted} />
+      <PhotoTraitAssist
+        categories={categories}
+        userId={userId}
+        onExtracted={applyExtracted}
+        onPhotoSelected={(file) => setAssistPhotoFile(file)}
+      />
 
       {/* Step 1 — type (optional) */}
       <div className="funnel-step">
@@ -671,20 +688,16 @@ export function CoralIdentifyFunnel({
           {ranked.length > 0 ? (
             <div className="funnel-results">
               {ranked.map(({ coral, match }) => (
-                <a
-                  key={coral.id}
-                  className="funnel-result"
-                  href={`/coral/${coral.genusSlug}/${coral.slug}`}
-                >
+                <div key={coral.id} className="funnel-result">
                   <div className="funnel-result-photo">
-                    {coral.heroUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coral.heroUrl} alt={`${coral.name} — reference photo`} />
-                    ) : (
-                      <div
-                        className="funnel-result-tile"
-                        style={{ background: tileBg(coral.hexes) }}
+                    {coral.photos.length > 0 ? (
+                      <PhotoCarousel
+                        photos={coral.photos.map((url) => ({ url, alt: `${coral.name} — reference photo` }))}
+                        fallbackSeed={coral.id}
+                        slots={coral.photos.length}
                       />
+                    ) : (
+                      <div className="funnel-result-tile" style={{ background: tileBg(coral.hexes) }} />
                     )}
                   </div>
                   <div className="funnel-result-body">
@@ -692,26 +705,18 @@ export function CoralIdentifyFunnel({
                       {coral.name}
                       <span className="muted"> · {coral.genusName}</span>
                     </div>
-                    <div className="funnel-result-families">
-                      {coral.families.map((fam) => (
-                        <span
-                          key={fam}
-                          className={`funnel-fam${colorSet.has(fam) ? " matched" : ""}`}
-                          title={colorSet.has(fam) ? `${familyLabel(fam)} (you saw this)` : familyLabel(fam)}
-                        >
-                          <span className="funnel-fam-dot" style={{ background: SWATCH[fam] }} />
-                          {familyLabel(fam)}
-                        </span>
-                      ))}
-                    </div>
+                    <ResultColorBreakdown colorRanges={coral.colorRanges} matchedFamilies={colorSet} />
                     {match.missed.length > 0 && (
                       <p className="funnel-result-missed">
                         No {match.missed.map(familyLabel).join(", ").toLowerCase()} documented for this one
                       </p>
                     )}
-                    <span className="funnel-result-cta">View full profile &amp; photos →</span>
+                    <a className="funnel-result-cta" href={`/coral/${coral.genusSlug}/${coral.slug}`}>
+                      View full profile &amp; photos →
+                    </a>
+                    <PostToWikiControl coral={coral} userId={userId} sharedPhotoFile={assistPhotoFile} />
                   </div>
-                </a>
+                </div>
               ))}
             </div>
           ) : (
@@ -878,6 +883,138 @@ function AnatomyColorStep({
           <ColorPercentSplit picks={picks} onChange={onSetPicks} />
         </>
       )}
+    </div>
+  );
+}
+
+// "Breaks out" a result's colors by WHERE they're documented (mouth, skirt,
+// growth tip, etc — position_label, same data ElementColorKey renders on the
+// wiki page itself) instead of one flat family-chip row — so a close match
+// shows exactly which part carries which color, not just "this coral has
+// orange somewhere." A swatch is highlighted when its own color family is
+// one the user picked, same "matched" signal the old flat chips gave.
+function ResultColorBreakdown({
+  colorRanges,
+  matchedFamilies,
+}: {
+  colorRanges: ColorRange[];
+  matchedFamilies: Set<ColorFamily>;
+}) {
+  if (colorRanges.length === 0) return null;
+
+  const byPosition = new Map<string, ColorRange[]>();
+  const unlabeled: ColorRange[] = [];
+  for (const r of colorRanges) {
+    if (r.position_label) {
+      const list = byPosition.get(r.position_label) ?? [];
+      list.push(r);
+      byPosition.set(r.position_label, list);
+    } else {
+      unlabeled.push(r);
+    }
+  }
+
+  function isMatched(range: ColorRange): boolean {
+    return range.color_stops.some((s) => {
+      const f = hexToFamily(s.hex);
+      return f ? matchedFamilies.has(f) : false;
+    });
+  }
+
+  function swatch(r: ColorRange, i: number) {
+    return (
+      <span key={i} className={`funnel-result-swatch${isMatched(r) ? " matched" : ""}`}>
+        <ColorSwatch range={r} compact title={r.label ?? undefined} />
+      </span>
+    );
+  }
+
+  return (
+    <div className="funnel-result-breakdown">
+      {[...byPosition.entries()].map(([position, ranges]) => (
+        <div className="funnel-result-position" key={position}>
+          <span className="funnel-result-position-label">{ELEMENT_LABEL[position] ?? position}</span>
+          <span className="funnel-result-position-swatches">{ranges.map(swatch)}</span>
+        </div>
+      ))}
+      {unlabeled.length > 0 ? (
+        <div className="funnel-result-position">
+          <span className="funnel-result-position-label muted">Other</span>
+          <span className="funnel-result-position-swatches">{unlabeled.map(swatch)}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Once a match looks right, post the same photo straight to that coral's
+// wiki page — no separate upload flow needed. Reuses the exact upload path
+// (uploadCoralPhoto) the wiki page's own photo-logging feature uses.
+function PostToWikiControl({
+  coral,
+  userId,
+  sharedPhotoFile,
+}: {
+  coral: ColorMatchCoral;
+  userId: string | null;
+  sharedPhotoFile: File | null;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const inputId = useId();
+
+  function submit(file: File) {
+    setError(null);
+    const formData = new FormData();
+    formData.set("photo", file);
+    formData.set("taxon_node_id", coral.id);
+    formData.set("genus_slug", coral.genusSlug);
+    formData.set("morph_slug", coral.slug);
+    startTransition(async () => {
+      const result = await uploadCoralPhoto(formData);
+      if (result?.error) {
+        setError(result.error);
+        setStatus("error");
+        return;
+      }
+      setStatus("success");
+    });
+  }
+
+  if (!userId) {
+    return (
+      <a className="funnel-result-postwiki-login" href="/login">
+        Log in to post your photo here
+      </a>
+    );
+  }
+  if (status === "success") {
+    return <p className="funnel-result-postwiki-success">✓ Posted to the wiki</p>;
+  }
+
+  return (
+    <div className="funnel-result-postwiki">
+      {sharedPhotoFile ? (
+        <button type="button" className="btn-secondary" disabled={pending} onClick={() => submit(sharedPhotoFile)}>
+          {pending ? "Posting…" : "📷 Post my photo here"}
+        </button>
+      ) : (
+        <label htmlFor={inputId} className="funnel-result-postwiki-label">
+          {pending ? "Posting…" : "+ Add your photo to this coral"}
+          <input
+            id={inputId}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={pending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) submit(file);
+            }}
+          />
+        </label>
+      )}
+      {error && <p className="error funnel-result-postwiki-error">{error}</p>}
     </div>
   );
 }

@@ -1023,6 +1023,9 @@ td {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 0.9rem;
 }
+/* No longer a single <a> wrapping the whole card — it now hosts real
+   interactive controls (photo carousel, post-to-wiki), which can't nest
+   inside a link safely. Only .funnel-result-cta is a real link now. */
 .funnel-result {
   display: flex;
   flex-direction: column;
@@ -1031,19 +1034,26 @@ td {
   overflow: hidden;
   background: var(--panel);
   color: var(--text);
-  text-decoration: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .funnel-result:hover {
   border-color: var(--accent-text);
   box-shadow: var(--shadow);
-  text-decoration: none;
 }
 .funnel-result-photo {
   aspect-ratio: 4 / 3;
   overflow: hidden;
 }
-.funnel-result-photo img,
+.funnel-result-photo .carousel,
+.funnel-result-photo .carousel-stage {
+  height: 100%;
+}
+.funnel-result-photo .carousel-img {
+  height: 100%;
+}
+.funnel-result-photo .carousel-dots {
+  padding: 0.3rem 0;
+}
 .funnel-result-tile {
   width: 100%;
   height: 100%;
@@ -1060,31 +1070,36 @@ td {
   font-weight: 600;
   font-size: 0.95rem;
 }
-.funnel-result-families {
+/* Position-grouped color breakdown ("where each color is") — replaces the
+   old flat family-chip row per user feedback ("breakout the colors ... to
+   show where they are identified"). */
+.funnel-result-breakdown {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  flex-direction: column;
+  gap: 0.25rem;
 }
-.funnel-fam {
-  display: inline-flex;
+.funnel-result-position {
+  display: flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  padding: 0.1rem 0.45rem 0.1rem 0.3rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+.funnel-result-position-label {
+  flex: 0 0 auto;
   color: var(--muted);
 }
-.funnel-fam.matched {
-  border-color: var(--accent-text);
-  color: var(--accent-text);
-  font-weight: 600;
+.funnel-result-position-swatches {
+  display: flex;
+  gap: 0.25rem;
 }
-.funnel-fam-dot {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+.funnel-result-swatch {
+  display: inline-flex;
+  border-radius: 4px;
+}
+.funnel-result-swatch.matched {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 1px;
+  border-radius: 5px;
 }
 .funnel-result-missed {
   margin: 0;
@@ -1096,6 +1111,38 @@ td {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent-text);
+}
+.funnel-result-postwiki {
+  margin-top: 0.3rem;
+}
+.funnel-result-postwiki button {
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+.funnel-result-postwiki-label {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+.funnel-result-postwiki-label input {
+  display: none;
+}
+.funnel-result-postwiki-login {
+  margin-top: 0.3rem;
+  display: inline-block;
+  font-size: 0.78rem;
+}
+.funnel-result-postwiki-success {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.funnel-result-postwiki-error {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
 }
 .funnel-empty {
   margin: 0;
