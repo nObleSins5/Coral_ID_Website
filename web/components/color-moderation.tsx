@@ -174,6 +174,14 @@ function hexesFor(range: ColorRangeForModeration | null): string[] {
   return range.color_stops.map((s) => s.hex);
 }
 
+// Aligned 1:1 with hexesFor — how much of THIS range's own blend each stop
+// is (e.g. an 80/20 blue-to-purple growth-tip gradient). Sibling to the
+// range-level "% of the {position}" field below, at the stop grain.
+function percentsFor(range: ColorRangeForModeration | null): (number | null)[] {
+  if (!range || range.color_stops.length === 0) return [null];
+  return range.color_stops.map((s) => s.approx_percent);
+}
+
 function isValidHex(h: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(h);
 }
@@ -215,6 +223,9 @@ function ColorRangeRow({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [stops, setStops] = useState<string[]>(hexesFor(range));
+  // Aligned 1:1 with `stops` by index — how much of this range's own blend
+  // each stop is (e.g. 80% blue / 20% purple on a gradient growth tip).
+  const [stopPercents, setStopPercents] = useState<(number | null)[]>(percentsFor(range));
   const [pattern, setPattern] = useState(range?.color_pattern_code ?? "solid");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [label, setLabel] = useState(range?.label ?? "");
@@ -252,16 +263,27 @@ function ColorRangeRow({
   function setStop(i: number, hex: string) {
     setStops((prev) => prev.map((s, idx) => (idx === i ? hex : s)));
   }
+  function setStopPercent(i: number, value: number | null) {
+    setStopPercents((prev) => prev.map((p, idx) => (idx === i ? value : p)));
+  }
   function addStop(hex?: string) {
     setStops((prev) => [...prev, hex ?? "#FFFFFF"]);
+    setStopPercents((prev) => [...prev, null]);
   }
   function removeStop(i: number) {
     setStops((prev) => prev.filter((_, idx) => idx !== i));
+    setStopPercents((prev) => prev.filter((_, idx) => idx !== i));
   }
+
+  const stopTotal = stopPercents.reduce((sum: number | null, p) => (p == null ? sum : (sum ?? 0) + p), null as number | null);
 
   function handleSubmit(formData: FormData) {
     setError(null);
-    formData.set("hexes", stops.filter((s) => s.trim()).join(","));
+    const kept = stops
+      .map((hex, i) => ({ hex: hex.trim(), percent: stopPercents[i] }))
+      .filter((s) => s.hex);
+    formData.set("hexes", kept.map((s) => s.hex).join(","));
+    formData.set("stop_percents", kept.map((s) => s.percent ?? "").join(","));
     startTransition(async () => {
       const result = await upsertColorRange(formData);
       if (result?.error) setError(result.error);
@@ -349,6 +371,18 @@ function ColorRangeRow({
               placeholder="#F28C00"
               aria-label={`Hex for stop ${i + 1}`}
             />
+            {stops.length > 1 ? (
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="color-mod-stop-percent"
+                value={stopPercents[i] ?? ""}
+                onChange={(e) => setStopPercent(i, e.target.value === "" ? null : Number(e.target.value))}
+                placeholder="%"
+                aria-label={`Percent of this blend for stop ${i + 1}`}
+              />
+            ) : null}
             {sampledHex ? (
               <button
                 type="button"
@@ -376,6 +410,13 @@ function ColorRangeRow({
             </button>
           ) : null}
         </div>
+        {stops.length > 1 ? (
+          <p className="muted color-mod-stop-percent-hint">
+            {stopTotal != null
+              ? `How much of this blend is each color — adds up to ${stopTotal}%.`
+              : "Optional: how much of this blend is each color (e.g. 80% electric blue, 20% purple on a gradient)."}
+          </p>
+        ) : null}
       </div>
       {validStops.length > 0 ? (
         <div className="color-mod-preview">

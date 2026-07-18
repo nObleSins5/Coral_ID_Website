@@ -147,7 +147,7 @@ export type ColorRangeForModeration = {
   notes: string | null;
   approx_percent: number | null;
   lighting_condition: string | null;
-  color_stops: { hex: string; ordinal: number }[];
+  color_stops: { hex: string; ordinal: number; approx_percent: number | null }[];
 };
 
 // Fetches a taxon's current color_ranges for the moderator editor — a read,
@@ -166,7 +166,7 @@ export async function getColorRangesForModeration(taxonId: string): Promise<{
     gate.supabase
       .from("color_ranges")
       .select(
-        "id, position_label, color_pattern_code, label, notes, approx_percent, lighting_condition, color_stops ( hex, ordinal )",
+        "id, position_label, color_pattern_code, label, notes, approx_percent, lighting_condition, color_stops ( hex, ordinal, approx_percent )",
       )
       .eq("taxon_node_id", taxonId)
       .order("sort_order"),
@@ -277,6 +277,7 @@ export async function upsertColorRange(formData: FormData): Promise<{ error?: st
   const lighting = String(formData.get("lighting_condition") ?? "").trim() || null;
   const percentRaw = String(formData.get("approx_percent") ?? "").trim();
   const hexesRaw = String(formData.get("hexes") ?? "");
+  const stopPercentsRaw = String(formData.get("stop_percents") ?? "");
 
   if (!taxonId) return { error: "Missing taxon." };
   if (!COLOR_PATTERN_CODES.has(patternCode)) return { error: "Choose a pattern." };
@@ -300,6 +301,26 @@ export async function upsertColorRange(formData: FormData): Promise<{ error?: st
   for (const h of hexes) {
     if (!HEX_RE.test(h)) {
       return { error: `"${h}" isn't a valid hex color — use the form #RRGGBB (e.g. #2E8B57).` };
+    }
+  }
+
+  // How much of THIS range's own blend each stop is (e.g. an 80/20
+  // blue-to-purple growth-tip gradient) — the sibling fact to the
+  // range-level % above, at the stop grain. Sent client-side as one entry
+  // per hex, same order, blank = not recorded. If the count doesn't line
+  // up with hexes (e.g. an older client), silently drop it rather than
+  // block the save — this is optional detail, never a hard requirement.
+  const stopPercentParts = stopPercentsRaw.split(",");
+  const stopPercents: (number | null)[] = new Array(hexes.length).fill(null);
+  if (stopPercentParts.length === hexes.length) {
+    for (let i = 0; i < stopPercentParts.length; i++) {
+      const raw = stopPercentParts[i].trim();
+      if (raw === "") continue;
+      const value = Number(raw);
+      if (Number.isNaN(value) || value < 0 || value > 100) {
+        return { error: `The percent for "${hexes[i]}" must be between 0 and 100.` };
+      }
+      stopPercents[i] = value;
     }
   }
 
@@ -336,6 +357,7 @@ export async function upsertColorRange(formData: FormData): Promise<{ error?: st
     color_range_id: rangeId,
     ordinal: i,
     hex: hex.toUpperCase(),
+    approx_percent: stopPercents[i],
   }));
   const { error: stopsError } = await supabase.from("color_stops").insert(stopRows);
   if (stopsError) return { error: stopsError.message };

@@ -398,6 +398,12 @@ CREATE TABLE color_stops (
     source_photo_id  uuid,
     sample_x         numeric CHECK (sample_x >= 0 AND sample_x <= 1),
     sample_y         numeric CHECK (sample_y >= 0 AND sample_y <= 1),
+    -- How much of THIS range's own blend is this one stop (e.g. a
+    -- blue-to-purple gradient growth tip: 80% blue stop, 20% purple stop) —
+    -- the sibling fact to color_ranges.approx_percent (how much of a whole
+    -- anatomy position a range covers), at the stop grain instead of the
+    -- range grain. Nullable; see 30_color_stop_percent.sql.
+    approx_percent   numeric CHECK (approx_percent IS NULL OR (approx_percent >= 0 AND approx_percent <= 100)),
     created_at       timestamptz NOT NULL DEFAULT now(),
     UNIQUE (color_range_id, ordinal)
 );

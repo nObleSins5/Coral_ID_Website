@@ -2386,6 +2386,14 @@ td {
 .color-mod-stop input:not([type]) {
   flex: 1 1 auto;
 }
+.color-mod-stop-percent {
+  width: 3.5rem;
+  flex: 0 0 auto;
+}
+.color-mod-stop-percent-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+}
 .color-mod-stop-add {
   display: flex;
   flex-wrap: wrap;
