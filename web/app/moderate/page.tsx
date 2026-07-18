@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUsernamesFor, getAllMorphsForSearch } from "@/lib/wiki";
+import { getUsernamesFor, getAllMorphsForSearch, getColorLabelSuggestions } from "@/lib/wiki";
 import {
   AliasModerationRow,
   ProductModerationRow,
@@ -115,9 +115,10 @@ export default async function ModerateQueue() {
     .select("code, label");
   const categoryLabelByCode = new Map((categories ?? []).map((c) => [c.code, c.label]));
 
-  const [morphs, { data: elementTypes }] = await Promise.all([
+  const [morphs, { data: elementTypes }, labelSuggestions] = await Promise.all([
     getAllMorphsForSearch(),
     supabase.from("element_types").select("code, label").order("code"),
+    getColorLabelSuggestions(),
   ]);
 
   const usernames = await getUsernamesFor(
@@ -137,7 +138,7 @@ export default async function ModerateQueue() {
       </p>
 
       <h2>Coral colors</h2>
-      <ColorModeration morphs={morphs} elementTypes={elementTypes ?? []} />
+      <ColorModeration morphs={morphs} elementTypes={elementTypes ?? []} labelSuggestions={labelSuggestions} />
 
       <h2>Coral aliases</h2>
       {aliasRows.length === 0 ? (

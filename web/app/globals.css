@@ -2389,6 +2389,10 @@ td {
   margin: 0.25rem 0 0;
   font-size: 0.78rem;
 }
+.color-mod-label-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+}
 .color-mod-preview {
   display: flex;
   align-items: center;

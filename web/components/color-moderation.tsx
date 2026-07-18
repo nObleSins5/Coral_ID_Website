@@ -143,6 +143,7 @@ function ColorRangeRow({
   range,
   elementTypes,
   suggestedPosition,
+  labelSuggestions,
   onSaved,
   onDeleted,
 }: {
@@ -150,6 +151,7 @@ function ColorRangeRow({
   range: ColorRangeForModeration | null;
   elementTypes: ElementType[];
   suggestedPosition?: string;
+  labelSuggestions: Record<string, string>;
   onSaved: () => void;
   onDeleted: () => void;
 }) {
@@ -158,12 +160,33 @@ function ColorRangeRow({
   const [stops, setStops] = useState<string[]>(hexesFor(range));
   const [pattern, setPattern] = useState(range?.color_pattern_code ?? "solid");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [label, setLabel] = useState(range?.label ?? "");
+  // Once a range already has a saved label, or the moderator types their
+  // own, stop auto-filling — this is a consistency AID, not a lock (the
+  // field always stays free-text/editable, per explicit request).
+  const [labelTouched, setLabelTouched] = useState(!!range?.label);
+
+  // Exact, ordered hex signature — matches how getColorLabelSuggestions
+  // (lib/wiki.ts) builds its lookup, so "the same hex stops" reliably
+  // resolves to whatever label was most commonly used for them elsewhere
+  // in the registry (e.g. #77BB41 always suggesting "Neon green" instead
+  // of drifting to "Bright green" / "Green" across different sessions).
+  // Derived at render time (not synced via an effect + setState) — the
+  // suggestion is only ever a fallback DISPLAY value until the moderator
+  // actually types, so there's nothing to keep in sync.
+  const signature = stops
+    .filter(isValidHex)
+    .map((h) => h.toUpperCase())
+    .join(",");
+  const suggestion = labelSuggestions[signature];
+  const displayLabel = labelTouched ? label : (suggestion ?? label);
+  const hasSuggestion = !labelTouched && Boolean(suggestion);
 
   const validStops = stops.filter(isValidHex);
   const previewRange: SwatchColorRange = {
     position_label: range?.position_label ?? null,
     color_pattern_code: pattern,
-    label: range?.label ?? null,
+    label: displayLabel || null,
     approx_percent: null,
     color_stops: validStops.map((hex, ordinal) => ({ hex, ordinal })),
   };
@@ -236,7 +259,20 @@ function ColorRangeRow({
         </div>
         <div>
           <label>Label</label>
-          <input name="label" defaultValue={range?.label ?? ""} placeholder="e.g. Orange face" />
+          <input
+            name="label"
+            value={displayLabel}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setLabelTouched(true);
+            }}
+            placeholder="e.g. Orange face"
+          />
+          {hasSuggestion ? (
+            <p className="muted color-mod-label-hint">
+              Auto-filled — this hex has been labeled this way before. Edit freely.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -357,6 +393,7 @@ function GroupedRanges({
   ranges,
   anatomyTemplateCode,
   elementTypes,
+  labelSuggestions,
   onSaved,
   onDeleted,
 }: {
@@ -364,6 +401,7 @@ function GroupedRanges({
   ranges: ColorRangeForModeration[];
   anatomyTemplateCode: string | null;
   elementTypes: ElementType[];
+  labelSuggestions: Record<string, string>;
   onSaved: () => void;
   onDeleted: () => void;
 }) {
@@ -372,9 +410,24 @@ function GroupedRanges({
     return (
       <>
         {ranges.map((r) => (
-          <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+          <ColorRangeRow
+            key={r.id}
+            taxonId={taxonId}
+            range={r}
+            elementTypes={elementTypes}
+            labelSuggestions={labelSuggestions}
+            onSaved={onSaved}
+            onDeleted={onDeleted}
+          />
         ))}
-        <ColorRangeRow taxonId={taxonId} range={null} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+        <ColorRangeRow
+          taxonId={taxonId}
+          range={null}
+          elementTypes={elementTypes}
+          labelSuggestions={labelSuggestions}
+          onSaved={onSaved}
+          onDeleted={onDeleted}
+        />
       </>
     );
   }
@@ -395,6 +448,12 @@ function GroupedRanges({
         const stepRanges = step.positions.flatMap((p) => byPosition.get(p) ?? []);
         const total = stepRanges.reduce((sum, r) => sum + (r.approx_percent ?? 0), 0);
         const hasAnyPercent = stepRanges.some((r) => r.approx_percent != null);
+        // Only this step's own positions — e.g. a mushroom's "Skirt" step
+        // offers skirt_1/2/3, never "Bubble on skirt" (that's a different
+        // step) or anything from a different anatomy entirely. Reported
+        // live: Acropora's dropdown was offering "Bubble on skirt", which
+        // doesn't apply to SPS at all.
+        const stepElementTypes = elementTypes.filter((e) => step.positions.includes(e.code));
         return (
           <div className="color-mod-group" key={step.key}>
             <div className="color-mod-group-head">
@@ -406,13 +465,22 @@ function GroupedRanges({
               ) : null}
             </div>
             {stepRanges.map((r) => (
-              <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+              <ColorRangeRow
+                key={r.id}
+                taxonId={taxonId}
+                range={r}
+                elementTypes={stepElementTypes}
+                labelSuggestions={labelSuggestions}
+                onSaved={onSaved}
+                onDeleted={onDeleted}
+              />
             ))}
             <ColorRangeRow
               taxonId={taxonId}
               range={null}
-              elementTypes={elementTypes}
+              elementTypes={stepElementTypes}
               suggestedPosition={step.positions[0]}
+              labelSuggestions={labelSuggestions}
               onSaved={onSaved}
               onDeleted={onDeleted}
             />
@@ -425,7 +493,15 @@ function GroupedRanges({
             Other
           </h4>
           {other.map((r) => (
-            <ColorRangeRow key={r.id} taxonId={taxonId} range={r} elementTypes={elementTypes} onSaved={onSaved} onDeleted={onDeleted} />
+            <ColorRangeRow
+              key={r.id}
+              taxonId={taxonId}
+              range={r}
+              elementTypes={elementTypes}
+              labelSuggestions={labelSuggestions}
+              onSaved={onSaved}
+              onDeleted={onDeleted}
+            />
           ))}
         </div>
       ) : null}
@@ -440,9 +516,11 @@ function GroupedRanges({
 export function ColorModeration({
   morphs,
   elementTypes,
+  labelSuggestions,
 }: {
   morphs: SearchableMorph[];
   elementTypes: ElementType[];
+  labelSuggestions: Record<string, string>;
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SearchableMorph | null>(null);
@@ -536,6 +614,7 @@ export function ColorModeration({
               ranges={ranges}
               anatomyTemplateCode={anatomyTemplateCode}
               elementTypes={elementTypes}
+              labelSuggestions={labelSuggestions}
               onSaved={refresh}
               onDeleted={refresh}
             />

@@ -841,6 +841,50 @@ export async function getAllMorphsForSearch(): Promise<SearchableMorph[]> {
   });
 }
 
+// Maps an exact, ordered hex-stop signature (e.g. "#77BB41,#E23B3B") to
+// whatever label has most often been used for that same signature
+// elsewhere in the registry — the moderator color-entry form's "consistent
+// naming" aid (a moderator who called #77BB41 "Neon green" once shouldn't
+// later call the same hex "Bright green" for a different taxon). Computed
+// from every existing color_range/color_stops row, not scoped to one
+// moderator — consistency across the whole registry is the point. Ties
+// resolve to whichever label was seen most often (mode); genuinely new
+// hex combinations simply have no entry, and the moderator UI leaves the
+// field free-text either way.
+export async function getColorLabelSuggestions(): Promise<Record<string, string>> {
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("color_ranges")
+    .select("label, color_stops ( hex, ordinal )");
+
+  const tally = new Map<string, Map<string, number>>();
+  for (const r of (data ?? []) as { label: string | null; color_stops: { hex: string; ordinal: number }[] }[]) {
+    if (!r.label) continue;
+    const signature = [...r.color_stops]
+      .sort((a, b) => a.ordinal - b.ordinal)
+      .map((s) => s.hex.toUpperCase())
+      .join(",");
+    if (!signature) continue;
+    const labelCounts = tally.get(signature) ?? new Map<string, number>();
+    labelCounts.set(r.label, (labelCounts.get(r.label) ?? 0) + 1);
+    tally.set(signature, labelCounts);
+  }
+
+  const result: Record<string, string> = {};
+  for (const [signature, labelCounts] of tally) {
+    let bestLabel: string | null = null;
+    let bestCount = 0;
+    for (const [label, count] of labelCounts) {
+      if (count > bestCount) {
+        bestLabel = label;
+        bestCount = count;
+      }
+    }
+    if (bestLabel) result[signature] = bestLabel;
+  }
+  return result;
+}
+
 export type UnidentifiedPhoto = {
   id: string;
   url: string;
