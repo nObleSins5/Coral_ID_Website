@@ -1,6 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAllMorphsForSearch, getGenera, getPhotosForTaxon } from "@/lib/wiki";
+import {
+  getAllMorphsForSearch,
+  getGenera,
+  getGenusOptionsForIdentify,
+  getPhotosForTaxon,
+} from "@/lib/wiki";
 import { EditSpecimenForm } from "@/components/edit-specimen-form";
 import { PlaceSpecimenControl } from "@/components/place-specimen-control";
 import { RemoveFromTankButton } from "@/components/remove-from-tank-button";
@@ -65,7 +70,11 @@ export default async function SpecimenPage({
         .maybeSingle()
     : { data: null };
 
-  const [morphs, genera] = await Promise.all([getAllMorphsForSearch(), getGenera()]);
+  const [morphs, genera, genusOptions] = await Promise.all([
+    getAllMorphsForSearch(),
+    getGenera(),
+    getGenusOptionsForIdentify(),
+  ]);
 
   let currentSlotLabel: string | null = null;
   let emptySlots: { id: string; label: string }[] = [];
@@ -129,6 +138,7 @@ export default async function SpecimenPage({
                 photoUrl={representativePhoto.url}
                 morphs={morphs}
                 genera={genera}
+                genusOptions={genusOptions}
               />
             </p>
           ) : null}

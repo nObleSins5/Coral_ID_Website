@@ -10,6 +10,7 @@ import {
 } from "@/app/identify/actions";
 import { ProposeIdentificationForm } from "@/components/propose-identification-form";
 import type {
+  GenusOption,
   PendingSuggestion,
   SearchableMorph,
   UnidentifiedQueueItem,
@@ -146,6 +147,7 @@ function PhotoCard({
   myVotes,
   morphs,
   genera,
+  genusOptions,
   proposingFor,
   setProposingFor,
 }: {
@@ -154,6 +156,7 @@ function PhotoCard({
   myVotes: Map<string, 1 | -1>;
   morphs: SearchableMorph[];
   genera: Genus[];
+  genusOptions: GenusOption[];
   proposingFor: string | null;
   setProposingFor: (id: string | null) => void;
 }) {
@@ -192,6 +195,9 @@ function PhotoCard({
                   {!s.proposed_taxon_name && s.proposed_genus_name ? (
                     <span className="muted"> ({s.proposed_genus_name})</span>
                   ) : null}
+                  {s.proposed_taxon_is_genus ? (
+                    <span className="muted"> — help narrow to a morph</span>
+                  ) : null}
                 </span>
                 <span className="muted suggestion-by">by {s.suggested_by_username}</span>
                 <VoteButtons
@@ -210,6 +216,7 @@ function PhotoCard({
             photoUrl={item.photo.url}
             morphs={morphs}
             genera={genera}
+            genusOptions={genusOptions}
             onDone={() => setProposingFor(null)}
           />
         ) : (
@@ -246,10 +253,19 @@ export function IdentifyQueue({
   initialQueue,
   morphs,
   genera,
+  genusOptions,
+  hideUpload,
+  emptyMessage,
 }: {
   initialQueue: UnidentifiedQueueItem[];
   morphs: SearchableMorph[];
   genera: Genus[];
+  genusOptions: GenusOption[];
+  // Reused on a genus's own wiki page to show/refine photos already
+  // confirmed to that genus — those photos already exist, so the generic
+  // "upload a new unidentified photo" entry point doesn't apply there.
+  hideUpload?: boolean;
+  emptyMessage?: string;
 }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [tanks, setTanks] = useState<Tank[]>([]);
@@ -297,14 +313,16 @@ export function IdentifyQueue({
 
   return (
     <div>
-      <div className="card">{!loading && (userId ? <UploadForm tanks={tanks} /> : (
-        <p className="muted">
-          <a href="/login">Log in</a> to upload a photo for identification.
-        </p>
-      ))}</div>
+      {!hideUpload && (
+        <div className="card">{!loading && (userId ? <UploadForm tanks={tanks} /> : (
+          <p className="muted">
+            <a href="/login">Log in</a> to upload a photo for identification.
+          </p>
+        ))}</div>
+      )}
 
       {initialQueue.length === 0 ? (
-        <p className="muted">No unidentified photos right now — check back soon.</p>
+        <p className="muted">{emptyMessage ?? "No unidentified photos right now — check back soon."}</p>
       ) : (
         <div className="identify-list">
           {initialQueue.map((item) => (
@@ -315,6 +333,7 @@ export function IdentifyQueue({
               myVotes={myVotes}
               morphs={morphs}
               genera={genera}
+              genusOptions={genusOptions}
               proposingFor={proposingFor}
               setProposingFor={setProposingFor}
             />

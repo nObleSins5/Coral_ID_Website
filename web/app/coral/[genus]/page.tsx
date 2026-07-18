@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 import {
   getAllGenusSlugs,
+  getAllMorphsForSearch,
+  getGenera,
   getGenusBySlug,
+  getGenusOnlyQueue,
+  getGenusOptionsForIdentify,
   getHeroPhotoUrlsForTaxa,
   getMorphsForGenus,
 } from "@/lib/wiki";
@@ -12,6 +16,7 @@ import {
   ColorTile,
   keyColors,
 } from "@/components/coral-ui";
+import { IdentifyQueue } from "@/components/identify-queue";
 
 export async function generateStaticParams() {
   const slugs = await getAllGenusSlugs();
@@ -41,8 +46,17 @@ export default async function GenusPage({
   const genus = await getGenusBySlug(genusSlug);
   if (!genus) notFound();
 
-  const morphs = await getMorphsForGenus(genus.id);
+  const [morphs, genusOnlyQueue, allMorphs, allGenera, genusOptions] = await Promise.all([
+    getMorphsForGenus(genus.id),
+    getGenusOnlyQueue(genus.id),
+    getAllMorphsForSearch(),
+    getGenera(),
+    getGenusOptionsForIdentify(),
+  ]);
   const heroUrls = await getHeroPhotoUrlsForTaxa(morphs.map((m) => m.id));
+  // Scope the "search existing corals" list to this genus's own morphs —
+  // more relevant here than the full 100+-coral list /identify searches.
+  const genusMorphs = allMorphs.filter((m) => m.genusSlug === genus.slug);
 
   return (
     <div>
@@ -97,6 +111,21 @@ export default async function GenusPage({
           })}
         </div>
       )}
+
+      <h2>Photographed as {genus.name} — morph not yet pinned down</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Confirmed to the genus but not an exact morph yet. Recognize one?
+        Propose the specific morph below and vote on others&apos; suggestions —
+        a confirmed match moves the photo to its own morph page automatically.
+      </p>
+      <IdentifyQueue
+        initialQueue={genusOnlyQueue}
+        morphs={genusMorphs}
+        genera={allGenera}
+        genusOptions={genusOptions}
+        hideUpload
+        emptyMessage={`No photos are sitting at the ${genus.name} level right now.`}
+      />
     </div>
   );
 }

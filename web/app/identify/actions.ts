@@ -204,8 +204,9 @@ export async function removePhoto(
 // Reference color key for a candidate coral matched while proposing an ID —
 // lets the user compare their photo's colors against the real documented
 // key before committing to a suggestion. Keyed off a trusted taxon id from
-// the search list (SearchableMorph), so no genus-slug verification is
-// needed here (unlike getMorphWithGenus, which serves a public URL).
+// the search list (SearchableMorph) or a genus picked directly ("I only know
+// the genus" mode), so no genus-slug verification is needed here (unlike
+// getMorphWithGenus, which serves a public URL).
 export async function getColorKeyForTaxon(
   taxonId: string,
 ): Promise<{ colorRanges: ColorRange[]; suggestedPositions: string[] }> {
@@ -213,7 +214,7 @@ export async function getColorKeyForTaxon(
   const [{ data: taxon }, { data: colorRanges }] = await Promise.all([
     supabase
       .from("taxon_nodes")
-      .select("parent_id")
+      .select("rank_code, parent_id, anatomy_template_code")
       .eq("id", taxonId)
       .maybeSingle(),
     supabase
@@ -222,15 +223,20 @@ export async function getColorKeyForTaxon(
       .eq("taxon_node_id", taxonId),
   ]);
 
-  let suggestedPositions: string[] = [];
-  if (taxon?.parent_id) {
+  // A morph's anatomy template comes from its parent genus; a genus targeted
+  // directly already carries its own template_code, no parent lookup needed.
+  let templateCode: string | null = null;
+  if (taxon?.rank_code === "genus") {
+    templateCode = taxon.anatomy_template_code ?? null;
+  } else if (taxon?.parent_id) {
     const { data: genus } = await supabase
       .from("taxon_nodes")
       .select("anatomy_template_code")
       .eq("id", taxon.parent_id)
       .maybeSingle();
-    suggestedPositions = await getAnatomyTemplateElements(genus?.anatomy_template_code ?? null);
+    templateCode = genus?.anatomy_template_code ?? null;
   }
+  const suggestedPositions = await getAnatomyTemplateElements(templateCode);
 
   return { colorRanges: (colorRanges as unknown as ColorRange[]) ?? [], suggestedPositions };
 }

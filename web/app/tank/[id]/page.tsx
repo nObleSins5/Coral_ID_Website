@@ -5,6 +5,7 @@ import { PlaceSpecimenControl } from "@/components/place-specimen-control";
 import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridView } from "@/components/tank-grid-view";
+import { TankPublishToggle } from "@/components/tank-publish-toggle";
 import { TankStatusBlock } from "@/components/tank-status-block";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { columnLabel } from "@/lib/grid";
@@ -19,6 +20,7 @@ type Tank = {
   tier_count: number;
   grid_columns: number | null;
   grid_rows: number | null;
+  is_public: boolean;
 };
 type GridSlot = { id: string; x: number; y: number; z: number; label: string };
 type Specimen = {
@@ -44,12 +46,19 @@ export default async function TankPage({
 
   const { data: tank } = await supabase
     .from("tanks")
-    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows")
+    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!tank) notFound();
   const tankRow = tank as Tank;
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("account_type_code")
+    .eq("id", user.id)
+    .maybeSingle();
+  const isBusiness = profile?.account_type_code === "business";
 
   const { data: slots } = await supabase
     .from("grid_slots")
@@ -174,6 +183,10 @@ export default async function TankPage({
         {" · "}
         <a href={`/tank/${tankRow.id}/husbandry`}>Equipment &amp; dosing</a>
       </p>
+
+      {hasGrid && isBusiness ? (
+        <TankPublishToggle tankId={tankRow.id} isPublic={tankRow.is_public} />
+      ) : null}
 
       {hasGrid ? (
         onboardingDone ? (

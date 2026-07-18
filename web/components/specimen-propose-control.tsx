@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ProposeIdentificationForm } from "@/components/propose-identification-form";
-import type { SearchableMorph } from "@/lib/wiki";
+import type { GenusOption, SearchableMorph } from "@/lib/wiki";
 
 type Genus = { id: string; name: string };
 
@@ -14,11 +14,13 @@ export function SpecimenProposeControl({
   photoUrl,
   morphs,
   genera,
+  genusOptions,
 }: {
   photoId: string;
   photoUrl: string;
   morphs: SearchableMorph[];
   genera: Genus[];
+  genusOptions: GenusOption[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -36,6 +38,7 @@ export function SpecimenProposeControl({
       photoUrl={photoUrl}
       morphs={morphs}
       genera={genera}
+      genusOptions={genusOptions}
       onDone={() => setOpen(false)}
     />
   );

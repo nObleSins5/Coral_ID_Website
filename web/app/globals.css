@@ -1294,7 +1294,7 @@ td {
 }
 .tank-grid-cell {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.4rem;
   min-height: 3.5rem;
   font-size: 0.75rem;
@@ -1302,13 +1302,15 @@ td {
   flex-direction: column;
   justify-content: space-between;
   gap: 0.2rem;
+  box-shadow: var(--shadow);
 }
 .tank-grid-cell.empty {
   color: var(--muted);
   background: var(--bg);
+  box-shadow: none;
 }
 .tank-grid-cell.occupied {
-  background: var(--card-bg, var(--bg));
+  background: var(--panel);
   border-color: var(--accent);
 }
 .tank-grid-cell .slot-label {

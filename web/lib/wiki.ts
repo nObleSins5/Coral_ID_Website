@@ -631,6 +631,7 @@ export type PendingSuggestion = {
   coral_photo_id: string;
   proposed_taxon_id: string | null;
   proposed_taxon_name: string | null; // resolved "Name (Genus)" label, if targeting an existing taxon
+  proposed_taxon_is_genus: boolean; // true when proposed_taxon_id targets a genus directly (not a morph)
   proposed_name: string | null; // an alias claim (alongside proposed_taxon_id) or a brand-new morph name
   proposed_genus_name: string | null; // resolved genus name for a brand-new-morph proposal (e.g. "Genus unknown")
   suggested_by_user_id: string;
@@ -644,20 +645,18 @@ export type UnidentifiedQueueItem = {
   suggestions: PendingSuggestion[];
 };
 
-// Photos with no taxon yet, each with its still-open (pending) suggestions —
-// one card per photo, matching the agreed queue design. Resolved
-// (confirmed/rejected/superseded) suggestions are never shown here.
-export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
-  const supabase = createPublicClient();
-
-  const { data: photos } = await supabase
-    .from("coral_photos")
-    .select("id, url, uploader_user_id, taken_at, created_at")
-    .is("taxon_node_id", null)
-    .eq("is_public", true)
-    .order("created_at", { ascending: false });
-
-  const photoList = (photos as UnidentifiedPhoto[]) ?? [];
+// Shared by getUnidentifiedQueue (taxon_node_id IS NULL) and
+// getGenusOnlyQueue (taxon_node_id = a specific genus) — both render the same
+// photo + pending-suggestions card, just scoped to a different starting set
+// of photos. Resolved (confirmed/rejected/superseded) suggestions are never
+// included; proposed_taxon_id may point at a MORPH (the common case) or,
+// since a suggestion can target a genus directly ("I only know the genus" —
+// see ProposeIdentificationForm), at a GENUS itself, which needs its own
+// label rule instead of the "Name (Genus)" morph format.
+async function buildQueueItems(
+  supabase: ReturnType<typeof createPublicClient>,
+  photoList: UnidentifiedPhoto[],
+): Promise<UnidentifiedQueueItem[]> {
   if (photoList.length === 0) return [];
 
   const photoIds = photoList.map((p) => p.id);
@@ -672,7 +671,9 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
 
   const suggestionList = suggestions ?? [];
 
-  // Resolve proposed_taxon_id -> "Name (Genus)" display labels, batched.
+  // Resolve proposed_taxon_id -> a display label, batched. A morph gets
+  // "Name (Genus)"; a genus targeted directly gets "Name (genus only)" since
+  // it has no morph-shaped parent to look up.
   const taxonIds = [
     ...new Set(
       suggestionList
@@ -681,14 +682,18 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
     ),
   ];
   const taxonLabels = new Map<string, string>();
+  const taxonIsGenus = new Map<string, boolean>();
   if (taxonIds.length > 0) {
     const { data: taxa } = await supabase
       .from("taxon_nodes")
-      .select("id, name, parent_id")
+      .select("id, name, parent_id, rank_code")
       .in("id", taxonIds);
     const genusIds = [
       ...new Set(
-        (taxa ?? []).map((t) => t.parent_id).filter((x): x is string => !!x),
+        (taxa ?? [])
+          .filter((t) => t.rank_code !== "genus")
+          .map((t) => t.parent_id)
+          .filter((x): x is string => !!x),
       ),
     ];
     const { data: genera } =
@@ -697,8 +702,14 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
         : { data: [] as { id: string; name: string }[] };
     const genusNameById = new Map((genera ?? []).map((g) => [g.id, g.name]));
     for (const t of taxa ?? []) {
-      const genusName = t.parent_id ? genusNameById.get(t.parent_id) : undefined;
-      taxonLabels.set(t.id, genusName ? `${t.name} (${genusName})` : t.name);
+      const isGenus = t.rank_code === "genus";
+      taxonIsGenus.set(t.id, isGenus);
+      if (isGenus) {
+        taxonLabels.set(t.id, `${t.name} (genus only)`);
+      } else {
+        const genusName = t.parent_id ? genusNameById.get(t.parent_id) : undefined;
+        taxonLabels.set(t.id, genusName ? `${t.name} (${genusName})` : t.name);
+      }
     }
   }
 
@@ -735,6 +746,9 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
       proposed_taxon_name: s.proposed_taxon_id
         ? (taxonLabels.get(s.proposed_taxon_id) ?? null)
         : null,
+      proposed_taxon_is_genus: s.proposed_taxon_id
+        ? (taxonIsGenus.get(s.proposed_taxon_id) ?? false)
+        : false,
       proposed_name: s.proposed_name,
       proposed_genus_name:
         !s.proposed_taxon_id && s.proposed_genus_id
@@ -755,4 +769,75 @@ export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
     photo,
     suggestions: byPhoto.get(photo.id) ?? [],
   }));
+}
+
+// Photos with no taxon yet, each with its still-open (pending) suggestions —
+// one card per photo, matching the agreed queue design.
+export async function getUnidentifiedQueue(): Promise<UnidentifiedQueueItem[]> {
+  const supabase = createPublicClient();
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, uploader_user_id, taken_at, created_at")
+    .is("taxon_node_id", null)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+  return buildQueueItems(supabase, (photos as UnidentifiedPhoto[]) ?? []);
+}
+
+// Photos already confirmed to THIS genus but not yet pinned to an exact
+// morph — "I only know the genus" proposals land here (see
+// ProposeIdentificationForm's genus-only mode). Kept open for further
+// proposals/votes exactly like the unidentified queue, rather than treating
+// genus-level confirmation as a dead end: a morph-targeting suggestion that
+// later gets confirmed moves the photo's taxon_node_id off this genus and
+// onto the real morph (handle_id_vote_change — no extra wiring needed here).
+export async function getGenusOnlyQueue(genusId: string): Promise<UnidentifiedQueueItem[]> {
+  const supabase = createPublicClient();
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, uploader_user_id, taken_at, created_at")
+    .eq("taxon_node_id", genusId)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+  return buildQueueItems(supabase, (photos as UnidentifiedPhoto[]) ?? []);
+}
+
+export type GenusOption = { id: string; name: string; slug: string; isUnknownBucket: boolean };
+
+// Genus choices for "I only know the genus" / "no idea at all" proposals —
+// every visible genus, PLUS the hidden "Genus unknown" placeholder
+// (sql/supabase/15_unknown_genus_placeholder.sql), which getGenera()
+// deliberately excludes from the public wiki grid but which this specific
+// context needs to offer as "not sure at all."
+export async function getGenusOptionsForIdentify(): Promise<GenusOption[]> {
+  const supabase = createPublicClient();
+  const [visible, unknown] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "genus")
+      .eq("is_visible", true)
+      .order("name"),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "genus")
+      .eq("slug", "genus-unknown")
+      .maybeSingle(),
+  ]);
+  const options: GenusOption[] = (visible.data ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    slug: g.slug,
+    isUnknownBucket: false,
+  }));
+  if (unknown.data) {
+    options.push({
+      id: unknown.data.id,
+      name: "Not sure at all — genus unknown",
+      slug: unknown.data.slug,
+      isUnknownBucket: true,
+    });
+  }
+  return options;
 }

@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 
-// Simple B&W tank cross-section with a rockwork silhouette, used purely to
-// orient the user: tier 1 is the bottom of the tank, the highest tier number
-// is closest to the surface/light. A future design pass will replace this
-// placeholder with real art (see PROGRESS.md).
+// A quiet, instrument-style tank cross-section — orients the user (tier 1 is
+// the bottom/substrate, the highest tier number is closest to the surface/
+// light) without dressing itself up as chrome. Registry design system rules
+// apply here same as anywhere else: flat fills only (no gradients/glass),
+// exactly one accent color used for exactly one thing — marking the
+// currently-selected tier — and the rockwork stays a quiet, secondary
+// silhouette so it never competes with real coral photography elsewhere on
+// the page. A future pass may replace the rockwork with a real per-tank
+// layout (see PROGRESS.md); this is the flat-diagram version of that idea.
 function TankMockup({ tierCount, selected }: { tierCount: number; selected: number }) {
-  const tankTop = 8;
+  const tankTop = 14;
   const tankBottom = 148;
   const tankHeight = tankBottom - tankTop;
   const bandHeight = tankHeight / tierCount;
@@ -20,39 +25,67 @@ function TankMockup({ tierCount, selected }: { tierCount: number; selected: numb
 
   return (
     <svg viewBox="0 0 90 170" width="70" aria-hidden="true">
+      {/* Waterline — a quiet cue that tankTop is the surface, not just the
+          top of the glass. */}
+      <line x1={6} y1={tankTop} x2={84} y2={tankTop} stroke="var(--accent-text)" strokeWidth={1} opacity={0.5} />
+      <path
+        d="M6,10 q4,-3 8,0 t8,0 t8,0 t8,0 t8,0 t8,0 t8,0 t8,0"
+        fill="none"
+        stroke="var(--accent-text)"
+        strokeWidth={1}
+        opacity={0.35}
+      />
+
       <rect
-        x={8}
+        x={6}
         y={tankTop}
-        width={74}
+        width={78}
         height={tankHeight}
+        rx={2}
         fill="none"
         stroke="var(--text)"
-        strokeWidth={2}
+        strokeWidth={1.5}
       />
-      {/* Rockwork silhouette, anchored to the substrate. */}
+
+      {/* Rockwork silhouette, layered from a single flat tone at two
+          opacities for depth without a gradient. Anchored to the substrate,
+          it reads as reference geometry, not decoration. */}
       <polygon
-        points="8,148 20,120 30,135 42,110 55,132 66,118 82,148"
+        points="6,148 16,128 24,138 30,118 38,134 6,148"
         fill="var(--muted)"
-        opacity={0.6}
+        opacity={0.35}
       />
+      <polygon
+        points="30,148 42,116 52,132 62,108 72,130 84,120 84,148"
+        fill="var(--muted)"
+        opacity={0.55}
+      />
+
       {dividers.map((y) => (
         <line
           key={y}
-          x1={8}
+          x1={6}
           y1={y}
-          x2={82}
+          x2={84}
           y2={y}
           stroke="var(--border)"
-          strokeDasharray="3 3"
+          strokeDasharray="2 3"
         />
       ))}
+
+      {/* Selected tier: an accent BORDER around the band, matching the same
+          "Shallow Reef Blue border marks the occupied/selected thing" rule
+          the tank-grid cells themselves use — not a color wash, so this
+          stays legible over the rockwork behind it. */}
       <rect
-        x={8}
+        x={6}
         y={bandTop}
-        width={74}
+        width={78}
         height={bandHeight}
         fill="var(--accent)"
-        opacity={0.35}
+        opacity={0.12}
+        stroke="var(--accent-text)"
+        strokeWidth={1.5}
       />
     </svg>
   );

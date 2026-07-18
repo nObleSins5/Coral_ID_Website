@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getColorKeyForTaxon, proposeIdentification } from "@/app/identify/actions";
-import type { SearchableMorph } from "@/lib/wiki";
+import type { GenusOption, SearchableMorph } from "@/lib/wiki";
 import { ElementColorKey, type ColorRange } from "@/components/coral-ui";
 import { PhotoColorSampler } from "@/components/photo-color-sampler";
 
 type Genus = { id: string; name: string };
+
+// A genus targeted directly ("I only know the genus" mode) rather than a
+// specific morph — same shape the color-key/link logic needs as a matched
+// SearchableMorph, but there's no morph slug to link to.
+type MatchedGenus = { id: string; name: string; slug: string };
 
 // Shared "propose an identification for this photo" form — used both by the
 // /identify queue (IdentifyQueue) and, for a private/local specimen, the
@@ -18,12 +23,14 @@ export function ProposeIdentificationForm({
   photoUrl,
   morphs,
   genera,
+  genusOptions,
   onDone,
 }: {
   photoId: string;
   photoUrl: string;
   morphs: SearchableMorph[];
   genera: Genus[];
+  genusOptions: GenusOption[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -31,6 +38,8 @@ export function ProposeIdentificationForm({
   const [matched, setMatched] = useState<SearchableMorph | null>(null);
   const [isAlias, setIsAlias] = useState(false);
   const [aliasName, setAliasName] = useState("");
+  const [genusOnlyMode, setGenusOnlyMode] = useState(false);
+  const [matchedGenus, setMatchedGenus] = useState<MatchedGenus | null>(null);
   const [newMorphMode, setNewMorphMode] = useState(false);
   const [newGenusId, setNewGenusId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -47,30 +56,40 @@ export function ProposeIdentificationForm({
   // cascading setState).
   function selectMatch(m: SearchableMorph | null) {
     setMatched(m);
+    setMatchedGenus(null);
     setColorKey(null);
     setShowSampler(false);
   }
 
-  // Fetch the matched coral's reference colors for comparison — purely
-  // visual, nothing here is submitted or stored.
+  function selectGenus(id: string) {
+    const g = genusOptions.find((g) => g.id === id) ?? null;
+    setMatched(null);
+    setMatchedGenus(g ? { id: g.id, name: g.name, slug: g.slug } : null);
+    setColorKey(null);
+    setShowSampler(false);
+  }
+
+  // Fetch the matched coral's (or genus's) reference colors for comparison —
+  // purely visual, nothing here is submitted or stored.
   useEffect(() => {
-    if (!matched) return;
+    const targetId = matched?.id ?? matchedGenus?.id;
+    if (!targetId) return;
     let cancelled = false;
-    getColorKeyForTaxon(matched.id).then((result) => {
+    getColorKeyForTaxon(targetId).then((result) => {
       if (!cancelled) setColorKey(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [matched]);
+  }, [matched, matchedGenus]);
 
   const results = useMemo(() => {
-    if (matched || newMorphMode || query.trim().length < 2) return [];
+    if (matched || newMorphMode || genusOnlyMode || query.trim().length < 2) return [];
     const q = query.toLowerCase();
     return morphs
       .filter((m) => m.name.toLowerCase().includes(q) || m.genusName.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [query, matched, newMorphMode, morphs]);
+  }, [query, matched, newMorphMode, genusOnlyMode, morphs]);
 
   function handleSubmit(formData: FormData) {
     setError(null);
@@ -78,6 +97,15 @@ export function ProposeIdentificationForm({
     if (matched) {
       formData.set("existing_taxon_id", matched.id);
       if (isAlias && aliasName.trim()) formData.set("alias_name", aliasName.trim());
+    } else if (genusOnlyMode) {
+      if (!matchedGenus) {
+        setError("Pick a genus above.");
+        return;
+      }
+      // Targets the genus's own taxon_node directly — no alias/new name, so
+      // this never invents a morph name. See getGenusOnlyQueue (lib/wiki.ts)
+      // for where a photo confirmed here shows up.
+      formData.set("existing_taxon_id", matchedGenus.id);
     } else if (newMorphMode) {
       formData.set("new_name", query.trim());
       formData.set("new_genus_id", newGenusId);
@@ -100,7 +128,7 @@ export function ProposeIdentificationForm({
 
   return (
     <form className="propose-form" action={handleSubmit}>
-      {!newMorphMode ? (
+      {!newMorphMode && !genusOnlyMode ? (
         <>
           <label>Search existing corals</label>
           <input
@@ -183,6 +211,19 @@ export function ProposeIdentificationForm({
           )}
 
           <p className="muted propose-switch">
+            Only sure of the genus?{" "}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setGenusOnlyMode(true);
+                selectMatch(null);
+              }}
+            >
+              I know the genus, not the exact morph
+            </button>
+          </p>
+          <p className="muted propose-switch">
             Can&apos;t find it?{" "}
             <button
               type="button"
@@ -193,6 +234,72 @@ export function ProposeIdentificationForm({
               }}
             >
               This might be an undocumented coral
+            </button>
+          </p>
+        </>
+      ) : genusOnlyMode ? (
+        <>
+          <label htmlFor="genus-only-select">Genus</label>
+          <select
+            id="genus-only-select"
+            value={matchedGenus?.id ?? ""}
+            onChange={(e) => selectGenus(e.target.value)}
+          >
+            <option value="">Choose a genus</option>
+            {genusOptions.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <p className="muted" style={{ fontSize: "0.85rem" }}>
+            No name needed — this just confirms the genus. The community can
+            still narrow it down to an exact morph later.
+          </p>
+
+          {matchedGenus && (
+            <div className="card" style={{ marginTop: "0.5rem" }}>
+              <p style={{ marginTop: 0, marginBottom: "0.4rem" }}>
+                <a href={`/coral/${matchedGenus.slug}`} target="_blank" rel="noopener">
+                  See {matchedGenus.name}&apos;s wiki page →
+                </a>
+              </p>
+              {colorKey ? (
+                colorKey.colorRanges.length > 0 ? (
+                  <ElementColorKey
+                    colorRanges={colorKey.colorRanges}
+                    suggestedPositions={
+                      colorKey.suggestedPositions.length > 0 ? colorKey.suggestedPositions : undefined
+                    }
+                  />
+                ) : (
+                  <p className="muted" style={{ fontSize: "0.85rem" }}>
+                    No genus-level colors documented yet.
+                  </p>
+                )
+              ) : (
+                <p className="muted" style={{ fontSize: "0.85rem" }}>Loading colors…</p>
+              )}
+              {!showSampler ? (
+                <button type="button" className="btn-secondary" onClick={() => setShowSampler(true)}>
+                  Compare colors from your photo
+                </button>
+              ) : (
+                <PhotoColorSampler photoUrl={photoUrl} />
+              )}
+            </div>
+          )}
+
+          <p className="muted propose-switch">
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setGenusOnlyMode(false);
+                selectGenus("");
+              }}
+            >
+              Actually, let me search existing corals
             </button>
           </p>
         </>

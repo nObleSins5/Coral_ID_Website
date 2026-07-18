@@ -100,6 +100,48 @@ export async function resetGrid(formData: FormData): Promise<{ error?: string }>
   return {};
 }
 
+// Publishes/unpublishes a read-only showcase of this tank's grid at
+// /showcase/[id] (sql/supabase/28_public_tank_showcase.sql) — business-tier
+// only, matching the existing account_type_code gate on affiliate_links
+// (12_business_listings.sql). Enforced here in the app layer rather than in
+// RLS: tanks' owner-ALL policy already lets an owner update any column on
+// their own row, and Postgres RLS has no column-level granularity to narrow
+// just this one flag further.
+export async function setTankPublic(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const makePublic = formData.get("is_public") === "true";
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  if (makePublic) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("account_type_code")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.account_type_code !== "business") {
+      return { error: "Publishing a tank showcase is a business-account feature." };
+    }
+  }
+
+  const { error } = await supabase
+    .from("tanks")
+    .update({ is_public: makePublic })
+    .eq("id", tankId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  revalidatePath(`/showcase/${tankId}`);
+  return {};
+}
+
 // --- Quick-add (tank grid page: search the wiki, add, place — no navigating
 // away). Three branches sharing the same shape (create a specimen, optionally
 // a photo, optionally straight into a grid slot) but differing in what the

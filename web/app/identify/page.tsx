@@ -3,6 +3,7 @@ import {
   getCoralsForColorMatch,
   getFunnelCategories,
   getGenera,
+  getGenusOptionsForIdentify,
   getUnidentifiedQueue,
 } from "@/lib/wiki";
 import { CoralIdentifyFunnel } from "@/components/coral-identify-funnel";
@@ -20,12 +21,13 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function IdentifyPage() {
-  const [corals, categories, queue, morphs, genera] = await Promise.all([
+  const [corals, categories, queue, morphs, genera, genusOptions] = await Promise.all([
     getCoralsForColorMatch(),
     getFunnelCategories(),
     getUnidentifiedQueue(),
     getAllMorphsForSearch(),
     getGenera(),
+    getGenusOptionsForIdentify(),
   ]);
 
   return (
@@ -46,7 +48,12 @@ export default async function IdentifyPage() {
           propose and vote on an identification. Confirmed IDs get their own wiki page
           automatically — and become matchable in the funnel above.
         </p>
-        <IdentifyQueue initialQueue={queue} morphs={morphs} genera={genera} />
+        <IdentifyQueue
+          initialQueue={queue}
+          morphs={morphs}
+          genera={genera}
+          genusOptions={genusOptions}
+        />
       </section>
     </div>
   );
