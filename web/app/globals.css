@@ -2173,6 +2173,7 @@ td {
 .color-picker .hex { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; font-weight: 600; }
 .cp-current { display: flex; gap: 0.75rem; align-items: flex-start; }
 .cp-swatch-lg { width: 60px; height: 60px; border-radius: 7px; border: 1px solid var(--border); flex: none; }
+.cp-use-hex { margin: 0.4rem 0 0; font-size: 0.8rem; }
 .cp-tag-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
 .cp-tag-row select { flex: 1; }
 .cp-tag-row button { margin: 0; }
@@ -2385,11 +2386,20 @@ td {
 .color-mod-stop input:not([type]) {
   flex: 1 1 auto;
 }
+.color-mod-stop-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
 .color-mod-pattern-hint {
   margin: 0.25rem 0 0;
   font-size: 0.78rem;
 }
 .color-mod-label-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+}
+.color-mod-percent-hint {
   margin: 0.25rem 0 0;
   font-size: 0.75rem;
 }
@@ -2404,6 +2414,43 @@ td {
   width: 4rem;
   height: 1.5rem;
   border-radius: 4px;
+}
+
+/* Moderator photo card — real photos + the hex loupe (photo-color-sampler,
+   reused from /identify) so a moderator can pinpoint a color directly from
+   a reference photo instead of guessing hex values. */
+.color-mod-photocard {
+  margin: 0 0 1rem;
+}
+.color-mod-photo-empty {
+  margin: 0 0 1rem;
+}
+.color-mod-photothumbs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.2rem;
+}
+.color-mod-photothumb {
+  flex: 0 0 auto;
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg);
+}
+.color-mod-photothumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.color-mod-photothumb.selected {
+  border-color: var(--accent-text);
 }
 
 /* Anatomy-grouped entry form — same STEP_GROUPS framework as the identify

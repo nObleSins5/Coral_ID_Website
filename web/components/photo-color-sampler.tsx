@@ -21,7 +21,18 @@ const REF_MATERIAL_LABEL: Record<string, string> = {
 // colors. Nothing here is submitted or stored (the wiki's crowdsourced
 // color-contribution pipeline was removed 2026-07-12; canonical colors now
 // come from research/moderator entry only).
-export function PhotoColorSampler({ photoUrl }: { photoUrl: string }) {
+//
+// Reused as-is on /moderate's color-entry form (onUseHex) — there, sampling
+// IS meant to feed a real field (a color_stop's hex), so a "Use this hex"
+// action is surfaced; /identify never passes onUseHex, so nothing changes
+// for that read-only comparison use.
+export function PhotoColorSampler({
+  photoUrl,
+  onUseHex,
+}: {
+  photoUrl: string;
+  onUseHex?: (hex: string) => void;
+}) {
   const photoRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const loupeRef = useRef<HTMLCanvasElement>(null);
@@ -245,6 +256,15 @@ export function PhotoColorSampler({ photoUrl }: { photoUrl: string }) {
                     <div className="muted" style={{ fontSize: "0.8rem" }}>
                       {gain ? `raw ${rgbToHex(current.rgb)} · white-balanced` : "uncorrected"}
                     </div>
+                    {onUseHex && currentUsedHex ? (
+                      <button
+                        type="button"
+                        className="btn-secondary cp-use-hex"
+                        onClick={() => onUseHex(currentUsedHex)}
+                      >
+                        Use this hex →
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : (

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getTopPhotosForTaxa } from "@/lib/wiki";
 
 const DECISIONS = new Set(["approved", "rejected"]);
 
@@ -152,13 +153,16 @@ export type ColorRangeForModeration = {
 // Fetches a taxon's current color_ranges for the moderator editor — a read,
 // not a mutation, but kept here (not lib/wiki.ts) since it's gated on
 // is_moderator, not public like everything in that file.
-export async function getColorRangesForModeration(
-  taxonId: string,
-): Promise<{ ranges?: ColorRangeForModeration[]; anatomyTemplateCode?: string | null; error?: string }> {
+export async function getColorRangesForModeration(taxonId: string): Promise<{
+  ranges?: ColorRangeForModeration[];
+  anatomyTemplateCode?: string | null;
+  photos?: string[];
+  error?: string;
+}> {
   const gate = await requireModerator();
   if ("error" in gate) return { error: gate.error };
 
-  const [{ data, error }, { data: taxon }] = await Promise.all([
+  const [{ data, error }, { data: taxon }, topPhotos] = await Promise.all([
     gate.supabase
       .from("color_ranges")
       .select(
@@ -167,6 +171,10 @@ export async function getColorRangesForModeration(
       .eq("taxon_node_id", taxonId)
       .order("sort_order"),
     gate.supabase.from("taxon_nodes").select("parent_id").eq("id", taxonId).maybeSingle(),
+    // Real community photos for the moderator's image card + hex loupe
+    // (see components/photo-color-sampler.tsx) — same most-voted-first
+    // ranking already used for the identify funnel's result carousels.
+    getTopPhotosForTaxa([taxonId], 10),
   ]);
   if (error) return { error: error.message };
 
@@ -184,7 +192,7 @@ export async function getColorRangesForModeration(
     ...r,
     color_stops: [...r.color_stops].sort((a, b) => a.ordinal - b.ordinal),
   })) as ColorRangeForModeration[];
-  return { ranges, anatomyTemplateCode };
+  return { ranges, anatomyTemplateCode, photos: topPhotos.get(taxonId) ?? [] };
 }
 
 export type ColorEntryModerationRow = {

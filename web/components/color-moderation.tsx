@@ -12,6 +12,7 @@ import {
 } from "@/app/moderate/actions";
 import { stepsForTemplate } from "@/lib/anatomy-steps";
 import { ColorSwatch, type ColorRange as SwatchColorRange } from "@/components/coral-ui";
+import { PhotoColorSampler } from "@/components/photo-color-sampler";
 
 const PATTERNS: { code: string; label: string; hint: string }[] = [
   { code: "solid", label: "Solid (single color)", hint: "One flat color, no blend." },
@@ -23,9 +24,13 @@ const PATTERNS: { code: string; label: string; hint: string }[] = [
   { code: "rainbow", label: "Rainbow / multicolor", hint: "Several hard-edged, distinct colors side by side — not a blend." },
   { code: "banded", label: "Banded", hint: "Regular repeating stripes." },
   { code: "spotted", label: "Spotted / speckled", hint: "Small distinct dots of a second color over a base." },
-  { code: "mottled", label: "Mottled", hint: "Larger, soft-edged blotches of a second color." },
+  { code: "mottled", label: "Mottled", hint: "Blotchy, irregular mix of colors — no clear direction to it." },
   { code: "tipped", label: "Tipped", hint: "A blend from base color into a distinct tip color." },
-  { code: "ringed", label: "Ringed", hint: "Concentric rings of alternating color from a center point." },
+  {
+    code: "ringed",
+    label: "Ringed / radiant",
+    hint: "Color radiates outward in rings from a center point — sometimes described as a \"radiant\" look.",
+  },
 ];
 
 const LIGHTING = [
@@ -123,6 +128,47 @@ function ColorEntryActivityList({ onSelectTaxonId }: { onSelectTaxonId: (id: str
   );
 }
 
+// The taxon's real community photos, browsable as a thumbnail strip, with
+// the hex-loupe sampler (components/photo-color-sampler.tsx, reused as-is
+// from /identify) pointed at whichever one is active — "look at the photos
+// while entering colors" plus a real pixel eyedropper to pin down a hex
+// instead of guessing. Sampling here feeds real fields (via onSampled),
+// unlike /identify's read-only comparison use of the same component.
+function ModeratorPhotoCard({
+  photos,
+  onSampled,
+}: {
+  photos: string[];
+  onSampled: (hex: string) => void;
+}) {
+  const [activeUrl, setActiveUrl] = useState(photos[0]);
+
+  if (photos.length === 0) {
+    return <p className="muted color-mod-photo-empty">No community photos yet for this coral.</p>;
+  }
+
+  return (
+    <div className="color-mod-photocard">
+      {photos.length > 1 ? (
+        <div className="color-mod-photothumbs">
+          {photos.map((url) => (
+            <button
+              type="button"
+              key={url}
+              className={`color-mod-photothumb${url === activeUrl ? " selected" : ""}`}
+              onClick={() => setActiveUrl(url)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" />
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <PhotoColorSampler photoUrl={activeUrl} onUseHex={onSampled} />
+    </div>
+  );
+}
+
 function hexesFor(range: ColorRangeForModeration | null): string[] {
   if (!range || range.color_stops.length === 0) return [""];
   return range.color_stops.map((s) => s.hex);
@@ -144,6 +190,8 @@ function ColorRangeRow({
   elementTypes,
   suggestedPosition,
   labelSuggestions,
+  sampledHex,
+  percentLabel,
   onSaved,
   onDeleted,
 }: {
@@ -152,6 +200,15 @@ function ColorRangeRow({
   elementTypes: ElementType[];
   suggestedPosition?: string;
   labelSuggestions: Record<string, string>;
+  // Last hex lifted from the photo loupe (ModeratorPhotoCard) — offered as a
+  // one-click fill for any stop, so pinpointing a color visually and typing
+  // it in are the same action instead of two.
+  sampledHex: string | null;
+  // "% of the skin" / "% of the skirt" etc — defaults to a generic phrase
+  // when there's no anatomy grouping to name. Not "% of the whole coral":
+  // this is the split BETWEEN the colors documented at this one position
+  // (e.g. skin is 60% blue / 40% green), not a share of the whole animal.
+  percentLabel?: string;
   onSaved: () => void;
   onDeleted: () => void;
 }) {
@@ -195,8 +252,8 @@ function ColorRangeRow({
   function setStop(i: number, hex: string) {
     setStops((prev) => prev.map((s, idx) => (idx === i ? hex : s)));
   }
-  function addStop() {
-    setStops((prev) => [...prev, "#FFFFFF"]);
+  function addStop(hex?: string) {
+    setStops((prev) => [...prev, hex ?? "#FFFFFF"]);
   }
   function removeStop(i: number) {
     setStops((prev) => prev.filter((_, idx) => idx !== i));
@@ -292,6 +349,16 @@ function ColorRangeRow({
               placeholder="#F28C00"
               aria-label={`Hex for stop ${i + 1}`}
             />
+            {sampledHex ? (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setStop(i, sampledHex)}
+                title={`Set this stop to the last sampled color, ${sampledHex}`}
+              >
+                ↙ {sampledHex}
+              </button>
+            ) : null}
             {stops.length > 1 ? (
               <button type="button" className="btn-secondary" onClick={() => removeStop(i)}>
                 Remove
@@ -299,9 +366,16 @@ function ColorRangeRow({
             ) : null}
           </div>
         ))}
-        <button type="button" className="btn-secondary" onClick={addStop}>
-          + Add stop
-        </button>
+        <div className="color-mod-stop-add">
+          <button type="button" className="btn-secondary" onClick={() => addStop()}>
+            + Add stop
+          </button>
+          {sampledHex ? (
+            <button type="button" className="btn-secondary" onClick={() => addStop(sampledHex)}>
+              + Add sampled color ({sampledHex})
+            </button>
+          ) : null}
+        </div>
       </div>
       {validStops.length > 0 ? (
         <div className="color-mod-preview">
@@ -312,7 +386,7 @@ function ColorRangeRow({
 
       <div className="row">
         <div>
-          <label>% of coral</label>
+          <label>{percentLabel ?? "% of this color area"}</label>
           <input
             name="approx_percent"
             type="number"
@@ -321,6 +395,11 @@ function ColorRangeRow({
             defaultValue={range?.approx_percent ?? ""}
             placeholder="Rough estimate"
           />
+          <p className="muted color-mod-percent-hint">
+            How much of {percentLabel ? percentLabel.replace(/^% of /, "the ") : "this position"} shows
+            THIS color — not how much of the whole coral. If two colors share a position (e.g. blue and
+            green on the skin), their percentages should add up to roughly 100%.
+          </p>
         </div>
         <div>
           <label>Lighting</label>
@@ -394,6 +473,7 @@ function GroupedRanges({
   anatomyTemplateCode,
   elementTypes,
   labelSuggestions,
+  sampledHex,
   onSaved,
   onDeleted,
 }: {
@@ -402,6 +482,7 @@ function GroupedRanges({
   anatomyTemplateCode: string | null;
   elementTypes: ElementType[];
   labelSuggestions: Record<string, string>;
+  sampledHex: string | null;
   onSaved: () => void;
   onDeleted: () => void;
 }) {
@@ -416,6 +497,7 @@ function GroupedRanges({
             range={r}
             elementTypes={elementTypes}
             labelSuggestions={labelSuggestions}
+            sampledHex={sampledHex}
             onSaved={onSaved}
             onDeleted={onDeleted}
           />
@@ -425,6 +507,7 @@ function GroupedRanges({
           range={null}
           elementTypes={elementTypes}
           labelSuggestions={labelSuggestions}
+          sampledHex={sampledHex}
           onSaved={onSaved}
           onDeleted={onDeleted}
         />
@@ -454,6 +537,10 @@ function GroupedRanges({
         // live: Acropora's dropdown was offering "Bubble on skirt", which
         // doesn't apply to SPS at all.
         const stepElementTypes = elementTypes.filter((e) => step.positions.includes(e.code));
+        // "% of the skin", "% of the skirt" — never "% of coral": this is
+        // the split between colors WITHIN this one position, reported live
+        // as confusing when it read like "40% of the whole coral is skin."
+        const percentLabel = `% of the ${step.label.toLowerCase()}`;
         return (
           <div className="color-mod-group" key={step.key}>
             <div className="color-mod-group-head">
@@ -461,7 +548,9 @@ function GroupedRanges({
                 {step.label} {step.optional ? <span className="muted">(optional)</span> : null}
               </h4>
               {hasAnyPercent && (total < 90 || total > 110) ? (
-                <span className="muted color-mod-group-total">adds up to {total}%</span>
+                <span className="muted color-mod-group-total">
+                  adds up to {total}% of the {step.label.toLowerCase()}
+                </span>
               ) : null}
             </div>
             {stepRanges.map((r) => (
@@ -471,6 +560,8 @@ function GroupedRanges({
                 range={r}
                 elementTypes={stepElementTypes}
                 labelSuggestions={labelSuggestions}
+                sampledHex={sampledHex}
+                percentLabel={percentLabel}
                 onSaved={onSaved}
                 onDeleted={onDeleted}
               />
@@ -481,6 +572,8 @@ function GroupedRanges({
               elementTypes={stepElementTypes}
               suggestedPosition={step.positions[0]}
               labelSuggestions={labelSuggestions}
+              sampledHex={sampledHex}
+              percentLabel={percentLabel}
               onSaved={onSaved}
               onDeleted={onDeleted}
             />
@@ -498,6 +591,7 @@ function GroupedRanges({
               taxonId={taxonId}
               range={r}
               elementTypes={elementTypes}
+              sampledHex={sampledHex}
               labelSuggestions={labelSuggestions}
               onSaved={onSaved}
               onDeleted={onDeleted}
@@ -526,6 +620,12 @@ export function ColorModeration({
   const [selected, setSelected] = useState<SearchableMorph | null>(null);
   const [ranges, setRanges] = useState<ColorRangeForModeration[] | null>(null);
   const [anatomyTemplateCode, setAnatomyTemplateCode] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  // The last hex lifted from the photo loupe — offered to every stop input
+  // as a one-click fill (see ColorRangeRow). Deliberately NOT reset by a
+  // refresh() after saving, so sampling several colors from one photo and
+  // placing them across a few rows doesn't require re-sampling each time.
+  const [sampledHex, setSampledHex] = useState<string | null>(null);
   const [loading, startTransition] = useTransition();
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -548,13 +648,23 @@ export function ColorModeration({
       else {
         setRanges(result.ranges ?? []);
         setAnatomyTemplateCode(result.anatomyTemplateCode ?? null);
+        setPhotos(result.photos ?? []);
       }
     });
   }
 
+  // A real taxon switch clears the sampled hex (it came from the previous
+  // coral's photo, not this one) — refresh() below deliberately does NOT,
+  // so saving a color mid-session doesn't throw away a hex you just lifted
+  // for the next row.
+  function selectTaxon(taxon: SearchableMorph) {
+    setSampledHex(null);
+    loadRanges(taxon);
+  }
+
   function loadById(id: string) {
     const taxon = morphs.find((m) => m.id === id);
-    if (taxon) loadRanges(taxon);
+    if (taxon) selectTaxon(taxon);
   }
 
   function refresh() {
@@ -585,7 +695,7 @@ export function ColorModeration({
                   type="button"
                   key={m.id}
                   className="header-search-result"
-                  onClick={() => loadRanges(m)}
+                  onClick={() => selectTaxon(m)}
                 >
                   {m.name} <span className="muted">({m.genusName})</span>
                 </button>
@@ -609,15 +719,19 @@ export function ColorModeration({
           {loadError ? <p className="error">{loadError}</p> : null}
 
           {ranges ? (
-            <GroupedRanges
-              taxonId={selected.id}
-              ranges={ranges}
-              anatomyTemplateCode={anatomyTemplateCode}
-              elementTypes={elementTypes}
-              labelSuggestions={labelSuggestions}
-              onSaved={refresh}
-              onDeleted={refresh}
-            />
+            <>
+              <ModeratorPhotoCard key={selected.id} photos={photos} onSampled={setSampledHex} />
+              <GroupedRanges
+                taxonId={selected.id}
+                ranges={ranges}
+                anatomyTemplateCode={anatomyTemplateCode}
+                elementTypes={elementTypes}
+                labelSuggestions={labelSuggestions}
+                sampledHex={sampledHex}
+                onSaved={refresh}
+                onDeleted={refresh}
+              />
+            </>
           ) : null}
         </>
       )}
