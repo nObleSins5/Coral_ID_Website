@@ -1,19 +1,24 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   quickAddExisting,
   quickAddLocal,
   quickAddUnidentified,
 } from "@/app/tank/actions";
+import { getPhotosForTaxonAction } from "@/app/coral/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { SearchableMorph } from "@/lib/wiki";
+import { PhotoPicker, type PickablePhoto } from "@/components/photo-picker";
 
 type Genus = { id: string; name: string };
 type Slot = { id: string; label: string };
 
 // Shared bits every branch's form needs: an optional grid slot and an
-// optional (or, for the "propose new" branch, required) photo.
+// optional (or, for the "propose new" branch, required) photo. Skipped
+// entirely when a slot is already fixed by context (presetSlotId, clicked
+// from the grid itself — see grid-slot-panel.tsx).
 function SlotPicker({ emptySlots }: { emptySlots: Slot[] }) {
   if (emptySlots.length === 0) return null;
   return (
@@ -31,6 +36,87 @@ function SlotPicker({ emptySlots }: { emptySlots: Slot[] }) {
   );
 }
 
+// The matched-existing-coral branch's photo step: "Choose own photo" (the
+// original file-upload input, unchanged) vs "Use a community photo" (picks
+// an existing public photo of this exact taxon instead of uploading a new
+// one) — the two options requested for this flow, not both shown together.
+function MatchedPhotoStep({ taxonId }: { taxonId: string }) {
+  const [mode, setMode] = useState<"own" | "community">("own");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<PickablePhoto[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, startTransition] = useTransition();
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, []);
+
+  function switchToCommunity() {
+    setMode("community");
+    if (photos === null) {
+      startTransition(async () => {
+        const result = await getPhotosForTaxonAction(taxonId);
+        setPhotos(result);
+        const own = result.find((p) => p.uploader_user_id === userId);
+        setSelectedId(own?.id ?? null);
+      });
+    }
+  }
+
+  return (
+    <>
+      <label>Photo (optional)</label>
+      <div className="checkbox-row">
+        <label className="checkbox-label">
+          <input
+            type="radio"
+            name="quick-add-photo-mode"
+            checked={mode === "own"}
+            onChange={() => setMode("own")}
+          />
+          Choose own photo
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="radio"
+            name="quick-add-photo-mode"
+            checked={mode === "community"}
+            onChange={switchToCommunity}
+          />
+          Use a community photo
+        </label>
+      </div>
+      {mode === "own" ? (
+        <input
+          id="quick-add-photo"
+          name="photo"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+        />
+      ) : (
+        <>
+          <input type="hidden" name="representative_photo_id" value={selectedId ?? ""} />
+          {loading ? <p className="muted">Loading photos…</p> : null}
+          {photos && photos.length === 0 ? (
+            <p className="muted" style={{ fontSize: "0.85rem" }}>
+              No community photos exist for this coral yet.
+            </p>
+          ) : null}
+          {photos && photos.length > 0 && userId ? (
+            <PhotoPicker
+              photos={photos}
+              userId={userId}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
+          ) : null}
+        </>
+      )}
+    </>
+  );
+}
+
 // Inline search + quick-add for the tank grid page's "Not yet in the grid"
 // section — add a coral (known, private-nickname, or propose-new) and
 // optionally place it, all without navigating to the wiki and back.
@@ -39,14 +125,28 @@ export function QuickAddSpecimen({
   emptySlots,
   morphs,
   genera,
+  presetSlotId,
+  onDone,
+  onCancel,
 }: {
   tankId: string;
   emptySlots: Slot[];
   morphs: SearchableMorph[];
   genera: Genus[];
+  // Set when opened from a specific grid cell (grid-slot-panel.tsx) — the
+  // slot dropdown is skipped entirely and this slot is submitted directly.
+  presetSlotId?: string;
+  // Called (instead of the default collapse-back-to-button) after a
+  // successful add, when this is embedded inside another panel that manages
+  // its own open/closed state (grid-slot-panel.tsx).
+  onDone?: () => void;
+  // Called on Cancel when embedded (presetSlotId set) — signals the parent
+  // panel to close/step back, since this component has no "collapsed" state
+  // of its own in that context.
+  onCancel?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!presetSlotId);
   const [query, setQuery] = useState("");
   const [matched, setMatched] = useState<SearchableMorph | null>(null);
   const [mode, setMode] = useState<"search" | "local" | "unidentified">("search");
@@ -62,6 +162,10 @@ export function QuickAddSpecimen({
   }, [query, matched, mode, morphs]);
 
   function reset() {
+    if (presetSlotId) {
+      onCancel?.();
+      return;
+    }
     setOpen(false);
     setQuery("");
     setMatched(null);
@@ -69,43 +173,43 @@ export function QuickAddSpecimen({
     setError(null);
   }
 
+  function succeed() {
+    if (onDone) onDone();
+    else reset();
+    router.refresh();
+  }
+
   function handleExisting(formData: FormData) {
     setError(null);
     formData.set("tank_id", tankId);
     formData.set("taxon_node_id", matched!.id);
+    if (presetSlotId) formData.set("grid_slot_id", presetSlotId);
     startTransition(async () => {
       const result = await quickAddExisting(formData);
       if (result?.error) setError(result.error);
-      else {
-        reset();
-        router.refresh();
-      }
+      else succeed();
     });
   }
 
   function handleLocal(formData: FormData) {
     setError(null);
     formData.set("tank_id", tankId);
+    if (presetSlotId) formData.set("grid_slot_id", presetSlotId);
     startTransition(async () => {
       const result = await quickAddLocal(formData);
       if (result?.error) setError(result.error);
-      else {
-        reset();
-        router.refresh();
-      }
+      else succeed();
     });
   }
 
   function handleUnidentified(formData: FormData) {
     setError(null);
     formData.set("tank_id", tankId);
+    if (presetSlotId) formData.set("grid_slot_id", presetSlotId);
     startTransition(async () => {
       const result = await quickAddUnidentified(formData);
       if (result?.error) setError(result.error);
-      else {
-        reset();
-        router.refresh();
-      }
+      else succeed();
     });
   }
 
@@ -127,13 +231,7 @@ export function QuickAddSpecimen({
         </p>
         <label htmlFor="quick-add-name">Nickname (optional)</label>
         <input id="quick-add-name" name="name" placeholder="e.g. Steve" />
-        <label htmlFor="quick-add-photo">Photo (optional)</label>
-        <input
-          id="quick-add-photo"
-          name="photo"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-        />
+        <MatchedPhotoStep taxonId={matched.id} />
         <label htmlFor="quick-add-taken-at">Date taken</label>
         <input
           id="quick-add-taken-at"
@@ -141,7 +239,7 @@ export function QuickAddSpecimen({
           type="date"
           defaultValue={new Date().toISOString().slice(0, 10)}
         />
-        <SlotPicker emptySlots={emptySlots} />
+        {!presetSlotId ? <SlotPicker emptySlots={emptySlots} /> : null}
         <div className="form-actions">
           <button type="submit" disabled={pending}>
             {pending ? "Adding…" : "Add"}
@@ -179,7 +277,7 @@ export function QuickAddSpecimen({
           type="date"
           defaultValue={new Date().toISOString().slice(0, 10)}
         />
-        <SlotPicker emptySlots={emptySlots} />
+        {!presetSlotId ? <SlotPicker emptySlots={emptySlots} /> : null}
         <div className="form-actions">
           <button type="submit" disabled={pending}>
             {pending ? "Adding…" : "Add"}
@@ -231,7 +329,7 @@ export function QuickAddSpecimen({
           type="date"
           defaultValue={new Date().toISOString().slice(0, 10)}
         />
-        <SlotPicker emptySlots={emptySlots} />
+        {!presetSlotId ? <SlotPicker emptySlots={emptySlots} /> : null}
         <div className="form-actions">
           <button type="submit" disabled={pending}>
             {pending ? "Submitting…" : "Submit"}

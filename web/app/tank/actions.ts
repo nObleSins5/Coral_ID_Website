@@ -171,6 +171,57 @@ export async function setTankBadgeEnabled(formData: FormData): Promise<{ error?:
   return {};
 }
 
+const SLOT_TYPE_CODES = new Set(["sand", "rock", "open_water", "frag_rack"]);
+
+// Slot settings — substrate type + "not usable for coral" (sql/supabase/34_grid_slot_types.sql).
+// Setting a slot to open_water cascades UPWARD to every tier above it at the
+// same (x, y) — coral grows up into open water, not the reverse, so 99% of
+// the time a lower-tier open-water call should apply to everything above it
+// too. cascade_open_water lets the caller opt out (the client shows a confirm
+// step first when there ARE higher tiers to affect).
+export async function updateGridSlot(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const gridSlotId = String(formData.get("grid_slot_id") ?? "");
+  const slotTypeCodeRaw = String(formData.get("slot_type_code") ?? "");
+  const slotTypeCode = SLOT_TYPE_CODES.has(slotTypeCodeRaw) ? slotTypeCodeRaw : null;
+  const disabled = formData.get("disabled") === "true";
+  const cascadeOpenWater = formData.get("cascade_open_water") !== "false";
+  if (!gridSlotId) return { error: "Missing slot reference." };
+
+  const { data: slot } = await supabase
+    .from("grid_slots")
+    .select("id, tank_id, x, y, z, tanks!inner ( user_id )")
+    .eq("id", gridSlotId)
+    .maybeSingle();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const owner = (slot as any)?.tanks?.user_id;
+  if (!slot || owner !== user.id) return { error: "Slot not found." };
+
+  const { error } = await supabase
+    .from("grid_slots")
+    .update({ slot_type_code: slotTypeCode, disabled })
+    .eq("id", gridSlotId);
+  if (error) return { error: error.message };
+
+  if (slotTypeCode === "open_water" && cascadeOpenWater) {
+    await supabase
+      .from("grid_slots")
+      .update({ slot_type_code: "open_water" })
+      .eq("tank_id", slot.tank_id)
+      .eq("x", slot.x)
+      .eq("y", slot.y)
+      .gt("z", slot.z);
+  }
+
+  revalidatePath(`/tank/${slot.tank_id}`);
+  return {};
+}
+
 // --- Quick-add (tank grid page: search the wiki, add, place — no navigating
 // away). Three branches sharing the same shape (create a specimen, optionally
 // a photo, optionally straight into a grid slot) but differing in what the
@@ -197,10 +248,26 @@ export async function quickAddExisting(
   const gridSlotId = String(formData.get("grid_slot_id") ?? "") || null;
   const name = String(formData.get("name") ?? "").trim() || null;
   const takenAtRaw = String(formData.get("taken_at") ?? "");
+  // An existing public photo picked via PhotoPicker ("use a community
+  // photo") instead of a fresh upload — mutually exclusive with `photo`
+  // below, mirrors addSpecimen's representative_photo_id validation
+  // (app/coral/actions.ts).
+  const pickedPhotoId = String(formData.get("representative_photo_id") ?? "") || null;
   if (!taxonNodeId) return { error: "Choose a coral." };
 
   const tank = await getOwnedTank(supabase, tankId, user.id);
   if (!tank) return { error: "Tank not found." };
+
+  let pickedPhotoUploaderId: string | null = null;
+  if (pickedPhotoId) {
+    const { data: photo } = await supabase
+      .from("coral_photos")
+      .select("uploader_user_id, is_public")
+      .eq("id", pickedPhotoId)
+      .maybeSingle();
+    if (!photo?.is_public) return { error: "That photo is no longer available." };
+    pickedPhotoUploaderId = photo.uploader_user_id;
+  }
 
   const { data: specimen, error: specimenError } = await supabase
     .from("specimens")
@@ -210,11 +277,16 @@ export async function quickAddExisting(
       grid_slot_id: gridSlotId,
       taxon_node_id: taxonNodeId,
       name,
+      representative_photo_id: pickedPhotoId,
     })
     .select("id")
     .single();
   if (specimenError || !specimen) {
     return { error: specimenError?.message ?? "Could not create specimen." };
+  }
+
+  if (pickedPhotoId && pickedPhotoUploaderId === user.id) {
+    await supabase.from("coral_photos").update({ specimen_id: specimen.id }).eq("id", pickedPhotoId);
   }
 
   const photoFile = formData.get("photo");

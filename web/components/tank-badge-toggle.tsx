@@ -43,6 +43,7 @@ export function TankBadgeToggle({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   function toggle() {
     setError(null);
@@ -60,6 +61,19 @@ export function TankBadgeToggle({
   const showcaseUrl = `${SITE_URL}/showcase/${tankId}`;
   const bbcode = `[URL=${showcaseUrl}][IMG]${badgeUrl}[/IMG][/URL]`;
   const html = `<a href="${showcaseUrl}"><img src="${badgeUrl}" alt="My ReefCodex tank"></a>`;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="btn-secondary"
+        style={{ marginBottom: "1.25rem" }}
+        onClick={() => setOpen(true)}
+      >
+        Get Forum Badge
+      </button>
+    );
+  }
 
   return (
     <div className="card" style={{ marginBottom: "1.25rem" }}>

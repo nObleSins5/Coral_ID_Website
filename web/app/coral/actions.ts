@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { computeParameterSnapshot, uploadPhotoFile } from "@/lib/photo-upload";
+import { getPhotosForTaxon, type WikiPhoto } from "@/lib/wiki";
 
 // Uploads a standalone photo attached to a taxon (Door 1). The
 // "unidentified — help me ID this" path lives separately in
@@ -550,5 +551,15 @@ export async function reportComment(
   if (error && error.code !== "23505") return { error: error.message };
 
   return {};
+}
+
+// Thin client-callable wrapper around getPhotosForTaxon (lib/wiki.ts,
+// server-only/public-client) — lets a client component fetch a taxon's
+// public photos on demand for PhotoPicker (components/photo-picker.tsx),
+// same shape as getColorKeyForTaxon (app/identify/actions.ts) does for
+// ProposeIdentificationForm. Used by the grid-slot "use a community photo"
+// pickers (components/grid-slot-panel.tsx, components/quick-add-specimen.tsx).
+export async function getPhotosForTaxonAction(taxonId: string): Promise<WikiPhoto[]> {
+  return getPhotosForTaxon(taxonId);
 }
 

@@ -11,7 +11,10 @@ import { useState } from "react";
 // silhouette so it never competes with real coral photography elsewhere on
 // the page. A future pass may replace the rockwork with a real per-tank
 // layout (see PROGRESS.md); this is the flat-diagram version of that idea.
-function TankMockup({ tierCount, selected }: { tierCount: number; selected: number }) {
+// Exported for reuse by tank-grid-interactive.tsx (the owner-facing
+// clickable grid on /tank/[id]) — same cross-section chrome, this file stays
+// the read-only version used by the public /showcase/[id] page.
+export function TankMockup({ tierCount, selected }: { tierCount: number; selected: number }) {
   const tankTop = 14;
   const tankBottom = 148;
   const tankHeight = tankBottom - tankTop;

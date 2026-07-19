@@ -1,4 +1,4 @@
-import { PARAM_META, type TankStatus } from "@/lib/tank-callouts";
+import { PARAM_META, type TankCallout, type TankStatus } from "@/lib/tank-callouts";
 
 // Quiet status line + advisory chips for /tank/[id] — see
 // docs/tank-callout-engine-brief.md. Deliberately server-rendered, no card,
@@ -36,6 +36,40 @@ function readingSummary(status: TankStatus): string {
   return parts.join(", ");
 }
 
+// The chip list itself — shared by TankStatusBlock (below, /tank/[id]) and
+// CalloutSummaryToggle (dashboard card, web/components/callout-summary-toggle.tsx)
+// so both surfaces render the exact same wording/links for the same data.
+export function CalloutList({
+  callouts,
+  husbandryHref,
+}: {
+  callouts: TankCallout[];
+  husbandryHref: string;
+}) {
+  if (callouts.length === 0) return null;
+  return (
+    <ul className="tank-callout-list">
+      {callouts.map((c, i) => (
+        <li key={i} className="tank-callout">
+          {c.type === "equipment_gap" ? (
+            <a href={husbandryHref}>
+              {c.coralCount} {c.demandTier}-{c.category === "light" ? "light" : "flow"} coral
+              {c.coralCount === 1 ? "" : "s"} · no {c.category} logged →
+            </a>
+          ) : (
+            <span>
+              {PARAM_META[c.param].label} {c.actual} {PARAM_META[c.param].unit} — outside{" "}
+              {c.offenders ? `${c.offenders.join(", ")}'s` : "the recommended"}{" "}
+              {formatBand(c.band.min, c.band.max, PARAM_META[c.param].unit)} range
+              {c.offenders ? " (your other corals are fine with this)" : ""}
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function TankStatusBlock({
   status,
   husbandryHref,
@@ -60,27 +94,7 @@ export function TankStatusBlock({
           ? `Last logged: ${readingSummary(status)} · ${timeAgo(latestReading.measured_at)}`
           : "No parameters logged yet."}
       </p>
-      {callouts.length > 0 ? (
-        <ul className="tank-callout-list">
-          {callouts.map((c, i) => (
-            <li key={i} className="tank-callout">
-              {c.type === "equipment_gap" ? (
-                <a href={husbandryHref}>
-                  {c.coralCount} {c.demandTier}-{c.category === "light" ? "light" : "flow"} coral
-                  {c.coralCount === 1 ? "" : "s"} · no {c.category} logged →
-                </a>
-              ) : (
-                <span>
-                  {PARAM_META[c.param].label} {c.actual} {PARAM_META[c.param].unit} — outside{" "}
-                  {c.offenders ? `${c.offenders.join(", ")}'s` : "the recommended"}{" "}
-                  {formatBand(c.band.min, c.band.max, PARAM_META[c.param].unit)} range
-                  {c.offenders ? " (your other corals are fine with this)" : ""}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      <CalloutList callouts={callouts} husbandryHref={husbandryHref} />
     </div>
   );
 }

@@ -4,12 +4,11 @@ import { ConfigureGridForm } from "@/components/configure-grid-form";
 import { PlaceSpecimenControl } from "@/components/place-specimen-control";
 import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
-import { TankGridView } from "@/components/tank-grid-view";
+import { TankGridInteractive } from "@/components/tank-grid-interactive";
 import { TankPublishToggle } from "@/components/tank-publish-toggle";
 import { TankBadgeToggle } from "@/components/tank-badge-toggle";
 import { TankStatusBlock } from "@/components/tank-status-block";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { columnLabel } from "@/lib/grid";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 import { getTankStatus } from "@/lib/tank-callouts";
 
@@ -24,7 +23,15 @@ type Tank = {
   is_public: boolean;
   badge_enabled: boolean;
 };
-type GridSlot = { id: string; x: number; y: number; z: number; label: string };
+type GridSlot = {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  label: string;
+  slot_type_code: string | null;
+  disabled: boolean;
+};
 type Specimen = {
   id: string;
   name: string | null;
@@ -64,7 +71,7 @@ export default async function TankPage({
 
   const { data: slots } = await supabase
     .from("grid_slots")
-    .select("id, x, y, z, label")
+    .select("id, x, y, z, label, slot_type_code, disabled")
     .eq("tank_id", id)
     .order("z", { ascending: true })
     .order("y", { ascending: true })
@@ -123,7 +130,6 @@ export default async function TankPage({
     return genusSlug && s.taxon_nodes ? `/coral/${genusSlug}/${s.taxon_nodes.slug}` : null;
   }
 
-  const tiers = tankRow.tier_count ?? 1;
   const columns = tankRow.grid_columns;
   const rows = tankRow.grid_rows;
   const hasGrid = !!(columns && rows);
@@ -131,47 +137,39 @@ export default async function TankPage({
   const hasEquipment = tankStatus.equipmentLogged;
   const onboardingDone = hasGrid && hasCoral && hasEquipment;
 
-  const tierGrids = Array.from({ length: tiers }, (_, i) => i + 1).map((z) => (
-    <div className="tank-grid-tier" key={z}>
-      <div
-        className="tank-grid"
-        style={{ gridTemplateColumns: `repeat(${columns}, minmax(70px, 1fr))` }}
-      >
-        {slotList
-          .filter((slot) => slot.z === z)
-          .map((slot) => {
-            const specimen = specimenBySlot.get(slot.id);
-            const photoUrl = specimen?.representative_photo_id
-              ? photoUrlById.get(specimen.representative_photo_id)
-              : null;
-            return (
-              <div
-                key={slot.id}
-                className={`tank-grid-cell ${specimen ? "occupied" : "empty"}`}
-              >
-                <span className="slot-label">
-                  {columnLabel(slot.x)}
-                  {slot.y}
-                </span>
-                {specimen ? (
-                  <>
-                    {photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photoUrl} alt="" className="tank-grid-cell-thumb" />
-                    ) : null}
-                    <a href={`/specimen/${specimen.id}`}>
-                      {specimen.name || specimen.taxon_nodes?.name || "Unnamed coral"}
-                    </a>
-                  </>
-                ) : (
-                  <span>Empty</span>
-                )}
-              </div>
-            );
-          })}
-      </div>
-    </div>
-  ));
+  // Flat data for TankGridInteractive (components/tank-grid-interactive.tsx)
+  // — cell rendering/click-handling lives there now, this page just gathers
+  // the data (same queries as before, tierGrids JSX no longer built here).
+  const interactiveSlots = slotList.map((s) => ({
+    id: s.id,
+    x: s.x,
+    y: s.y,
+    z: s.z,
+    label: s.label,
+    slotTypeCode: s.slot_type_code,
+    disabled: s.disabled,
+  }));
+  const occupantBySlotId = new Map(
+    specimenList
+      .filter((s) => s.grid_slot_id)
+      .map((s) => [
+        s.grid_slot_id as string,
+        {
+          specimenId: s.id,
+          name: s.name,
+          taxonName: s.taxon_nodes?.name ?? null,
+          photoUrl: s.representative_photo_id ? photoUrlById.get(s.representative_photo_id) ?? null : null,
+          href: taxonHref(s),
+        },
+      ]),
+  );
+  const unplacedOptions = unplaced.map((s) => ({
+    specimenId: s.id,
+    label: s.name || s.taxon_nodes?.name || "Unnamed coral",
+    taxonId: s.taxon_node_id,
+    taxonName: s.taxon_nodes?.name ?? null,
+    representativePhotoId: s.representative_photo_id,
+  }));
 
   return (
     <div>
@@ -209,7 +207,15 @@ export default async function TankPage({
         <ConfigureGridForm tankId={tankRow.id} />
       ) : (
         <>
-          <TankGridView tierGrids={tierGrids} />
+          <TankGridInteractive
+            tankId={tankRow.id}
+            columns={columns as number}
+            slots={interactiveSlots}
+            occupantBySlotId={occupantBySlotId}
+            unplaced={unplacedOptions}
+            morphs={allMorphs}
+            genera={allGenera}
+          />
 
           <div style={{ marginTop: "0.5rem", marginBottom: "1.5rem" }}>
             <ResetGridButton tankId={tankRow.id} />

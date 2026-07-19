@@ -24,6 +24,15 @@
   --yellow: #ffd670;
   --orange: #ff9770;
   --pink: #ff70a6;
+
+  /* Grid slot substrate — meaningful, not decorative (like the difficulty
+     pill above): flat tints only, one per slot_type_code, distinct from the
+     supporting palette (those mean vote/wishlist/difficulty, these mean
+     "what's physically at this spot in the tank"). */
+  --sand: #ede3cf;
+  --rock: #d4d8dc;
+  --water: #d6f0fb;
+  --frag-rack: #dcead9;
 }
 
 * {
@@ -248,6 +257,19 @@ button:hover {
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
+}
+.callout-summary-toggle {
+  background: var(--panel);
+  cursor: pointer;
+  margin: 0;
+  font-family: inherit;
+}
+.callout-summary-toggle:hover {
+  border-color: var(--accent-text);
+}
+.callout-summary-card {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
 }
 /* Fixed-width icon box so the ☀/≈/⏳ glyph sits at a consistent offset
    regardless of the font's natural glyph metrics or the label text next to
@@ -1768,6 +1790,48 @@ td {
   object-fit: cover;
   border-radius: 5px;
 }
+/* Slot substrate tint — an independent visual channel from the occupied/
+   empty border above (background vs. border), so a blue-bordered occupied
+   cell and a blue-tinted open-water cell never visually collide. */
+.tank-grid-cell.slot-sand {
+  background: var(--sand);
+}
+.tank-grid-cell.slot-rock {
+  background: var(--rock);
+}
+.tank-grid-cell.slot-open_water {
+  background: var(--water);
+}
+.tank-grid-cell.slot-frag_rack {
+  background: var(--frag-rack);
+}
+.tank-grid-cell.active {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 1px;
+}
+.tank-grid-cell-empty-btn,
+.tank-grid-cell-edit {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: left;
+  cursor: pointer;
+}
+.tank-grid-cell-empty-btn:hover,
+.tank-grid-cell-edit:hover {
+  text-decoration: underline;
+}
+/* Occupies the same grid position as a real cell (so gridTemplateColumns
+   alignment holds) but renders nothing — a "not usable for coral" slot
+   should not be shown, per product decision, without breaking the layout
+   of every slot around it. */
+.tank-grid-cell-hidden {
+  visibility: hidden;
+}
 .tank-grid-view {
   display: flex;
   gap: 1.25rem;
@@ -1806,6 +1870,45 @@ td {
   flex: 1;
   margin-bottom: 0;
   min-width: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0.3rem 0 0.6rem;
+}
+
+/* --- Grid slot panel (/tank/[id], components/grid-slot-panel.tsx) --- */
+
+.grid-slot-panel {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+.grid-slot-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.grid-slot-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.3rem 0 0.6rem;
+}
+.grid-slot-cascade-confirm {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.6rem;
+}
+.grid-slot-occupant,
+.grid-slot-add-coral {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
 }
 
 /* --- Business dashboard --- */

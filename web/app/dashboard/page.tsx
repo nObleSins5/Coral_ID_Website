@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createTank, logParameters, removeFromWishlist } from "./actions";
 import { ParameterGraphButton, type GraphPoint } from "@/components/parameter-graph-button";
+import { CalloutSummaryToggle } from "@/components/callout-summary-toggle";
 import { getTankStatus } from "@/lib/tank-callouts";
 
 type Tank = {
@@ -219,7 +220,6 @@ export default async function Dashboard() {
           const slotCount = slotCountByTank.get(tank.id) ?? 0;
           const placedCount = placedCountByTank.get(tank.id) ?? 0;
           const equipSummary = equipmentSummary(equipmentByTank.get(tank.id) ?? []);
-          const calloutCount = statusByTank.get(tank.id)?.callouts.length ?? 0;
           return (
             <div className="card" key={tank.id}>
               <div className="tank-card-header">
@@ -229,11 +229,10 @@ export default async function Dashboard() {
                     {" →"}
                   </a>
                 </h2>
-                {calloutCount > 0 ? (
-                  <span className="pill" style={{ flexShrink: 0 }}>
-                    {calloutCount} callout{calloutCount === 1 ? "" : "s"}
-                  </span>
-                ) : null}
+                <CalloutSummaryToggle
+                  callouts={statusByTank.get(tank.id)?.callouts ?? []}
+                  husbandryHref={`/tank/${tank.id}/husbandry`}
+                />
               </div>
               <p className="muted tank-card-meta">
                 {tank.tank_type ? `${tank.tank_type} · ` : ""}
