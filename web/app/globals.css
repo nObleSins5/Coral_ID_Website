@@ -1925,6 +1925,19 @@ td {
 .moderation-actions button {
   margin-top: 0;
 }
+.moderation-row-thumb {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.moderation-row-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 /* --- Landing (/) --- */
 

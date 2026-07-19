@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { moderateAlias, moderateProduct, restoreComment, deleteReportedComment } from "@/app/moderate/actions";
+import {
+  moderateAlias,
+  moderateProduct,
+  restoreComment,
+  deleteReportedComment,
+  confirmMorphProposal,
+} from "@/app/moderate/actions";
 
 // One pending row + Approve/Reject — same optimistic-remove-on-success shape
 // as the rest of the app's inline moderation-ish actions (reset-grid-button,
@@ -199,6 +205,75 @@ export function ProductModerationRow({
           onClick={() => decide("rejected")}
         >
           Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Brand-new-morph proposal, not yet cleared for auto-confirm
+// (handle_id_vote_change, sql/supabase/09_unidentified_id_flow.sql). "Confirm
+// now" is a moderator fast-path to the exact same outcome the vote trigger
+// would eventually produce (moderator_confirm_suggestion,
+// sql/supabase/33_moderator_confirm_suggestion.sql) — a single action, no
+// reject button: a bad proposal is already handled by downvotes through the
+// normal vote flow, this queue is only for accelerating good ones.
+export function MorphProposalModerationRow({
+  suggestionId,
+  proposedName,
+  genusName,
+  genusSlug,
+  photoUrl,
+  proposedBy,
+  netVotes,
+  createdAt,
+}: {
+  suggestionId: string;
+  proposedName: string;
+  genusName: string;
+  genusSlug: string | null;
+  photoUrl: string | null;
+  proposedBy: string;
+  netVotes: number;
+  createdAt: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function confirm() {
+    setError(null);
+    const formData = new FormData();
+    formData.set("suggestion_id", suggestionId);
+    if (genusSlug) formData.set("genus_slug", genusSlug);
+    startTransition(async () => {
+      const result = await confirmMorphProposal(formData);
+      if (result?.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="moderation-row">
+      {photoUrl ? (
+        <div className="moderation-row-thumb">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photoUrl} alt="" />
+        </div>
+      ) : null}
+      <div>
+        <p style={{ margin: 0 }}>
+          <strong>{proposedName}</strong> <span className="muted">({genusName})</span>
+        </p>
+        <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+          Proposed by {proposedBy} · {new Date(createdAt).toLocaleDateString()} · net votes:{" "}
+          {netVotes}
+        </p>
+        {error ? <p className="error">{error}</p> : null}
+      </div>
+      <div className="moderation-actions">
+        <button type="button" disabled={pending} onClick={confirm}>
+          {pending ? "Confirming…" : "Confirm now"}
         </button>
       </div>
     </div>

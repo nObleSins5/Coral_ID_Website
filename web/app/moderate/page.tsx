@@ -5,6 +5,7 @@ import {
   AliasModerationRow,
   ProductModerationRow,
   CommentModerationRow,
+  MorphProposalModerationRow,
 } from "@/components/moderation-row";
 import { ColorModeration } from "@/components/color-moderation";
 
@@ -14,6 +15,16 @@ type AliasRow = {
   proposed_by_user_id: string | null;
   created_at: string;
   taxon_nodes: { name: string; slug: string; parent_id: string | null; rank_code: string } | null;
+};
+
+type MorphProposalRow = {
+  id: string;
+  proposed_name: string | null;
+  net_votes: number;
+  created_at: string;
+  suggested_by_user_id: string;
+  coral_photos: { url: string } | null;
+  taxon_nodes: { name: string; slug: string } | null; // the target genus, via proposed_genus_id
 };
 
 type ProductRow = {
@@ -115,17 +126,41 @@ export default async function ModerateQueue() {
     .select("code, label");
   const categoryLabelByCode = new Map((categories ?? []).map((c) => [c.code, c.label]));
 
-  const [morphs, { data: elementTypes }, labelSuggestions] = await Promise.all([
+  // Brand-new-morph proposals still pending — a proposal targeting an
+  // existing taxon (proposed_taxon_id set) doesn't need this queue, it's
+  // just a photo waiting on votes for an ALREADY-real coral. This only
+  // covers the "propose a coral that doesn't exist yet" case (same set
+  // getPendingMorphsForGenus, lib/wiki.ts, shows per-genus on the wiki page).
+  const { data: morphProposals } = await supabase
+    .from("id_suggestions")
+    .select(
+      "id, proposed_name, net_votes, created_at, suggested_by_user_id, coral_photos ( url ), taxon_nodes!fk_id_suggestions_genus ( name, slug )",
+    )
+    .eq("status_code", "pending")
+    .is("proposed_taxon_id", null)
+    .not("proposed_genus_id", "is", null)
+    .order("net_votes", { ascending: false });
+  const morphProposalRows = (morphProposals ?? []) as unknown as MorphProposalRow[];
+
+  const [morphs, { data: elementTypes }, labelSuggestions, { data: coloredTaxonIds }] = await Promise.all([
     getAllMorphsForSearch(),
     supabase.from("element_types").select("code, label").order("code"),
     getColorLabelSuggestions(),
+    supabase.from("color_ranges").select("taxon_node_id"),
   ]);
+  // Status indicator for the "Coral colors" section below — how many morphs
+  // have zero color_ranges yet, including ones just confirmed above (auto or
+  // manual). No new schema/flag needed: a taxon with no color_ranges row IS
+  // "needs a first profile", whether it's brand new or an old seeded gap.
+  const coloredTaxonIdSet = new Set((coloredTaxonIds ?? []).map((r) => r.taxon_node_id));
+  const needsColorCount = morphs.filter((m) => !coloredTaxonIdSet.has(m.id)).length;
 
   const usernames = await getUsernamesFor(
     [
       ...aliasRows.map((a) => a.proposed_by_user_id),
       ...productRows.map((p) => p.added_by_user_id),
       ...commentRows.map((c) => c.user_id),
+      ...morphProposalRows.map((m) => m.suggested_by_user_id),
     ].filter((x): x is string => !!x),
   );
 
@@ -137,7 +172,33 @@ export default async function ModerateQueue() {
         they go public.
       </p>
 
-      <h2>Coral colors</h2>
+      <h2>Pending morphs</h2>
+      {morphProposalRows.length === 0 ? (
+        <p className="muted">No morph proposals pending review.</p>
+      ) : (
+        <div className="card">
+          {morphProposalRows.map((m) => (
+            <MorphProposalModerationRow
+              key={m.id}
+              suggestionId={m.id}
+              proposedName={m.proposed_name ?? "Untitled"}
+              genusName={m.taxon_nodes?.name ?? "Unknown genus"}
+              genusSlug={m.taxon_nodes?.slug ?? null}
+              photoUrl={m.coral_photos?.url ?? null}
+              proposedBy={usernames.get(m.suggested_by_user_id) ?? "A hobbyist"}
+              netVotes={m.net_votes}
+              createdAt={m.created_at}
+            />
+          ))}
+        </div>
+      )}
+
+      <h2>
+        Coral colors{" "}
+        {needsColorCount > 0 ? (
+          <span className="pill pill-pending">{needsColorCount} need a first profile</span>
+        ) : null}
+      </h2>
       <ColorModeration morphs={morphs} elementTypes={elementTypes ?? []} labelSuggestions={labelSuggestions} />
 
       <h2>Coral aliases</h2>

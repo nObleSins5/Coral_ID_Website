@@ -64,7 +64,7 @@ function ColorEntryActivityList({ onSelectTaxonId }: { onSelectTaxonId: (id: str
   const [rows, setRows] = useState<ColorEntryModerationRow[] | null>(null);
   const [loading, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [onlyNeverEntered, setOnlyNeverEntered] = useState(false);
+  const [onlyNeverEntered, setOnlyNeverEntered] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
   function load() {
@@ -79,7 +79,7 @@ function ColorEntryActivityList({ onSelectTaxonId }: { onSelectTaxonId: (id: str
   if (!loaded) {
     return (
       <button type="button" onClick={load}>
-        Show my corals &amp; last activity
+        Show corals needing colors
       </button>
     );
   }

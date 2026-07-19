@@ -117,6 +117,33 @@ export async function deleteReportedComment(
   return {};
 }
 
+// Manual fast-path for a still-pending brand-new-morph proposal — same
+// outcome as the auto-confirm vote trigger (handle_id_vote_change,
+// sql/supabase/09_unidentified_id_flow.sql), just skipping the remaining
+// vote/time thresholds. The actual moderator check and taxon creation happen
+// inside moderator_confirm_suggestion (sql/supabase/33_moderator_confirm_suggestion.sql)
+// — requireModerator here just gives a readable error instead of a raw RPC
+// failure, matching every other action in this file.
+export async function confirmMorphProposal(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const gate = await requireModerator();
+  if ("error" in gate) return { error: gate.error };
+
+  const suggestionId = String(formData.get("suggestion_id") ?? "");
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  if (!suggestionId) return { error: "Missing proposal reference." };
+
+  const { error } = await gate.supabase.rpc("moderator_confirm_suggestion", {
+    p_suggestion_id: suggestionId,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/moderate");
+  if (genusSlug) revalidatePath(`/coral/${genusSlug}`);
+  return {};
+}
+
 // -----------------------------------------------------------------------
 // Color entry (sql/supabase/27_color_moderation.sql, docs/color-percent-
 // feature-brief.md) — the first UI-based path for canonical color_ranges/
