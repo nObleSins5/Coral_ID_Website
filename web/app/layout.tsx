@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { AuthNavLink } from "@/components/auth-nav-link";
 import { HeaderSearch } from "@/components/header-search";
 import "./globals.css";
@@ -36,6 +37,7 @@ export default function RootLayout({
           </nav>
         </header>
         <main className="container">{children}</main>
+        <Analytics />
       </body>
     </html>
   );
