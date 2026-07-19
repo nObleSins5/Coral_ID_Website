@@ -286,16 +286,43 @@ td {
 }
 .genus-card {
   display: block;
-  background: var(--panel);
+  position: relative;
+  overflow: hidden;
+  min-height: 132px;
+  background-color: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 1rem;
   color: var(--text);
   box-shadow: var(--shadow);
 }
 .genus-card:hover {
   border-color: var(--accent-text);
   text-decoration: none;
+}
+/* Background photo is the genus's single most-voted photo across every one
+   of its morphs (getGenusHeroPhotos) — zoomed to ~200% and repositioned to
+   crop toward center-right entirely via CSS, no image processing. */
+.genus-card.has-photo {
+  background-size: 200% auto;
+  background-position: 32% center;
+  background-repeat: no-repeat;
+}
+/* Text sits on its own layer so the fade can be a same-color opacity ramp
+   (the card's own panel color, opaque -> transparent) rather than a
+   decorative two-hue gradient — DESIGN.md bans the latter; every other
+   gradient in this app is real coral color data, not UI decoration. Plain
+   cards (no photo) get no gradient at all, same flat look as before. */
+.genus-card-scrim {
+  position: relative;
+  height: 100%;
+  min-height: 132px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.genus-card.has-photo .genus-card-scrim {
+  background: linear-gradient(to right, var(--panel) 0%, var(--panel) 42%, rgba(255, 255, 255, 0) 88%);
 }
 .genus-card h3 {
   margin: 0 0 0.35rem;

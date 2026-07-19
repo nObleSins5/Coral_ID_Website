@@ -1,4 +1,4 @@
-import { getGenera, getGenusCategories } from "@/lib/wiki";
+import { getGenera, getGenusCategories, getGenusHeroPhotos } from "@/lib/wiki";
 
 export const metadata = {
   title: "Coral Wiki — Reef Platform",
@@ -6,22 +6,35 @@ export const metadata = {
     "Browse corals by category and genus, drill into a morph, and compare its typical element colors for self-identification.",
 };
 
+// Genus card's background photo — the single most-voted photo across every
+// morph in the genus (getGenusHeroPhotos), not one specific morph's photo.
+// Cropped/repositioned with plain CSS (background-size + background-position,
+// no image processing needed): zoomed to ~200% crops out roughly the outer
+// half of the frame, keeping the visual center; position shifts that center
+// toward the right two-thirds of the card. A same-color scrim (the card's
+// own background, opaque -> transparent) fades the flat left side into the
+// photo — deliberately NOT a decorative two-hue gradient (DESIGN.md bans
+// those; the only gradients elsewhere in this app are real coral color
+// data). Genera with no real photo yet render as today's plain flat card.
 function GenusCard({
   genus,
+  heroUrl,
 }: {
   genus: { id: string; name: string; slug: string; scientific_name: string | null; morph_count: number };
+  heroUrl?: string;
 }) {
   return (
-    <a className="genus-card" href={`/coral/${genus.slug}`}>
-      <h3>{genus.name}</h3>
-      {genus.scientific_name ? (
-        <p className="muted" style={{ fontStyle: "italic", margin: "0 0 0.35rem" }}>
-          {genus.scientific_name}
+    <a
+      className={`genus-card${heroUrl ? " has-photo" : ""}`}
+      href={`/coral/${genus.slug}`}
+      style={heroUrl ? { backgroundImage: `url(${heroUrl})` } : undefined}
+    >
+      <div className="genus-card-scrim">
+        <h3>{genus.name}</h3>
+        <p className="muted">
+          {genus.morph_count} {genus.morph_count === 1 ? "morph" : "morphs"}
         </p>
-      ) : null}
-      <p className="muted">
-        {genus.morph_count} {genus.morph_count === 1 ? "morph" : "morphs"}
-      </p>
+      </div>
     </a>
   );
 }
@@ -36,6 +49,7 @@ export default async function WikiIndex() {
   // migration that makes this grouping possible.
   if (categories.length === 0) {
     const genera = await getGenera();
+    const heroPhotos = await getGenusHeroPhotos(genera.map((g) => g.id));
     return (
       <div>
         <h1>Coral wiki</h1>
@@ -48,13 +62,15 @@ export default async function WikiIndex() {
         ) : (
           <div className="genus-grid">
             {genera.map((g) => (
-              <GenusCard genus={g} key={g.id} />
+              <GenusCard genus={g} heroUrl={heroPhotos.get(g.id)} key={g.id} />
             ))}
           </div>
         )}
       </div>
     );
   }
+
+  const heroPhotos = await getGenusHeroPhotos(categories.flatMap((c) => c.genera.map((g) => g.id)));
 
   return (
     <div>
@@ -74,7 +90,7 @@ export default async function WikiIndex() {
           </summary>
           <div className="genus-grid">
             {c.genera.map((g) => (
-              <GenusCard genus={g} key={g.id} />
+              <GenusCard genus={g} heroUrl={heroPhotos.get(g.id)} key={g.id} />
             ))}
           </div>
         </details>

@@ -358,6 +358,53 @@ export async function getHeroPhotoUrlsForTaxa(
   return heroUrlByTaxon;
 }
 
+// Same most-voted/newest-tiebreak rule as getHeroPhotoUrlsForTaxa, but
+// rolled up one level: the single best photo across EVERY morph under a
+// genus (e.g. Acropora's card uses its single best photo out of all 11
+// morphs' photos combined, not one photo per morph). Batched across every
+// genus on the wiki index in a fixed number of queries, not one call per
+// genus — getGenusShowcasePhotos (the identify funnel's per-genus popup
+// fetcher) intentionally isn't reused here for that reason.
+export async function getGenusHeroPhotos(genusIds: string[]): Promise<Map<string, string>> {
+  const heroUrlByGenus = new Map<string, string>();
+  if (genusIds.length === 0) return heroUrlByGenus;
+
+  const supabase = createPublicClient();
+  const { data: morphs } = await supabase
+    .from("taxon_nodes")
+    .select("id, parent_id")
+    .eq("rank_code", "morph")
+    .in("parent_id", genusIds);
+  const morphRows = morphs ?? [];
+  if (morphRows.length === 0) return heroUrlByGenus;
+  const genusByMorph = new Map(morphRows.map((m) => [m.id, m.parent_id as string]));
+
+  const { data: photos } = await supabase
+    .from("coral_photos")
+    .select("id, url, taxon_node_id, created_at")
+    .in("taxon_node_id", morphRows.map((m) => m.id))
+    .eq("is_public", true)
+    .order("created_at", { ascending: false });
+
+  const photoList = (photos ?? []).filter((p) => p.url && p.taxon_node_id);
+  if (photoList.length === 0) return heroUrlByGenus;
+
+  const voteCounts = await getAccurateVoteCounts(photoList.map((p) => p.id));
+
+  const heroVotesByGenus = new Map<string, number>();
+  for (const p of photoList) {
+    const genusId = genusByMorph.get(p.taxon_node_id as string);
+    if (!genusId) continue;
+    const v = voteCounts.get(p.id) ?? 0;
+    const currentBest = heroVotesByGenus.get(genusId) ?? -1;
+    if (v > currentBest) {
+      heroVotesByGenus.set(genusId, v);
+      heroUrlByGenus.set(genusId, p.url as string);
+    }
+  }
+  return heroUrlByGenus;
+}
+
 // Up to `limit` photos per taxon, most-voted first (ties to newest) — same
 // hero-photo rule as getHeroPhotoUrlsForTaxa above, but keeping the whole
 // ranked list instead of collapsing to one. Used by the identify funnel's
