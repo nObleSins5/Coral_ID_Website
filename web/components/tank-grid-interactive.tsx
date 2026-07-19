@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TankMockup } from "@/components/tank-grid-view";
 import { GridSlotPanel, type Occupant, type UnplacedOption } from "@/components/grid-slot-panel";
+import { RecoverGridSlotsControl } from "@/components/recover-grid-slots-control";
 import type { SearchableMorph } from "@/lib/wiki";
 
 type Genus = { id: string; name: string };
@@ -122,7 +123,7 @@ export function TankGridInteractive({
 
       {activeSlot ? (
         <GridSlotPanel
-          key={activeSlot.id}
+          key={`${activeSlot.id}-${activeSlot.slotTypeCode}-${activeSlot.disabled}`}
           slot={{
             id: activeSlot.id,
             label: activeSlot.label,
@@ -138,6 +139,10 @@ export function TankGridInteractive({
           onClose={() => setActiveSlotId(null)}
         />
       ) : null}
+
+      <div style={{ marginTop: "0.75rem" }}>
+        <RecoverGridSlotsControl tankId={tankId} disabledSlots={slots.filter((s) => s.disabled)} />
+      </div>
     </div>
   );
 }

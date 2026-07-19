@@ -222,6 +222,37 @@ export async function updateGridSlot(formData: FormData): Promise<{ error?: stri
   return {};
 }
 
+// Bulk-clears the "not usable for coral" flag on however many slots the
+// owner picks — the only way back for a slot marked disabled via
+// updateGridSlot above, since a disabled slot renders nothing on the grid
+// itself (no click target to toggle it back individually). Not a delete
+// either way — disabled is a flag on the row, this just flips it, same as
+// the panel's own checkbox does one slot at a time.
+export async function recoverGridSlots(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const slotIds = formData.getAll("grid_slot_ids").map(String).filter(Boolean);
+  if (slotIds.length === 0) return { error: "Choose at least one location to recover." };
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const { error } = await supabase
+    .from("grid_slots")
+    .update({ disabled: false })
+    .eq("tank_id", tankId)
+    .in("id", slotIds);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
 // --- Quick-add (tank grid page: search the wiki, add, place — no navigating
 // away). Three branches sharing the same shape (create a specimen, optionally
 // a photo, optionally straight into a grid slot) but differing in what the

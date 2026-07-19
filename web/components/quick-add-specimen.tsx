@@ -36,15 +36,19 @@ function SlotPicker({ emptySlots }: { emptySlots: Slot[] }) {
   );
 }
 
-// The matched-existing-coral branch's photo step: "Choose own photo" (the
-// original file-upload input, unchanged) vs "Use a community photo" (picks
-// an existing public photo of this exact taxon instead of uploading a new
-// one) — the two options requested for this flow, not both shown together.
+// The matched-existing-coral branch's photo step: "Choose own photo" (any
+// photo YOU already uploaded of this exact taxon, pick one — or upload a
+// fresh one via the file input below the list) vs "Use a community photo"
+// (someone else's public photo of this taxon). Photos are fetched once and
+// split by ownership so each tab only ever shows what its label promises —
+// previously every photo (including your own) landed under "community",
+// which was the bug being fixed here.
 function MatchedPhotoStep({ taxonId }: { taxonId: string }) {
   const [mode, setMode] = useState<"own" | "community">("own");
   const [userId, setUserId] = useState<string | null>(null);
   const [photos, setPhotos] = useState<PickablePhoto[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [ownSelectedId, setOwnSelectedId] = useState<string | null>(null);
+  const [communitySelectedId, setCommunitySelectedId] = useState<string | null>(null);
   const [loading, startTransition] = useTransition();
 
   useEffect(() => {
@@ -52,17 +56,16 @@ function MatchedPhotoStep({ taxonId }: { taxonId: string }) {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  function switchToCommunity() {
-    setMode("community");
-    if (photos === null) {
-      startTransition(async () => {
-        const result = await getPhotosForTaxonAction(taxonId);
-        setPhotos(result);
-        const own = result.find((p) => p.uploader_user_id === userId);
-        setSelectedId(own?.id ?? null);
-      });
-    }
-  }
+  useEffect(() => {
+    startTransition(async () => {
+      const result = await getPhotosForTaxonAction(taxonId);
+      setPhotos(result);
+    });
+  }, [taxonId]);
+
+  const ownPhotos = (photos ?? []).filter((p) => p.uploader_user_id === userId);
+  const communityPhotos = (photos ?? []).filter((p) => p.uploader_user_id !== userId);
+  const representativePhotoId = mode === "own" ? ownSelectedId : communitySelectedId;
 
   return (
     <>
@@ -82,33 +85,45 @@ function MatchedPhotoStep({ taxonId }: { taxonId: string }) {
             type="radio"
             name="quick-add-photo-mode"
             checked={mode === "community"}
-            onChange={switchToCommunity}
+            onChange={() => setMode("community")}
           />
           Use a community photo
         </label>
       </div>
+      <input type="hidden" name="representative_photo_id" value={representativePhotoId ?? ""} />
+      {loading ? <p className="muted">Loading photos…</p> : null}
       {mode === "own" ? (
-        <input
-          id="quick-add-photo"
-          name="photo"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-        />
+        <>
+          {ownPhotos.length > 0 && userId ? (
+            <PhotoPicker
+              photos={ownPhotos}
+              userId={userId}
+              selectedId={ownSelectedId}
+              onSelect={setOwnSelectedId}
+            />
+          ) : null}
+          {!ownSelectedId ? (
+            <input
+              id="quick-add-photo"
+              name="photo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+            />
+          ) : null}
+        </>
       ) : (
         <>
-          <input type="hidden" name="representative_photo_id" value={selectedId ?? ""} />
-          {loading ? <p className="muted">Loading photos…</p> : null}
-          {photos && photos.length === 0 ? (
+          {communityPhotos.length === 0 && !loading ? (
             <p className="muted" style={{ fontSize: "0.85rem" }}>
               No community photos exist for this coral yet.
             </p>
           ) : null}
-          {photos && photos.length > 0 && userId ? (
+          {communityPhotos.length > 0 && userId ? (
             <PhotoPicker
-              photos={photos}
+              photos={communityPhotos}
               userId={userId}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
+              selectedId={communitySelectedId}
+              onSelect={setCommunitySelectedId}
             />
           ) : null}
         </>
