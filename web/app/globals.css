@@ -475,6 +475,25 @@ td {
   border-color: var(--border);
 }
 
+/* Below this width, the fixed 88/96/96px pill columns no longer fit beside
+   the color tile + name — they were overlapping the name and spilling past
+   the card's right edge. Wrap the row and drop the pills to their own
+   full-width line instead of trying to shrink fixed-width columns. */
+@media (max-width: 640px) {
+  .morph-row {
+    flex-wrap: wrap;
+  }
+  .morph-row-pills {
+    display: flex;
+    flex-wrap: wrap;
+    flex-basis: 100%;
+    gap: 0.4rem;
+  }
+  .morph-row-pills .pill {
+    flex: none;
+  }
+}
+
 .swatch-strip {
   display: flex;
   gap: 3px;
