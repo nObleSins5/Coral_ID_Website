@@ -3,14 +3,24 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { TankGridView } from "@/components/tank-grid-view";
 import { columnLabel } from "@/lib/grid";
 import { getUsernamesFor } from "@/lib/wiki";
+import { getBadgeData, PARAM_META, type ParamKey } from "@/lib/tank-callouts";
 
-// Public, read-only tank showcase — a business account's grid, published via
-// TankPublishToggle (app/tank/[id]/page.tsx) and gated by tanks.is_public
-// (sql/supabase/28_public_tank_showcase.sql). No login required, no owner
-// actions: every occupied cell links straight out to the real community wiki
-// page for that coral (or its genus catch-all page, for a "genus only"
-// specimen — see getGenusOnlyQueue) rather than the private /specimen/[id]
-// route, since a visitor here never owns the tank.
+// Public, read-only tank page — gated by EITHER tanks.is_public (a business
+// account's full grid, published via TankPublishToggle) OR
+// tanks.badge_enabled (any account's parameters + species list, published
+// via TankBadgeToggle — see sql/supabase/32_tank_badge.sql). No login
+// required, no owner actions: every occupied cell/species link goes straight
+// to the real community wiki page for that coral (or its genus catch-all
+// page, for a "genus only" specimen — see getGenusOnlyQueue) rather than the
+// private /specimen/[id] route, since a visitor here never owns the tank.
+
+const PARAM_ORDER: ParamKey[] = [
+  "alkalinity_dkh",
+  "calcium_ppm",
+  "magnesium_ppm",
+  "nitrate_ppm",
+  "phosphate_ppm",
+];
 
 type Tank = {
   id: string;
@@ -43,10 +53,17 @@ export default async function TankShowcasePage({
     .from("tanks")
     .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, user_id")
     .eq("id", id)
-    .eq("is_public", true)
+    .or("is_public.eq.true,badge_enabled.eq.true")
     .maybeSingle();
   if (!tank) notFound();
   const tankRow = tank as Tank;
+
+  const badgeData = await getBadgeData(supabase, id);
+  const paramEntries = badgeData?.latestReading
+    ? PARAM_ORDER.map((key) => ({ key, value: badgeData.latestReading![key] })).filter(
+        (p): p is { key: ParamKey; value: number } => p.value != null,
+      )
+    : [];
 
   const { data: slots } = await supabase
     .from("grid_slots")
@@ -164,11 +181,48 @@ export default async function TankShowcasePage({
         {tankRow.tank_type ? `${tankRow.tank_type} · ` : ""}
         {tankRow.volume ? `${tankRow.volume} gal` : ""}
         {" · Presented by "}
-        {ownerNames.get(tankRow.user_id) ?? "a business member"}
+        {ownerNames.get(tankRow.user_id) ?? "a ReefCodex member"}
       </p>
 
+      {paramEntries.length > 0 ? (
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <p style={{ marginTop: 0, marginBottom: "0.5rem", fontWeight: 600 }}>
+            Current parameters
+          </p>
+          <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+            {paramEntries.map((p) => (
+              <div key={p.key}>
+                <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+                  {PARAM_META[p.key].label}
+                </p>
+                <p style={{ margin: 0, fontWeight: 600 }}>
+                  {p.value} {PARAM_META[p.key].unit}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {!hasGrid ? (
-        <p className="muted">This tank doesn&apos;t have a grid configured yet.</p>
+        specimenList.length > 0 ? (
+          <div className="card" style={{ marginBottom: "1rem" }}>
+            <p style={{ marginTop: 0, marginBottom: "0.5rem", fontWeight: 600 }}>
+              Species in this tank
+            </p>
+            <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+              {specimenList.map((s) => {
+                const href = taxonHref(s);
+                const label = s.taxon_nodes?.name ?? s.name ?? "Unidentified";
+                return (
+                  <li key={s.id}>{href ? <a href={href}>{label}</a> : label}</li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : (
+          <p className="muted">No corals catalogued in this tank yet.</p>
+        )
       ) : (
         <TankGridView tierGrids={tierGrids} />
       )}

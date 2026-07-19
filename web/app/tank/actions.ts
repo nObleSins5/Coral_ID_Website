@@ -142,6 +142,35 @@ export async function setTankPublic(formData: FormData): Promise<{ error?: strin
   return {};
 }
 
+// Toggles the pastable forum-signature badge (app/badge/[id]/route.tsx) —
+// unlike setTankPublic above, deliberately NO account-type gate: this only
+// exposes current parameters + a species list (see 32_tank_badge.sql), not
+// the full grid, so any owner (hobbyist or business) may enable it for
+// their own tank.
+export async function setTankBadgeEnabled(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const enabled = formData.get("badge_enabled") === "true";
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const { error } = await supabase
+    .from("tanks")
+    .update({ badge_enabled: enabled })
+    .eq("id", tankId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  revalidatePath(`/showcase/${tankId}`);
+  return {};
+}
+
 // --- Quick-add (tank grid page: search the wiki, add, place — no navigating
 // away). Three branches sharing the same shape (create a specimen, optionally
 // a photo, optionally straight into a grid slot) but differing in what the

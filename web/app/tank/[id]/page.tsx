@@ -6,6 +6,7 @@ import { QuickAddSpecimen } from "@/components/quick-add-specimen";
 import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridView } from "@/components/tank-grid-view";
 import { TankPublishToggle } from "@/components/tank-publish-toggle";
+import { TankBadgeToggle } from "@/components/tank-badge-toggle";
 import { TankStatusBlock } from "@/components/tank-status-block";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { columnLabel } from "@/lib/grid";
@@ -21,6 +22,7 @@ type Tank = {
   grid_columns: number | null;
   grid_rows: number | null;
   is_public: boolean;
+  badge_enabled: boolean;
 };
 type GridSlot = { id: string; x: number; y: number; z: number; label: string };
 type Specimen = {
@@ -46,7 +48,7 @@ export default async function TankPage({
 
   const { data: tank } = await supabase
     .from("tanks")
-    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public")
+    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public, badge_enabled")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -187,6 +189,8 @@ export default async function TankPage({
       {hasGrid && isBusiness ? (
         <TankPublishToggle tankId={tankRow.id} isPublic={tankRow.is_public} />
       ) : null}
+
+      <TankBadgeToggle tankId={tankRow.id} badgeEnabled={tankRow.badge_enabled} />
 
       {hasGrid ? (
         onboardingDone ? (

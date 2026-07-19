@@ -316,3 +316,49 @@ export async function getTankStatus(
 
   return buildTankStatus(contributing, latestReading, equipment);
 }
+
+export type BadgeData = {
+  tankName: string;
+  latestReading: LatestReading | null;
+  speciesNames: string[];
+};
+
+// Minimal, public-safe data for the pastable forum badge (app/badge/[id]/route.tsx)
+// and the generalized /showcase/[id] page — deliberately NOT getTankStatus:
+// that also pulls specimen/genus recommended-range rollups and needs public
+// RLS on `equipment`, more than a badge needs. Returns null if the tank
+// doesn't exist or has neither is_public nor badge_enabled set (RLS would
+// already block the row read for a disabled tank when called with the
+// anon/public client, but the explicit check keeps the "why null" obvious
+// here rather than relying on a silent RLS empty-result).
+export async function getBadgeData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any>,
+  tankId: string,
+): Promise<BadgeData | null> {
+  const { data: tank } = await supabase
+    .from("tanks")
+    .select("name, is_public, badge_enabled")
+    .eq("id", tankId)
+    .maybeSingle();
+  if (!tank || !(tank.is_public || tank.badge_enabled)) return null;
+
+  const { data: readingRows } = await supabase
+    .from("parameter_readings")
+    .select("measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm, temperature_c")
+    .eq("tank_id", tankId)
+    .order("measured_at", { ascending: false })
+    .limit(1);
+  const latestReading = (readingRows?.[0] as LatestReading | undefined) ?? null;
+
+  const { data: specimens } = await supabase
+    .from("specimens")
+    .select("name, taxon_nodes ( name )")
+    .eq("tank_id", tankId)
+    .is("deleted_at", null);
+  const speciesNames = ((specimens ?? []) as unknown as { name: string | null; taxon_nodes: { name: string } | null }[])
+    .map((s) => s.taxon_nodes?.name ?? s.name)
+    .filter((n): n is string => !!n);
+
+  return { tankName: tank.name, latestReading, speciesNames };
+}
