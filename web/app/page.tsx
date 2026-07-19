@@ -1,5 +1,6 @@
-import { getFeaturedMorphs, getGenera, getMorphBySlug } from "@/lib/wiki";
+import { getAllMorphsForSearch, getFeaturedMorphs, getGenera, getMorphBySlug } from "@/lib/wiki";
 import { CareDifficultyPill, ElementColorKey } from "@/components/coral-ui";
+import { QuickPostPhoto } from "@/components/quick-post-photo";
 
 // The spotlight coral for the "old way vs. registry way" contrast below —
 // a real, well-documented morph, not a fabricated example. Falls back
@@ -8,10 +9,11 @@ import { CareDifficultyPill, ElementColorKey } from "@/components/coral-ui";
 const DIFFERENTIATOR_MORPH_SLUG = "walt-disney-acropora";
 
 export default async function Home() {
-  const [genera, featured, spotlight] = await Promise.all([
+  const [genera, featured, spotlight, morphs] = await Promise.all([
     getGenera(),
     getFeaturedMorphs(4),
     getMorphBySlug(DIFFERENTIATOR_MORPH_SLUG),
+    getAllMorphsForSearch(),
   ]);
 
   const totalMorphs = genera.reduce((sum, g) => sum + g.morph_count, 0);
@@ -56,6 +58,8 @@ export default async function Home() {
           </a>
         ) : null}
       </section>
+
+      <QuickPostPhoto morphs={morphs} genera={genera} />
 
       <section className="differentiator">
         <div className="differentiator-old">

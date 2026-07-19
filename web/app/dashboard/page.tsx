@@ -314,7 +314,7 @@ export default async function Dashboard() {
         })
       )}
 
-      <h2>Add a tank</h2>
+      <h2 id="add-a-tank">Add a tank</h2>
       <form className="card" action={createTank}>
         <label htmlFor="name">Name</label>
         <input id="name" name="name" required placeholder="e.g. 75g Mixed Reef" />

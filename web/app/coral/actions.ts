@@ -142,6 +142,173 @@ export async function quickAddMorph(
   return {};
 }
 
+// Landing-page "clear my camera roll" flow (components/quick-post-photo.tsx)
+// — one action, one submit, three outcomes depending on what the user typed:
+//   1. taxon_node_id set    -> matched an existing morph, same body as
+//                              uploadCoralPhoto above (attach + optional
+//                              tank/specimen).
+//   2. genus_id set instead -> no match, but a genus was tagged: same body
+//                              as quickAddMorph above (new-morph proposal),
+//                              extended to also accept tank_id — the
+//                              resulting specimen sits at the genus level
+//                              until the proposal resolves, the same interim
+//                              state getGenusOnlyQueue (lib/wiki.ts) already
+//                              renders for any other genus-only match.
+//   3. neither set          -> same body as uploadUnidentifiedPhoto
+//                              (app/identify/actions.ts): unattached, goes
+//                              to the /identify queue. Any typed name is
+//                              dropped here — id_suggestions_new_morph_needs_genus
+//                              means a bare name with no genus has nowhere
+//                              to be stored, so this is a deliberate no-op,
+//                              not a bug.
+export async function quickPostPhoto(formData: FormData): Promise<{
+  error?: string;
+  outcome?: "posted" | "new_morph_proposed" | "sent_to_identify";
+  href?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to post a photo." };
+
+  const taxonNodeId = String(formData.get("taxon_node_id") ?? "") || null;
+  const genusId = String(formData.get("genus_id") ?? "") || null;
+  const genusSlug = String(formData.get("genus_slug") ?? "") || null;
+  const morphSlug = String(formData.get("morph_slug") ?? "") || null;
+  const proposedName = String(formData.get("proposed_name") ?? "").trim();
+  const tankId = String(formData.get("tank_id") ?? "") || null;
+  const takenAtRaw = String(formData.get("taken_at") ?? "");
+
+  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
+  if ("error" in uploaded) return uploaded;
+
+  // Branch 1 — matched an existing morph.
+  if (taxonNodeId) {
+    const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
+    const { data: photo, error: insertError } = await supabase
+      .from("coral_photos")
+      .insert({
+        uploader_user_id: user.id,
+        taxon_node_id: taxonNodeId,
+        tank_id: tankId,
+        is_public: true,
+        taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+        storage_provider: "supabase",
+        storage_key: uploaded.path,
+        url: uploaded.publicUrl,
+        mime: uploaded.mime,
+        bytes: uploaded.bytes,
+        ...snapshot,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !photo) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      return { error: `Could not save photo: ${insertError?.message ?? "unknown error"}` };
+    }
+
+    if (tankId) {
+      await supabase.from("specimens").insert({
+        user_id: user.id,
+        tank_id: tankId,
+        taxon_node_id: taxonNodeId,
+        representative_photo_id: photo.id,
+      });
+      revalidatePath(`/tank/${tankId}`);
+      revalidatePath("/dashboard");
+    }
+
+    const href = genusSlug && morphSlug ? `/coral/${genusSlug}/${morphSlug}` : null;
+    if (genusSlug && morphSlug) revalidatePath(href!);
+    revalidatePath("/");
+    return { outcome: "posted", href: href ?? undefined };
+  }
+
+  // Branch 2 — no match, but a genus was tagged: new-morph proposal.
+  if (genusId) {
+    if (!proposedName) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      return { error: "Give the coral a name." };
+    }
+
+    const { data: photo, error: photoError } = await supabase
+      .from("coral_photos")
+      .insert({
+        uploader_user_id: user.id,
+        taxon_node_id: genusId,
+        tank_id: tankId,
+        is_public: true,
+        taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+        storage_provider: "supabase",
+        storage_key: uploaded.path,
+        url: uploaded.publicUrl,
+        mime: uploaded.mime,
+        bytes: uploaded.bytes,
+      })
+      .select("id")
+      .single();
+
+    if (photoError || !photo) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      return { error: `Could not save photo: ${photoError?.message ?? "unknown error"}` };
+    }
+
+    const { error: suggestionError } = await supabase.from("id_suggestions").insert({
+      coral_photo_id: photo.id,
+      proposed_taxon_id: null,
+      proposed_name: proposedName,
+      proposed_genus_id: genusId,
+      suggested_by_user_id: user.id,
+    });
+    if (suggestionError) {
+      await supabase.storage.from("coral-photos").remove([uploaded.path]);
+      await supabase.from("coral_photos").delete().eq("id", photo.id);
+      return { error: suggestionError.message };
+    }
+
+    if (tankId) {
+      await supabase.from("specimens").insert({
+        user_id: user.id,
+        tank_id: tankId,
+        taxon_node_id: genusId,
+        representative_photo_id: photo.id,
+      });
+      revalidatePath(`/tank/${tankId}`);
+      revalidatePath("/dashboard");
+    }
+
+    const href = genusSlug ? `/coral/${genusSlug}` : null;
+    if (href) revalidatePath(href);
+    return { outcome: "new_morph_proposed", href: href ?? undefined };
+  }
+
+  // Branch 3 — fully unidentified: same body as uploadUnidentifiedPhoto.
+  const snapshot = await computeParameterSnapshot(supabase, tankId, takenAtRaw);
+  const { error: insertError } = await supabase.from("coral_photos").insert({
+    uploader_user_id: user.id,
+    taxon_node_id: null,
+    tank_id: tankId,
+    is_public: true,
+    taken_at: takenAtRaw ? new Date(takenAtRaw).toISOString() : new Date().toISOString(),
+    storage_provider: "supabase",
+    storage_key: uploaded.path,
+    url: uploaded.publicUrl,
+    mime: uploaded.mime,
+    bytes: uploaded.bytes,
+    ...snapshot,
+  });
+
+  if (insertError) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    return { error: `Could not save photo: ${insertError.message}` };
+  }
+
+  revalidatePath("/identify");
+  return { outcome: "sent_to_identify" };
+}
+
 // Toggles a single, unambiguously-labeled "this is an accurate match" vote
 // (see docs/schema-decisions.md / docs/future-considerations.md for why this
 // is deliberately one signal, not a separate "I like this photo" — the UI
