@@ -76,6 +76,72 @@ export async function uploadCoralPhoto(
   return {};
 }
 
+// Fast on-ramp for "I know this genus, my morph just isn't seeded yet" — the
+// callout at the top of a genus's wiki page. Skips the full /identify flow
+// (upload -> get confirmed to the genus -> come back and propose a name):
+// this does the upload AND the new-morph proposal in one submit, landing the
+// photo directly at the genus level with a pending id_suggestion already
+// attached. Same underlying mechanism as the "newName + newGenusId" path in
+// app/identify/actions.ts (proposeIdentification) — a suggestion only
+// becomes a real taxon_node once it clears the community vote threshold
+// (handle_id_vote_change, sql/supabase/09_unidentified_id_flow.sql), so this
+// never bypasses moderation, it just removes the extra round trip.
+export async function quickAddMorph(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in to add a morph." };
+
+  const genusId = String(formData.get("genus_id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const genusSlug = String(formData.get("genus_slug") ?? "");
+  if (!genusId) return { error: "Missing genus reference." };
+  if (!name) return { error: "Give the morph a name." };
+
+  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
+  if ("error" in uploaded) return uploaded;
+
+  const { data: photo, error: photoError } = await supabase
+    .from("coral_photos")
+    .insert({
+      uploader_user_id: user.id,
+      taxon_node_id: genusId,
+      is_public: true,
+      taken_at: new Date().toISOString(),
+      storage_provider: "supabase",
+      storage_key: uploaded.path,
+      url: uploaded.publicUrl,
+      mime: uploaded.mime,
+      bytes: uploaded.bytes,
+    })
+    .select("id")
+    .single();
+
+  if (photoError || !photo) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    return { error: `Could not save photo: ${photoError?.message ?? "unknown error"}` };
+  }
+
+  const { error: suggestionError } = await supabase.from("id_suggestions").insert({
+    coral_photo_id: photo.id,
+    proposed_taxon_id: null,
+    proposed_name: name,
+    proposed_genus_id: genusId,
+    suggested_by_user_id: user.id,
+  });
+  if (suggestionError) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    await supabase.from("coral_photos").delete().eq("id", photo.id);
+    return { error: suggestionError.message };
+  }
+
+  if (genusSlug) revalidatePath(`/coral/${genusSlug}`);
+  return {};
+}
+
 // Toggles a single, unambiguously-labeled "this is an accurate match" vote
 // (see docs/schema-decisions.md / docs/future-considerations.md for why this
 // is deliberately one signal, not a separate "I like this photo" — the UI

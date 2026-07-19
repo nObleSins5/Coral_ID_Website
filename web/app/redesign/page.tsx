@@ -57,7 +57,7 @@ export default async function RedesignHome() {
           variant="outline"
           className="border-border font-medium tracking-wide text-muted-foreground uppercase"
         >
-          The Coral Registry
+          ReefCodex
         </Badge>
         <span className="tabular-nums">
           <strong className="font-semibold text-foreground">{totalMorphs}</strong>{" "}

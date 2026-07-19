@@ -1116,6 +1116,51 @@ export async function getGenusOnlyQueue(genusId: string): Promise<UnidentifiedQu
   return buildQueueItems(supabase, (photos as UnidentifiedPhoto[]) ?? []);
 }
 
+export type PendingMorph = {
+  suggestionId: string;
+  name: string;
+  photoUrl: string;
+  netVotes: number;
+};
+
+// Brand-new-morph proposals for THIS genus that haven't cleared the vote
+// threshold yet (see handle_id_vote_change, sql/supabase/09_unidentified_id_flow.sql)
+// — shown as "Pending" tiles in the genus page's main registry grid, right
+// alongside confirmed morphs (the underlying photo + suggestion also still
+// appear in getGenusOnlyQueue's card list further down the same page, where
+// voting happens). Multiple people proposing the same name for different
+// photos is expected early on (see quickAddMorph in app/coral/actions.ts) —
+// dedupe by normalized name and keep only the leading (highest-voted)
+// candidate photo per name, so the grid shows one tile per pending name, not
+// one per photo.
+export async function getPendingMorphsForGenus(genusId: string): Promise<PendingMorph[]> {
+  const supabase = createPublicClient();
+  const { data: suggestions } = await supabase
+    .from("id_suggestions")
+    .select("id, proposed_name, net_votes, coral_photo_id, coral_photos!inner(url, is_public)")
+    .eq("proposed_genus_id", genusId)
+    .is("proposed_taxon_id", null)
+    .eq("status_code", "pending")
+    .eq("coral_photos.is_public", true)
+    .order("net_votes", { ascending: false });
+
+  const byName = new Map<string, PendingMorph>();
+  for (const s of suggestions ?? []) {
+    if (!s.proposed_name) continue;
+    const key = s.proposed_name.trim().toLowerCase();
+    if (byName.has(key)) continue;
+    const photo = Array.isArray(s.coral_photos) ? s.coral_photos[0] : s.coral_photos;
+    if (!photo?.url) continue;
+    byName.set(key, {
+      suggestionId: s.id,
+      name: s.proposed_name.trim(),
+      photoUrl: photo.url,
+      netVotes: s.net_votes,
+    });
+  }
+  return [...byName.values()];
+}
+
 export type GenusOption = { id: string; name: string; slug: string; isUnknownBucket: boolean };
 
 // Genus choices for "I only know the genus" / "no idea at all" proposals —

@@ -12,7 +12,7 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Reef Platform",
+  title: "ReefCodex",
   description:
     "Log tank parameters, equipment, and coral inventory — and help build a crowdsourced record linking coral coloration to the conditions that produced it.",
 };
@@ -25,7 +25,7 @@ export default function RootLayout({
       <body>
         <header className="site-header">
           <a href="/" className="brand">
-            Reef Platform
+            Reef<span className="brand-accent">Codex</span>
           </a>
           <HeaderSearch />
           <nav>

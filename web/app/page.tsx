@@ -22,13 +22,14 @@ export default async function Home() {
     <div className="landing">
       <section className="hero">
         <div className="hero-copy">
+          <p className="hero-kicker">ReefCodex</p>
           <h1 className="hero-headline">
             Know your coral by its actual colors — not a guess.
           </h1>
           <p className="hero-sub">
-            Tell us the shape and the colors you see — that&apos;s it. The Coral
-            Registry matches what you describe against real, element-by-element
-            trait data, instead of making you scroll a feed of lookalike photos.
+            Tell us the shape and the colors you see — that&apos;s it. ReefCodex
+            matches what you describe against real, element-by-element trait
+            data, instead of making you scroll a feed of lookalike photos.
           </p>
           <div className="hero-actions">
             <a className="btn-primary-link" href="/identify">

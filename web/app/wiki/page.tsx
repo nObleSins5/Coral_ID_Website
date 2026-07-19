@@ -1,7 +1,7 @@
 import { getGenera, getGenusCategories, getGenusHeroPhotos } from "@/lib/wiki";
 
 export const metadata = {
-  title: "Coral Wiki — Reef Platform",
+  title: "Coral Wiki — ReefCodex",
   description:
     "Browse corals by category and genus, drill into a morph, and compare its typical element colors for self-identification.",
 };

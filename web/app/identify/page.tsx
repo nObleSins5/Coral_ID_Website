@@ -11,7 +11,7 @@ import { CoralIdentifyFunnel } from "@/components/coral-identify-funnel";
 import { IdentifyQueue } from "@/components/identify-queue";
 
 export const metadata = {
-  title: "Identify a Coral — Reef Platform",
+  title: "Identify a Coral — ReefCodex",
   description:
     "Identify your coral by the colors you see — pick its shape and colors and compare against real, structured trait data. Or post a photo for the community.",
 };

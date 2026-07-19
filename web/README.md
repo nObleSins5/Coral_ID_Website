@@ -1,6 +1,6 @@
-# Reef Platform — Web app
+# ReefCodex — Web app
 
-Next.js (App Router, TypeScript) front end for the Reef Platform, talking to
+Next.js (App Router, TypeScript) front end for ReefCodex, talking to
 Supabase. This is the **Phase 0 vertical slice**: sign up → create a tank → log
 parameters, end to end against a live Supabase database with Row-Level Security.
 

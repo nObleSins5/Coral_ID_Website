@@ -337,7 +337,21 @@ export function CarePill({ kind, code }: { kind: "light" | "flow"; code: string 
   const icon = kind === "light" ? "☀" : "≈";
   return (
     <span className="pill">
-      {icon} {kind === "light" ? "Light" : "Flow"}: {CARE_LEVEL[code] ?? code}
+      <span className="pill-icon">{icon}</span> {kind === "light" ? "Light" : "Flow"}:{" "}
+      {CARE_LEVEL[code] ?? code}
+    </span>
+  );
+}
+
+// Marks a brand-new-morph proposal that hasn't cleared the community vote
+// threshold yet (see getPendingMorphsForGenus, lib/wiki.ts) — deliberately
+// NOT one of the four locked status colors (those are reserved for
+// difficulty/vote/wishlist per DESIGN.md's One-Accent Rule), just the
+// neutral pill treatment with a small icon for scannability.
+export function PendingPill() {
+  return (
+    <span className="pill pill-pending">
+      <span className="pill-icon">⏳</span> Pending
     </span>
   );
 }

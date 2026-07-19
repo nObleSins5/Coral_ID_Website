@@ -8,15 +8,18 @@ import {
   getGenusOptionsForIdentify,
   getHeroPhotoUrlsForTaxa,
   getMorphsForGenus,
+  getPendingMorphsForGenus,
 } from "@/lib/wiki";
 import {
   CareDifficultyPill,
   CarePill,
   CompactColorKey,
   ColorTile,
+  PendingPill,
   keyColors,
 } from "@/components/coral-ui";
 import { IdentifyQueue } from "@/components/identify-queue";
+import { AddMorphCallout } from "@/components/add-morph-callout";
 
 export async function generateStaticParams() {
   const slugs = await getAllGenusSlugs();
@@ -46,13 +49,15 @@ export default async function GenusPage({
   const genus = await getGenusBySlug(genusSlug);
   if (!genus) notFound();
 
-  const [morphs, genusOnlyQueue, allMorphs, allGenera, genusOptions] = await Promise.all([
-    getMorphsForGenus(genus.id),
-    getGenusOnlyQueue(genus.id),
-    getAllMorphsForSearch(),
-    getGenera(),
-    getGenusOptionsForIdentify(),
-  ]);
+  const [morphs, genusOnlyQueue, allMorphs, allGenera, genusOptions, pendingMorphs] =
+    await Promise.all([
+      getMorphsForGenus(genus.id),
+      getGenusOnlyQueue(genus.id),
+      getAllMorphsForSearch(),
+      getGenera(),
+      getGenusOptionsForIdentify(),
+      getPendingMorphsForGenus(genus.id),
+    ]);
   const heroUrls = await getHeroPhotoUrlsForTaxa(morphs.map((m) => m.id));
   // Scope the "search existing corals" list to this genus's own morphs —
   // more relevant here than the full 100+-coral list /identify searches.
@@ -73,7 +78,9 @@ export default async function GenusPage({
         ) : null}
       </h1>
 
-      {morphs.length === 0 ? (
+      <AddMorphCallout genusId={genus.id} genusName={genus.name} genusSlug={genus.slug} />
+
+      {morphs.length === 0 && pendingMorphs.length === 0 ? (
         <p className="muted">No morphs seeded yet for this genus.</p>
       ) : (
         <div className="morph-list">
@@ -109,6 +116,27 @@ export default async function GenusPage({
               </a>
             );
           })}
+          {pendingMorphs.map((p) => (
+            <div className="morph-row morph-row-pending" key={p.suggestionId}>
+              <div className="color-tile" style={{ overflow: "hidden" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.photoUrl}
+                  alt={`${p.name} — proposed photo`}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                />
+              </div>
+              <div className="morph-row-main">
+                <div className="name">{p.name}</div>
+                <span className="muted" style={{ fontSize: "0.85rem" }}>
+                  Not yet confirmed — vote below
+                </span>
+              </div>
+              <div className="morph-row-pills">
+                <PendingPill />
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

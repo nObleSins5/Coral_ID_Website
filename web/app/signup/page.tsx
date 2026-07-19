@@ -1,4 +1,5 @@
 import { signup } from "./actions";
+import { COUNTRIES } from "@/lib/countries";
 
 export default async function SignupPage({
   searchParams,
@@ -26,18 +27,26 @@ export default async function SignupPage({
           <option value="business">Business</option>
         </select>
 
+        <label htmlFor="country_code">Country</label>
+        <select id="country_code" name="country_code" required defaultValue="">
+          <option value="" disabled>
+            Select your country…
+          </option>
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
         <div className="row">
           <div>
-            <label htmlFor="region">Region</label>
-            <input id="region" name="region" placeholder="e.g. Southeast US" />
+            <label htmlFor="state">State / Province / Region</label>
+            <input id="state" name="state" placeholder="Optional" />
           </div>
           <div>
-            <label htmlFor="state">State</label>
-            <input id="state" name="state" placeholder="e.g. GA" />
-          </div>
-          <div>
-            <label htmlFor="zip">Zip</label>
-            <input id="zip" name="zip" placeholder="e.g. 30301" />
+            <label htmlFor="postal_code">Postal code</label>
+            <input id="postal_code" name="postal_code" placeholder="Optional" />
           </div>
         </div>
 
@@ -48,8 +57,9 @@ export default async function SignupPage({
         Already have an account? <a href="/login">Log in</a>.
       </p>
       <p className="muted">
-        Zip is stored now so local-trade matching can be switched on later
-        without re-asking.
+        Your country (and postal code, if you add it) are stored now so
+        regional trade matching can be switched on later without re-asking —
+        never a street address.
       </p>
     </div>
   );

@@ -58,8 +58,17 @@ a:hover {
 }
 .site-header .brand {
   font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
   color: var(--text);
   white-space: nowrap;
+}
+/* Two-tone wordmark — Deep Water Blue (not the vivid Shallow Reef Blue, which
+   DESIGN.md reserves for a single plain UI affordance per screen), so the
+   logotype reads intentional without competing with the page's own accent
+   usage lower down. */
+.brand-accent {
+  color: var(--accent-text);
 }
 .site-header nav {
   margin-left: auto;
@@ -240,6 +249,17 @@ button:hover {
   border-radius: 999px;
   color: var(--muted);
 }
+/* Fixed-width icon box so the ☀/≈/⏳ glyph sits at a consistent offset
+   regardless of the font's natural glyph metrics or the label text next to
+   it — see .morph-row-pills below for the other half of the alignment fix. */
+.pill-icon {
+  display: inline-flex;
+  width: 1em;
+  justify-content: center;
+}
+.pill-pending {
+  font-style: italic;
+}
 /* Care-difficulty badge: an easy->expert escalation across the supporting
    palette (calm lime through to hot pink), distinct from the neutral .pill
    used for light/flow/growth-form tags. */
@@ -364,6 +384,41 @@ td {
   margin-bottom: 0;
 }
 
+/* Genus page "add a new morph" callout — the one Shallow Reef Blue "you are
+   here" affordance on this screen (DESIGN.md's One-Accent Rule), so nothing
+   else on the page should also reach for --accent. A full border, not a
+   side stripe (DESIGN.md explicitly disallows border-left/right accents). */
+.add-morph-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+.add-morph-callout p {
+  margin: 0;
+}
+.add-morph-callout button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+.add-morph-form {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 .morph-list {
   display: flex;
   flex-direction: column;
@@ -397,13 +452,27 @@ td {
 .morph-row-main .name {
   font-weight: 600;
 }
+/* Fixed-width columns (difficulty / light / flow), not shrink-to-fit flex —
+   a flex row lets each pill's width follow its own label length ("Light:
+   High" vs "Light: Very High"), which pushes every pill in the row sideways
+   depending on its neighbors' text and leaves nothing aligned between rows.
+   Grid tracks pin each pill type to the same x-offset down the whole list. */
 .morph-row-pills {
-  display: flex;
+  display: grid;
+  grid-template-columns: 88px 96px 96px;
   gap: 0.4rem;
-  flex-wrap: wrap;
 }
 .morph-row-pills .pill {
-  flex: none;
+  justify-self: start;
+}
+.morph-row-pending .morph-row-pills {
+  grid-template-columns: none;
+}
+.morph-row-pending {
+  cursor: default;
+}
+.morph-row-pending:hover {
+  border-color: var(--border);
 }
 
 .swatch-strip {
@@ -1897,6 +1966,14 @@ td {
   .hero {
     animation: none;
   }
+}
+.hero-kicker {
+  color: var(--accent-text);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 0.6rem;
 }
 .hero-headline {
   font-size: clamp(1.9rem, 1.35rem + 2vw, 2.75rem);
