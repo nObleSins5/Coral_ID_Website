@@ -7,6 +7,18 @@ export const metadata = {
     "Identify your coral by the colors you see — pick its shape and colors and compare against real, structured trait data. No coral-anatomy knowledge needed.",
 };
 
+// CoralIdentifyFunnel reads/writes funnel state via useSearchParams() with no
+// Suspense boundary around it (a deliberate choice — see PROGRESS.md
+// 2026-07-16: wrapping it in <Suspense> instead caused the funnel to render
+// as a DOM sibling AFTER other page content due to streaming SSR reordering).
+// force-dynamic is what makes that safe: the page is never statically
+// prerendered, so Next's "useSearchParams needs a Suspense boundary" build
+// check — which only fires for a static/prerendered shell — doesn't apply.
+// Dropping this (as happened when /identify was split from /community) will
+// fail the build with a prerender error the moment this page is eligible
+// for static generation again.
+export const dynamic = "force-dynamic";
+
 export default async function IdentifyPage() {
   const [corals, categories] = await Promise.all([
     getCoralsForColorMatch(),
