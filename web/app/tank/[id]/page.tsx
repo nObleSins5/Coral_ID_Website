@@ -9,6 +9,12 @@ import { TankPublishToggle } from "@/components/tank-publish-toggle";
 import { TankBadgeToggle } from "@/components/tank-badge-toggle";
 import { TankStatusBlock } from "@/components/tank-status-block";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { PlacementModeToggle } from "@/components/placement-mode-toggle";
+import { CreateSceneForm } from "@/components/create-scene-form";
+import { ScenePhotoUpload } from "@/components/scene-photo-upload";
+import { SceneCalibrationTool } from "@/components/scene-calibration-tool";
+import { ScenePlacementCanvas, type PlacementSpecimen } from "@/components/scene-placement-canvas";
+import type { SceneViewCalibration } from "@/lib/scene";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 import { getTankStatus } from "@/lib/tank-callouts";
 
@@ -22,6 +28,7 @@ type Tank = {
   grid_rows: number | null;
   is_public: boolean;
   badge_enabled: boolean;
+  placement_mode: "grid" | "scene";
 };
 type GridSlot = {
   id: string;
@@ -55,7 +62,9 @@ export default async function TankPage({
 
   const { data: tank } = await supabase
     .from("tanks")
-    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public, badge_enabled")
+    .select(
+      "id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public, badge_enabled, placement_mode",
+    )
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -108,6 +117,36 @@ export default async function TankPage({
       ? await supabase.from("coral_photos").select("id, url").in("id", photoIds)
       : { data: [] as { id: string; url: string }[] };
   const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
+
+  // Scene model (sql/supabase/36_tank_scale_model.sql) — fetched regardless of
+  // the tank's current placement_mode so switching modes (PlacementModeToggle)
+  // never loses access to a scene already set up.
+  const { data: scene } = await supabase
+    .from("tank_scenes")
+    .select("id, width_mm, height_mm, depth_mm")
+    .eq("tank_id", id)
+    .eq("kind", "tank")
+    .maybeSingle();
+
+  const { data: sceneViewRows } = scene
+    ? await supabase.from("scene_views").select("id, facing, image_path, calibration").eq("scene_id", scene.id)
+    : { data: [] as { id: string; facing: string; image_path: string; calibration: unknown }[] };
+  const sceneViews = (sceneViewRows ?? []) as {
+    id: string;
+    facing: string;
+    image_path: string;
+    calibration: SceneViewCalibration | null;
+  }[];
+  const frontView = sceneViews.find((v) => v.facing === "front") ?? null;
+  const sideView = sceneViews.find((v) => v.facing === "side") ?? null;
+  const topView = sceneViews.find((v) => v.facing === "top") ?? null;
+
+  const { data: placementRows } = scene
+    ? await supabase.from("specimen_placements").select("specimen_id, x_mm, y_mm, z_mm").eq("scene_id", scene.id)
+    : { data: [] as { specimen_id: string; x_mm: number; y_mm: number; z_mm: number }[] };
+  const placementBySpecimenId = new Map(
+    (placementRows ?? []).map((p) => [p.specimen_id, { x_mm: p.x_mm, y_mm: p.y_mm, z_mm: p.z_mm }]),
+  );
 
   const [allMorphs, allGenera, tankStatus] = await Promise.all([
     getAllMorphsForSearch(),
@@ -171,6 +210,18 @@ export default async function TankPage({
     representativePhotoId: s.representative_photo_id,
   }));
 
+  // Scene mode's specimen list — every specimen in the tank, independent of
+  // grid_slot_id (the two placement systems coexist and don't share state).
+  const placementSpecimens: PlacementSpecimen[] = specimenList.map((s) => ({
+    id: s.id,
+    name: s.name || s.taxon_nodes?.name || "Unnamed coral",
+    photoUrl: s.representative_photo_id ? photoUrlById.get(s.representative_photo_id) ?? null : null,
+    placement: placementBySpecimenId.get(s.id) ?? null,
+  }));
+  const sceneDims = scene
+    ? { width_mm: scene.width_mm, height_mm: scene.height_mm, depth_mm: scene.depth_mm }
+    : null;
+
   return (
     <div>
       <p className="breadcrumb">
@@ -190,6 +241,8 @@ export default async function TankPage({
 
       <TankBadgeToggle tankId={tankRow.id} badgeEnabled={tankRow.badge_enabled} />
 
+      <PlacementModeToggle tankId={tankRow.id} placementMode={tankRow.placement_mode} />
+
       {hasGrid ? (
         onboardingDone ? (
           <TankStatusBlock status={tankStatus} husbandryHref={`/tank/${tankRow.id}/husbandry`} />
@@ -203,9 +256,10 @@ export default async function TankPage({
         )
       ) : null}
 
-      {!hasGrid ? (
-        <ConfigureGridForm tankId={tankRow.id} />
-      ) : (
+      {tankRow.placement_mode === "grid" ? (
+        !hasGrid ? (
+          <ConfigureGridForm tankId={tankRow.id} />
+        ) : (
         <>
           <TankGridInteractive
             tankId={tankRow.id}
@@ -257,6 +311,39 @@ export default async function TankPage({
             </div>
           )}
         </>
+        )
+      ) : (
+        <div className="scene-mode-section">
+          {!scene ? (
+            <CreateSceneForm tankId={tankRow.id} />
+          ) : (
+            <>
+              <ScenePhotoUpload sceneId={scene.id} facing="front" hasExisting={!!frontView} />
+              <ScenePhotoUpload sceneId={scene.id} facing="side" hasExisting={!!sideView} />
+              <ScenePhotoUpload sceneId={scene.id} facing="top" hasExisting={!!topView} />
+
+              {!frontView ? (
+                <p className="muted">Upload a face-on photo above to start placing corals.</p>
+              ) : !frontView.calibration ? (
+                <SceneCalibrationTool
+                  sceneViewId={frontView.id}
+                  facing="front"
+                  imageUrl={frontView.image_path}
+                  axisLengthsMm={{ horizontal: sceneDims!.width_mm, vertical: sceneDims!.height_mm }}
+                  initialCalibration={null}
+                />
+              ) : (
+                <ScenePlacementCanvas
+                  sceneId={scene.id}
+                  dims={sceneDims!}
+                  imageUrl={frontView.image_path}
+                  calibration={frontView.calibration}
+                  specimens={placementSpecimens}
+                />
+              )}
+            </>
+          )}
+        </div>
       )}
     </div>
   );

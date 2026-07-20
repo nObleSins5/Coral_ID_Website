@@ -171,6 +171,32 @@ export async function setTankBadgeEnabled(formData: FormData): Promise<{ error?:
   return {};
 }
 
+// Switches which placement UI a tank shows — grid_slots or the calibrated
+// scene model — without touching either one's data (coexist, opt-in per
+// docs/tank-scale-model-brief.md §4). Switching back to 'grid' doesn't lose
+// scene placements, and switching to 'scene' doesn't lose the grid; a tank
+// can flip freely since nothing is deleted, only which UI renders.
+export async function setPlacementMode(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const mode = String(formData.get("placement_mode") ?? "");
+  if (mode !== "grid" && mode !== "scene") return { error: "Invalid placement mode." };
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const { error } = await supabase.from("tanks").update({ placement_mode: mode }).eq("id", tankId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
 const SLOT_TYPE_CODES = new Set(["sand", "rock", "open_water", "frag_rack"]);
 
 // Slot settings — substrate type + "not usable for coral" (sql/supabase/34_grid_slot_types.sql).

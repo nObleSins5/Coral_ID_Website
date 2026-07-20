@@ -2068,6 +2068,17 @@ td {
   flex-basis: 100%;
   font-size: 0.85rem;
 }
+.scene-mode-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.placement-mode-toggle {
+  margin: -0.5rem 0 1rem;
+}
+.placement-mode-toggle .btn-secondary-link {
+  font-size: inherit;
+}
 
 .checkbox-row {
   display: flex;
