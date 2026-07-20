@@ -81,10 +81,13 @@ a:hover {
 }
 .site-header nav {
   margin-left: auto;
-  white-space: nowrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
 }
 .site-header nav a {
-  margin-left: 1rem;
+  white-space: nowrap;
+  margin: 0;
 }
 
 .header-search {
@@ -141,12 +144,17 @@ a:hover {
     flex-basis: 100%;
     max-width: none;
   }
+  .site-header nav {
+    order: 4;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
 }
 /* The nav's one auth-dependent item (AuthNavLink) is a form+button when
-   signed in, not an <a> — styled to read identically to its sibling links. */
+   signed in, not an <a> — styled to read identically to its sibling links.
+   Spacing comes from nav's own `gap` now, not a per-item margin. */
 .nav-signout-form {
   display: inline;
-  margin-left: 1rem;
 }
 .nav-signout-form button {
   background: none;
