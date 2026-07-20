@@ -47,7 +47,7 @@ constrain 3D position without any true 3D reconstruction.
 | Photo | Slides along | Calibrates | Role |
 |---|---|---|---|
 | **Face-on** (required, v1) | front glass | X (left–right), Y (up–down) | The primary canvas that replaces the grid drawing. |
-| **Side profile** (required, v1) | side glass | Z (front–back depth), Y (cross-check) | The linked depth view; the measurement standard for how far off the front glass a structure sits. |
+| **Side profile** (required, v1) | side glass | Z (front–back depth), Y (cross-check) | Optional depth *aid* for corals visible from the side (front row, rock tops). NOT the source of truth — rockwork occludes most of the tank from a side view, so depth is set primarily via the slider (see §5). Still captured in v1 because it calibrates the depth scale the slider uses. |
 | Top-down (deferred, optional) | — | X/Z footprint cross-check | Often physically uncapturable (tank in a stand under a tight light). Never required; a future cross-check only. |
 
 ### Calibration math (v1, deliberately linear)
@@ -88,10 +88,13 @@ tank_scenes
   tank_id         uuid fk -> tanks
   parent_scene_id uuid fk -> tank_scenes  NULL  (phase-2 seam; always NULL in v1)
   kind            text   ('tank' | 'detail')    (v1 only ever 'tank')
-  -- known physical dimensions of what this scene frames, inches
-  width_in        numeric
-  height_in       numeric
-  depth_in        numeric
+  -- known physical dimensions of what this scene frames.
+  -- Canonical unit is MILLIMETRES (metric, precise, integer-friendly);
+  -- inches are a display conversion only (mm / 25.4), never a second column,
+  -- so the two units can never drift out of sync.
+  width_mm        numeric
+  height_mm       numeric
+  depth_mm        numeric
   created_at / updated_at
 
 scene_views                              -- the calibrated photos for a scene
@@ -107,7 +110,9 @@ specimen_placements                      -- replaces specimens.grid_slot_id usag
   id              uuid pk
   scene_id        uuid fk -> tank_scenes
   specimen_id     uuid fk -> specimens
-  x_in / y_in / z_in  numeric            -- continuous, inches, scene-local
+  -- continuous, scene-local, canonical MILLIMETRES (see dimensions note above);
+  -- inches derived for display only.
+  x_mm / y_mm / z_mm  numeric
   created_at / updated_at
 ```
 
@@ -125,14 +130,24 @@ specimen_placements                      -- replaces specimens.grid_slot_id usag
 ## 5. Interaction Model
 
 - **Placing:** user opens the face-on canvas, taps a coral from their specimen
-  list, then taps its location on the photo. A second tap on the side-profile
-  view (or a depth slider defaulting to mid-tank) sets `z_in`. Continuous — no
-  snapping.
-- **Manipulating "the model":** pan/zoom the face-on canvas; toggle to the
-  side/depth view to read front-back position. "Manipulate to get to a rock
-  outcrop" = zoom + pan on the canvas (deep-zoom style), not orbiting a mesh.
-- **Editing:** drag a pin to reposition; its `(x,y,z)` updates live. Removing a
-  specimen from the tank clears its placement.
+  list, then taps its location on the photo (sets X, Y). A **depth slider**
+  (defaulting to mid-tank) sets Z / front-back. Continuous — no snapping. Each
+  of the three axes is slider-adjustable for fine-tuning after the initial tap.
+- **Depth is slider-primary, side-photo-assisted (occlusion is why).** The side
+  profile canNOT be the source of truth for depth: rockwork blocks the line of
+  sight from the side, so any coral tucked behind rock simply does not appear in
+  the side photo — you can't tap what you can't see. So the depth **slider is the
+  primary input** for Z, always available for every specimen. The side photo is
+  an **optional aid**: for the corals that *are* visible from the side (front
+  row, tops of rockwork), tapping them there can set/refine Z; for everything
+  occluded, the user estimates depth on the slider (aided by the known tank depth
+  scale printed on the slider, e.g. "0 in — front glass … 18 in — back glass").
+  Never require a side-profile tap to place a coral.
+- **Manipulating "the model":** pan/zoom the face-on canvas; the depth slider and
+  optional side view read/adjust front-back position. "Manipulate to get to a
+  rock outcrop" = zoom + pan on the canvas (deep-zoom style), not orbiting a mesh.
+- **Editing:** drag a pin to reposition (X/Y); adjust the slider for Z; values
+  update live. Removing a specimen from the tank clears its placement.
 
 ## 6. Key States
 
