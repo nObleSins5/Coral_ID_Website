@@ -1886,6 +1886,133 @@ td {
   min-width: 0;
 }
 
+/* --- Scene placement canvas (components/scene-placement-canvas.tsx) ---
+   The calibrated-photo placement model from docs/tank-scale-model-brief.md —
+   a coral is a pin at a real position on the tank's own photo, not a grid
+   cell. Reuses the tank-grid's accent/border vocabulary rather than inventing
+   a second visual language for "spatial placement." */
+
+.scene-placement {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.scene-canvas-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.scene-canvas-hint {
+  font-size: 0.85rem;
+}
+.scene-canvas-stage {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.scene-canvas-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.scene-canvas-image.placing {
+  cursor: crosshair;
+}
+.scene-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  padding: 0.3rem;
+  margin: 0;
+  cursor: pointer;
+  line-height: 0;
+}
+.scene-pin-dot {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--accent-ink);
+  box-shadow: var(--shadow);
+}
+.scene-pin.active .scene-pin-dot {
+  width: 16px;
+  height: 16px;
+  background: var(--accent-text);
+  border-color: #fff;
+}
+
+.scene-specimen-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.scene-specimen-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 7px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.scene-specimen-row.active {
+  border-color: var(--accent-text);
+}
+.scene-specimen-thumb {
+  width: 1.6rem;
+  height: 1.6rem;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.scene-specimen-status {
+  font-size: 0.75rem;
+}
+
+.scene-depth-control {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.scene-depth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.scene-depth-control input[type="range"] {
+  width: 100%;
+}
+.scene-depth-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.scene-depth-hint {
+  font-size: 0.8rem;
+}
+.scene-depth-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.2rem;
+}
+
 .checkbox-row {
   display: flex;
   flex-wrap: wrap;
