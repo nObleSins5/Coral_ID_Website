@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { clampToScene } from "@/lib/scene";
+import { clampToScene, isValidCalibration, type SceneViewCalibration } from "@/lib/scene";
 
 // Places or moves a specimen within a calibrated tank_scene. A move is a
 // single upsert on (scene_id, specimen_id), same "no separate unplace step"
@@ -104,5 +104,56 @@ export async function removeSpecimenPlacement(
   if (error) return { error: error.message };
 
   revalidatePath(`/tank/${specimen.tank_id}`);
+  return {};
+}
+
+// Saves the pixel<->mm mapping for one scene_views photo (see
+// components/scene-calibration-tool.tsx). scene_views_owner_all RLS already
+// scopes the lookups below to scenes the caller owns — a foreign
+// scene_view_id resolves to no row rather than someone else's photo.
+export async function saveSceneCalibration(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const sceneViewId = String(formData.get("scene_view_id") ?? "");
+  const calibrationRaw = String(formData.get("calibration") ?? "");
+  if (!sceneViewId || !calibrationRaw) return { error: "Mark all four reference points first." };
+
+  let calibration: SceneViewCalibration;
+  try {
+    calibration = JSON.parse(calibrationRaw);
+  } catch {
+    return { error: "Invalid calibration data." };
+  }
+  if (!isValidCalibration(calibration)) {
+    return { error: "Two reference points landed on the same spot — mark them further apart." };
+  }
+
+  const { data: sceneView } = await supabase
+    .from("scene_views")
+    .select("id, scene_id")
+    .eq("id", sceneViewId)
+    .maybeSingle();
+  if (!sceneView) return { error: "Photo not found." };
+
+  const { data: scene } = await supabase
+    .from("tank_scenes")
+    .select("id, tank_id")
+    .eq("id", sceneView.scene_id)
+    .maybeSingle();
+  if (!scene) return { error: "Scene not found." };
+
+  const { error } = await supabase
+    .from("scene_views")
+    .update({ calibration, updated_at: new Date().toISOString() })
+    .eq("id", sceneViewId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${scene.tank_id}`);
   return {};
 }

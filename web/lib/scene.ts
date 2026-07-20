@@ -67,6 +67,15 @@ export function isValidCalibration(calibration: SceneViewCalibration): boolean {
   );
 }
 
+// mm represented by one image pixel along this axis — a sanity-check readout
+// for the calibration UI (e.g. two reference points a mis-click apart yields
+// an implausibly large mm/px, which is easier to notice as a number than as a
+// pair of pixel positions). 0 for a degenerate (same-pixel) calibration.
+export function mmPerPx(calibration: EdgeCalibration, lengthMm: number): number {
+  const span = Math.abs(calibration.maxPx - calibration.zeroPx);
+  return span === 0 ? 0 : lengthMm / span;
+}
+
 // Pixel position -> real-world mm along one axis, clamped to the scene's known
 // extent (a tap slightly outside the marked edges still resolves to the
 // nearest in-bounds mm rather than an out-of-range value).

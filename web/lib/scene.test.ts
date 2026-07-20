@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   pxToMm,
   mmToPx,
+  mmPerPx,
   isValidCalibration,
   pxToScenePartial,
   sceneToPx,
@@ -47,6 +48,21 @@ describe("pxToMm / mmToPx", () => {
   it("a degenerate zero-length scene axis doesn't divide by zero", () => {
     const calib = { zeroPx: 100, maxPx: 900 };
     expect(mmToPx(calib, 0, 50)).toBe(100);
+  });
+});
+
+describe("mmPerPx", () => {
+  it("computes the real-world mm one image pixel represents", () => {
+    const calib = { zeroPx: 100, maxPx: 900 }; // 800px spans 1220mm
+    expect(mmPerPx(calib, 1220)).toBeCloseTo(1220 / 800, 6);
+  });
+
+  it("is direction-agnostic (flipped axis still yields a positive scale)", () => {
+    expect(mmPerPx({ zeroPx: 900, maxPx: 100 }, 500)).toBeCloseTo(500 / 800, 6);
+  });
+
+  it("returns 0 for a degenerate same-pixel calibration rather than dividing by zero", () => {
+    expect(mmPerPx({ zeroPx: 500, maxPx: 500 }, 1220)).toBe(0);
   });
 });
 
