@@ -21,6 +21,9 @@ export default async function LoginPage({
         {error ? <p className="error">{error}</p> : null}
       </form>
       <p className="muted">
+        <a href="/reset-password">Forgot your password?</a>
+      </p>
+      <p className="muted">
         Need an account? <a href="/signup">Sign up</a>.
       </p>
     </div>

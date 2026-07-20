@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { SearchableMorph } from "@/lib/wiki";
 
 // Global "jump straight to a coral" search, client-fetched on mount (same
-// pattern as AuthNavLink/AddPhotoForm) rather than fetched in RootLayout —
+// pattern as AccountMenu/AddPhotoForm) rather than fetched in RootLayout —
 // keeps the layout itself static so pages under it can still be statically
 // generated. Reuses the same 37-row searchable-morph shape as the /identify
 // propose form and quick-add-specimen, just filtered here for direct
