@@ -2057,6 +2057,18 @@ td {
   gap: 0.5rem;
 }
 
+.scene-photo-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.scene-photo-upload-hint {
+  flex-basis: 100%;
+  font-size: 0.85rem;
+}
+
 .checkbox-row {
   display: flex;
   flex-wrap: wrap;

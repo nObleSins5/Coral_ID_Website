@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { clampToScene, isValidCalibration, type SceneViewCalibration } from "@/lib/scene";
+import { clampToScene, inchesToMm, isValidCalibration, type SceneViewCalibration } from "@/lib/scene";
+import { uploadPhotoFile } from "@/lib/photo-upload";
 
 // Places or moves a specimen within a calibrated tank_scene. A move is a
 // single upsert on (scene_id, specimen_id), same "no separate unplace step"
@@ -152,6 +153,111 @@ export async function saveSceneCalibration(
     .from("scene_views")
     .update({ calibration, updated_at: new Date().toISOString() })
     .eq("id", sceneViewId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${scene.tank_id}`);
+  return {};
+}
+
+// Creates the single (v1: kind='tank') calibrated scene a tank needs before
+// any photo can be uploaded or calibrated. One-shot, same "generate once,
+// don't resize in place" shape as configureGrid in tank/actions.ts — the
+// dimensions are what every mm coordinate in the scene is measured against,
+// so changing them after specimens are placed would silently invalidate
+// every existing placement. Flips the tank into scene mode; grid_slots (if
+// any) is untouched — coexist, opt-in (docs/tank-scale-model-brief.md §4).
+export async function createTankScene(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const widthIn = Number(formData.get("width_in"));
+  const heightIn = Number(formData.get("height_in"));
+  const depthIn = Number(formData.get("depth_in"));
+  if (!tankId || ![widthIn, heightIn, depthIn].every((n) => Number.isFinite(n) && n > 0)) {
+    return { error: "Enter the tank's width, height, and depth in inches." };
+  }
+
+  const { data: tank } = await supabase
+    .from("tanks")
+    .select("id")
+    .eq("id", tankId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!tank) return { error: "Tank not found." };
+
+  const { count } = await supabase
+    .from("tank_scenes")
+    .select("id", { count: "exact", head: true })
+    .eq("tank_id", tankId)
+    .eq("kind", "tank");
+  if (count && count > 0) return { error: "This tank already has a scene." };
+
+  const { error: insertError } = await supabase.from("tank_scenes").insert({
+    tank_id: tankId,
+    kind: "tank",
+    width_mm: inchesToMm(widthIn),
+    height_mm: inchesToMm(heightIn),
+    depth_mm: inchesToMm(depthIn),
+  });
+  if (insertError) return { error: insertError.message };
+
+  await supabase.from("tanks").update({ placement_mode: "scene" }).eq("id", tankId);
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
+// Uploads (or replaces) one facing's photo for a scene. Reuses the same
+// coral-photos storage bucket and uploadPhotoFile helper as every other photo
+// upload in the app (docs/tank-scale-model-brief.md §8 open question,
+// resolved) — despite the column's name, scene_views.image_path stores the
+// full public URL, same convention as coral_photos.url, not a bare storage
+// key. Replacing an existing photo clears its calibration: previously marked
+// pixel positions describe a different image and would silently misplace
+// every pin if left in place.
+export async function uploadSceneView(
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const sceneId = String(formData.get("scene_id") ?? "");
+  const facing = String(formData.get("facing") ?? "");
+  if (!sceneId || !["front", "side", "top"].includes(facing)) {
+    return { error: "Missing scene or facing." };
+  }
+
+  // RLS (tank_scenes_owner_all) already scopes this to scenes the caller
+  // owns — a foreign scene_id resolves to no row.
+  const { data: scene } = await supabase
+    .from("tank_scenes")
+    .select("id, tank_id")
+    .eq("id", sceneId)
+    .maybeSingle();
+  if (!scene) return { error: "Scene not found." };
+
+  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
+  if ("error" in uploaded) return uploaded;
+
+  const { error } = await supabase.from("scene_views").upsert(
+    {
+      scene_id: sceneId,
+      facing,
+      image_path: uploaded.publicUrl,
+      calibration: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "scene_id,facing" },
+  );
   if (error) return { error: error.message };
 
   revalidatePath(`/tank/${scene.tank_id}`);
