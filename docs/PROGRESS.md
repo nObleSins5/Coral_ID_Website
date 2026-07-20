@@ -6,6 +6,16 @@
 
 Read `README.md` and `docs/reef-platform-spec.md` first for product context; `docs/schema-decisions.md` for why the schema looks the way it does; `docs/future-considerations.md` for product ideas raised but not yet scheduled (e.g. affiliate-link staleness).
 
+## 🔧 Fix (2026-07-20): mobile header overflow + shortened nav labels
+
+**Symptom reported**: on mobile, the site header pushed content off the right edge and required a horizontal scroll to see it all.
+
+**Root cause**: `.site-header nav` had `white-space: nowrap`, forcing all 5 nav items ("Self Identification", "Community identification", "Wiki", "Dashboard", the auth link) onto one unbreakable line — a bug that got much more visible once the "split community ID into its own tab" work (2026-07-20 earlier session) added a second identification-related link and pushed the nav's intrinsic width well past what fits on a phone screen.
+
+**Fix**: `app/layout.tsx` — shortened "Self Identification"/"Community identification" to "Self ID"/"Community ID". `app/globals.css` — changed `.site-header nav` from `white-space: nowrap` to `display: flex; flex-wrap: wrap` (with `white-space: nowrap` moved down to individual `nav a` so only whole links, not the group, stay unbreakable), switched from per-link `margin-left` to `gap` for spacing, and added a mobile breakpoint rule giving nav its own full-width row (matching the existing pattern already used for `.header-search`).
+
+**Verified without a live dev server** (this sandbox still has no network path to Supabase — see the 2026-07-18/20 entries — so `next dev` hangs on any page's data fetch): reproduced the header markup + real `globals.css` in a standalone static HTML file and checked it with a locally-installed Playwright/Chromium (pre-installed browser binary, `playwright-core` added via `npm install --no-save` for this one check, not persisted to `package.json`). Confirmed the OLD nav CSS+labels genuinely overflow at 375px (`scrollWidth 541 vs clientWidth 375`) and the NEW CSS+labels don't, at 320/375/414px. Typecheck/lint/62 tests all still pass. Not confirmed against the real deployed app in a real browser — worth a quick phone/dev-tools check after this deploys.
+
 ## 🔧 Fix (2026-07-20): `/identify` build failure from a Supabase request fan-out at 62 genera
 
 **Symptom reported:** Vercel build failing with "Error occurred prerendering page /identify... Next.js build worker exited with code 1" — reproduced on a manual redeploy too, not a one-off. Because the build never succeeded, production stayed pinned to the last good deploy, which made brand-new morphs (created after that deploy, via community confirm or the moderator confirm queue) 404 — their pages were never in that stale build's `generateStaticParams`, and the deploy that would have picked them up kept failing.
