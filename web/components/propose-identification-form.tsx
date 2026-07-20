@@ -3,33 +3,34 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getColorKeyForTaxon, proposeIdentification } from "@/app/identify/actions";
-import type { GenusOption, SearchableMorph } from "@/lib/wiki";
+import type { CategoryOption, GenusOption, SearchableMorph } from "@/lib/wiki";
 import { ElementColorKey, type ColorRange } from "@/components/coral-ui";
 import { PhotoColorSampler } from "@/components/photo-color-sampler";
-
-type Genus = { id: string; name: string };
-
-// A genus targeted directly ("I only know the genus" mode) rather than a
-// specific morph — same shape the color-key/link logic needs as a matched
-// SearchableMorph, but there's no morph slug to link to.
-type MatchedGenus = { id: string; name: string; slug: string };
+import { CategoryGenusPicker } from "@/components/category-genus-picker";
 
 // Shared "propose an identification for this photo" form — used both by the
 // /identify queue (IdentifyQueue) and, for a private/local specimen, the
 // specimen page's escalation into the community pipeline (same photo, no
 // re-upload; proposeIdentification flips it public — see app/identify/actions.ts).
+//
+// One unified "genus + morph name" panel (as opposed to previously separate,
+// mutually-exclusive "genus only" / "new morph" modes) — a member can submit
+// a genus alone, a morph name alone, or both together in a single pass. Both
+// fields sit behind the same category-first cascading picker
+// (CategoryGenusPicker) so picking a type narrows the genus list instead of
+// dumping every genus in the registry on the user.
 export function ProposeIdentificationForm({
   photoId,
   photoUrl,
   morphs,
-  genera,
+  categories,
   genusOptions,
   onDone,
 }: {
   photoId: string;
   photoUrl: string;
   morphs: SearchableMorph[];
-  genera: Genus[];
+  categories: CategoryOption[];
   genusOptions: GenusOption[];
   onDone: () => void;
 }) {
@@ -38,10 +39,14 @@ export function ProposeIdentificationForm({
   const [matched, setMatched] = useState<SearchableMorph | null>(null);
   const [isAlias, setIsAlias] = useState(false);
   const [aliasName, setAliasName] = useState("");
-  const [genusOnlyMode, setGenusOnlyMode] = useState(false);
-  const [matchedGenus, setMatchedGenus] = useState<MatchedGenus | null>(null);
-  const [newMorphMode, setNewMorphMode] = useState(false);
-  const [newGenusId, setNewGenusId] = useState("");
+
+  // Proposing something not already in the registry — a genus, a morph
+  // name, or both, filled in in any combination.
+  const [proposeMode, setProposeMode] = useState(false);
+  const [categorySlug, setCategorySlug] = useState<string | null>(null);
+  const [genusId, setGenusId] = useState("");
+  const [newName, setNewName] = useState("");
+
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [colorKey, setColorKey] = useState<{
@@ -50,29 +55,28 @@ export function ProposeIdentificationForm({
   } | null>(null);
   const [showSampler, setShowSampler] = useState(false);
 
+  const selectedGenus = genusId ? (genusOptions.find((g) => g.id === genusId) ?? null) : null;
+
   // Clears/sets the matched coral and resets the (now stale) reference-color
-  // state that goes with it — called from every place `matched` changes,
-  // rather than as a side effect of an effect (avoids a same-render
-  // cascading setState).
+  // state that goes with it.
   function selectMatch(m: SearchableMorph | null) {
     setMatched(m);
-    setMatchedGenus(null);
     setColorKey(null);
     setShowSampler(false);
-  }
-
-  function selectGenus(id: string) {
-    const g = genusOptions.find((g) => g.id === id) ?? null;
-    setMatched(null);
-    setMatchedGenus(g ? { id: g.id, name: g.name, slug: g.slug } : null);
-    setColorKey(null);
-    setShowSampler(false);
+    if (m) {
+      // A search hit that's already in the wiki (e.g. "Walt Disney" ->
+      // Acropora) pre-fills the hierarchy to that coral's own type/genus,
+      // so the reference color key and any follow-on proposal already
+      // starts scoped correctly instead of defaulting to "Any type."
+      setCategorySlug(m.categorySlug);
+      setGenusId(m.genusId);
+    }
   }
 
   // Fetch the matched coral's (or genus's) reference colors for comparison —
   // purely visual, nothing here is submitted or stored.
   useEffect(() => {
-    const targetId = matched?.id ?? matchedGenus?.id;
+    const targetId = matched?.id ?? (proposeMode ? genusId : null);
     if (!targetId) return;
     let cancelled = false;
     getColorKeyForTaxon(targetId).then((result) => {
@@ -81,15 +85,18 @@ export function ProposeIdentificationForm({
     return () => {
       cancelled = true;
     };
-  }, [matched, matchedGenus]);
+  }, [matched, proposeMode, genusId]);
 
   const results = useMemo(() => {
-    if (matched || newMorphMode || genusOnlyMode || query.trim().length < 2) return [];
+    if (matched || proposeMode || query.trim().length < 2) return [];
     const q = query.toLowerCase();
-    return morphs
+    let candidates = morphs;
+    if (genusId) candidates = candidates.filter((m) => m.genusId === genusId);
+    else if (categorySlug) candidates = candidates.filter((m) => m.categorySlug === categorySlug);
+    return candidates
       .filter((m) => m.name.toLowerCase().includes(q) || m.genusName.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [query, matched, newMorphMode, genusOnlyMode, morphs]);
+  }, [query, matched, proposeMode, morphs, categorySlug, genusId]);
 
   function handleSubmit(formData: FormData) {
     setError(null);
@@ -97,21 +104,26 @@ export function ProposeIdentificationForm({
     if (matched) {
       formData.set("existing_taxon_id", matched.id);
       if (isAlias && aliasName.trim()) formData.set("alias_name", aliasName.trim());
-    } else if (genusOnlyMode) {
-      if (!matchedGenus) {
-        setError("Pick a genus above.");
+    } else if (proposeMode) {
+      const name = newName.trim();
+      if (!name && !genusId) {
+        setError("Give a genus, a name, or both.");
         return;
       }
-      // Targets the genus's own taxon_node directly — no alias/new name, so
-      // this never invents a morph name. See getGenusOnlyQueue (lib/wiki.ts)
-      // for where a photo confirmed here shows up.
-      formData.set("existing_taxon_id", matchedGenus.id);
-    } else if (newMorphMode) {
-      formData.set("new_name", query.trim());
-      formData.set("new_genus_id", newGenusId);
+      if (name) {
+        // A name was given — submit as a (possibly new) morph, tagged to
+        // whichever genus was picked, or "genus unknown" if none was.
+        formData.set("new_name", name);
+        formData.set("new_genus_id", genusId || "unsure");
+      } else {
+        // Genus only, no name — targets the genus's own taxon_node
+        // directly, same as before: never invents a morph name. See
+        // getGenusOnlyQueue (lib/wiki.ts) for where this shows up.
+        formData.set("existing_taxon_id", genusId);
+      }
     } else {
       setError(
-        "Pick an existing coral above, or use “Can’t find it?” below to propose an undocumented coral.",
+        "Pick an existing coral above, or use “Can’t find it?” below to propose a genus and/or a new name.",
       );
       return;
     }
@@ -128,8 +140,24 @@ export function ProposeIdentificationForm({
 
   return (
     <form className="propose-form" action={handleSubmit}>
-      {!newMorphMode && !genusOnlyMode ? (
+      {!proposeMode ? (
         <>
+          <label>Type / genus, if you know it (optional — narrows the search below)</label>
+          <CategoryGenusPicker
+            categories={categories}
+            genusOptions={genusOptions}
+            categorySlug={categorySlug}
+            genusId={genusId}
+            onCategoryChange={(slug) => {
+              setCategorySlug(slug);
+              selectMatch(null);
+            }}
+            onGenusChange={(id) => {
+              setGenusId(id);
+              selectMatch(null);
+            }}
+          />
+
           <label>Search existing corals</label>
           <input
             value={matched ? matched.name : query}
@@ -211,57 +239,55 @@ export function ProposeIdentificationForm({
           )}
 
           <p className="muted propose-switch">
-            Only sure of the genus?{" "}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setGenusOnlyMode(true);
-                selectMatch(null);
-              }}
-            >
-              I know the genus, not the exact morph
-            </button>
-          </p>
-          <p className="muted propose-switch">
             Can&apos;t find it?{" "}
             <button
               type="button"
               className="link-button"
               onClick={() => {
-                setNewMorphMode(true);
+                setProposeMode(true);
                 selectMatch(null);
+                setNewName(query);
+                setQuery("");
               }}
             >
-              This might be an undocumented coral
+              Propose a genus, a new name, or both
             </button>
           </p>
         </>
-      ) : genusOnlyMode ? (
+      ) : (
         <>
-          <label htmlFor="genus-only-select">Genus</label>
-          <select
-            id="genus-only-select"
-            value={matchedGenus?.id ?? ""}
-            onChange={(e) => selectGenus(e.target.value)}
-          >
-            <option value="">Choose a genus</option>
-            {genusOptions.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-          <p className="muted" style={{ fontSize: "0.85rem" }}>
-            No name needed — this just confirms the genus. The community can
-            still narrow it down to an exact morph later.
+          <p className="muted" style={{ fontSize: "0.85rem", marginTop: 0 }}>
+            Fill in whichever you know — a genus alone just confirms the type; a name alone
+            proposes an undocumented coral under &quot;genus unknown&quot;; both together proposes
+            a new, named morph under that genus.
           </p>
+          <CategoryGenusPicker
+            categories={categories}
+            genusOptions={genusOptions}
+            categorySlug={categorySlug}
+            genusId={genusId}
+            onCategoryChange={setCategorySlug}
+            onGenusChange={(id) => {
+              setGenusId(id);
+              setColorKey(null);
+              setShowSampler(false);
+            }}
+            genusLabel="Genus, if known"
+          />
 
-          {matchedGenus && (
+          <label htmlFor="new-name">Name, if known</label>
+          <input
+            id="new-name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Rainbow Fire Acro"
+          />
+
+          {genusId && (
             <div className="card" style={{ marginTop: "0.5rem" }}>
               <p style={{ marginTop: 0, marginBottom: "0.4rem" }}>
-                <a href={`/coral/${matchedGenus.slug}`} target="_blank" rel="noopener">
-                  See {matchedGenus.name}&apos;s wiki page →
+                <a href={`/coral/${selectedGenus?.slug}`} target="_blank" rel="noopener">
+                  See {selectedGenus?.name}&apos;s wiki page →
                 </a>
               </p>
               {colorKey ? (
@@ -295,39 +321,14 @@ export function ProposeIdentificationForm({
               type="button"
               className="link-button"
               onClick={() => {
-                setGenusOnlyMode(false);
-                selectGenus("");
+                setProposeMode(false);
+                setGenusId("");
+                setCategorySlug(null);
+                setNewName("");
+                setColorKey(null);
+                setShowSampler(false);
               }}
             >
-              Actually, let me search existing corals
-            </button>
-          </p>
-        </>
-      ) : (
-        <>
-          <label htmlFor="new-name">Name</label>
-          <input
-            id="new-name"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. Rainbow Fire Acro"
-          />
-          <label htmlFor="new-genus">Genus</label>
-          <select
-            id="new-genus"
-            value={newGenusId}
-            onChange={(e) => setNewGenusId(e.target.value)}
-          >
-            <option value="">Choose a genus</option>
-            {genera.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-            <option value="unsure">Not sure — genus unknown</option>
-          </select>
-          <p className="muted propose-switch">
-            <button type="button" className="link-button" onClick={() => setNewMorphMode(false)}>
               Actually, let me search existing corals
             </button>
           </p>

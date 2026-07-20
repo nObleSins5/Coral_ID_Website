@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { ProposeIdentificationForm } from "@/components/propose-identification-form";
-import type { GenusOption, SearchableMorph } from "@/lib/wiki";
-
-type Genus = { id: string; name: string };
+import type { CategoryOption, GenusOption, SearchableMorph } from "@/lib/wiki";
 
 // The "separate, higher-friction action" for a local/unidentified specimen:
 // send its existing photo into the community pipeline without re-uploading.
@@ -13,13 +11,13 @@ export function SpecimenProposeControl({
   photoId,
   photoUrl,
   morphs,
-  genera,
+  categories,
   genusOptions,
 }: {
   photoId: string;
   photoUrl: string;
   morphs: SearchableMorph[];
-  genera: Genus[];
+  categories: CategoryOption[];
   genusOptions: GenusOption[];
 }) {
   const [open, setOpen] = useState(false);
@@ -37,7 +35,7 @@ export function SpecimenProposeControl({
       photoId={photoId}
       photoUrl={photoUrl}
       morphs={morphs}
-      genera={genera}
+      categories={categories}
       genusOptions={genusOptions}
       onDone={() => setOpen(false)}
     />

@@ -10,6 +10,7 @@ import {
 } from "@/app/identify/actions";
 import { ProposeIdentificationForm } from "@/components/propose-identification-form";
 import type {
+  CategoryOption,
   GenusOption,
   PendingSuggestion,
   SearchableMorph,
@@ -17,7 +18,6 @@ import type {
 } from "@/lib/wiki";
 
 type Tank = { id: string; name: string };
-type Genus = { id: string; name: string };
 
 // --- Upload form -------------------------------------------------------
 
@@ -146,7 +146,7 @@ function PhotoCard({
   userId,
   myVotes,
   morphs,
-  genera,
+  categories,
   genusOptions,
   proposingFor,
   setProposingFor,
@@ -155,7 +155,7 @@ function PhotoCard({
   userId: string | null;
   myVotes: Map<string, 1 | -1>;
   morphs: SearchableMorph[];
-  genera: Genus[];
+  categories: CategoryOption[];
   genusOptions: GenusOption[];
   proposingFor: string | null;
   setProposingFor: (id: string | null) => void;
@@ -215,7 +215,7 @@ function PhotoCard({
             photoId={item.photo.id}
             photoUrl={item.photo.url}
             morphs={morphs}
-            genera={genera}
+            categories={categories}
             genusOptions={genusOptions}
             onDone={() => setProposingFor(null)}
           />
@@ -252,14 +252,14 @@ function PhotoCard({
 export function IdentifyQueue({
   initialQueue,
   morphs,
-  genera,
+  categories,
   genusOptions,
   hideUpload,
   emptyMessage,
 }: {
   initialQueue: UnidentifiedQueueItem[];
   morphs: SearchableMorph[];
-  genera: Genus[];
+  categories: CategoryOption[];
   genusOptions: GenusOption[];
   // Reused on a genus's own wiki page to show/refine photos already
   // confirmed to that genus — those photos already exist, so the generic
@@ -332,7 +332,7 @@ export function IdentifyQueue({
               userId={userId}
               myVotes={myVotes}
               morphs={morphs}
-              genera={genera}
+              categories={categories}
               genusOptions={genusOptions}
               proposingFor={proposingFor}
               setProposingFor={setProposingFor}

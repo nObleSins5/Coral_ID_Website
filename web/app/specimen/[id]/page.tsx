@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   getAllMorphsForSearch,
-  getGenera,
+  getCategoryOptions,
   getGenusOptionsForIdentify,
   getPhotosForTaxon,
 } from "@/lib/wiki";
@@ -70,9 +70,9 @@ export default async function SpecimenPage({
         .maybeSingle()
     : { data: null };
 
-  const [morphs, genera, genusOptions] = await Promise.all([
+  const [morphs, categories, genusOptions] = await Promise.all([
     getAllMorphsForSearch(),
-    getGenera(),
+    getCategoryOptions(),
     getGenusOptionsForIdentify(),
   ]);
 
@@ -137,7 +137,7 @@ export default async function SpecimenPage({
                 photoId={row.representative_photo_id as string}
                 photoUrl={representativePhoto.url}
                 morphs={morphs}
-                genera={genera}
+                categories={categories}
                 genusOptions={genusOptions}
               />
             </p>

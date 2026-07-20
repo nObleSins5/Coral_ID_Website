@@ -251,7 +251,7 @@ function PhotoTraitAssist({
       ) : null}
       {posted ? (
         <p className="funnel-assist-status funnel-assist-success">
-          Posted — your photo is live in <a href="#community">the community queue</a> below.
+          Posted — your photo is live in the <a href="/community">community queue</a>.
         </p>
       ) : null}
     </div>
@@ -729,7 +729,7 @@ export function CoralIdentifyFunnel({
           <p className="funnel-fallback-line">
             {category ? `${scopeCount} corals in this group · ` : ""}
             Not seeing yours?{" "}
-            <a href="#community">Post a photo for the community →</a>
+            <a href="/community">Post a photo for the community →</a>
           </p>
         </div>
       )}

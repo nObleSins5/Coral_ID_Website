@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { quickPostPhoto } from "@/app/coral/actions";
-import type { SearchableMorph } from "@/lib/wiki";
+import type { CategoryOption, GenusOption, SearchableMorph } from "@/lib/wiki";
+import { CategoryGenusPicker } from "@/components/category-genus-picker";
 
 type Tank = { id: string; name: string };
-type Genus = { id: string; name: string; slug: string };
 
 type PostedItem = {
   id: string;
@@ -30,12 +30,14 @@ const OUTCOME_LABEL: Record<PostedItem["outcome"], string> = {
 // genus -> straight to the /identify queue. The tank picker deliberately
 // persists across submits (only the photo + name reset) so working through a
 // whole batch of photos for one tank doesn't mean re-picking it every time.
-export function QuickPostPhoto({
+function QuickPostPhotoCard({
   morphs,
-  genera,
+  categories,
+  genusOptions,
 }: {
   morphs: SearchableMorph[];
-  genera: Genus[];
+  categories: CategoryOption[];
+  genusOptions: GenusOption[];
 }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -44,6 +46,7 @@ export function QuickPostPhoto({
 
   const [query, setQuery] = useState("");
   const [matched, setMatched] = useState<SearchableMorph | null>(null);
+  const [categorySlug, setCategorySlug] = useState<string | null>(null);
   const [genusId, setGenusId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -73,22 +76,34 @@ export function QuickPostPhoto({
   const results = useMemo(() => {
     if (matched || query.trim().length < 2) return [];
     const q = query.toLowerCase();
-    return morphs
+    let candidates = morphs;
+    if (genusId) candidates = candidates.filter((m) => m.genusId === genusId);
+    else if (categorySlug) candidates = candidates.filter((m) => m.categorySlug === categorySlug);
+    return candidates
       .filter((m) => m.name.toLowerCase().includes(q) || m.genusName.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [query, matched, morphs]);
+  }, [query, matched, morphs, categorySlug, genusId]);
 
   const showGenusTag = !matched && query.trim().length >= 2 && results.length === 0;
-  const taggedGenus = genusId ? genera.find((g) => g.id === genusId) : null;
+  const taggedGenus = genusId ? genusOptions.find((g) => g.id === genusId) : null;
 
   function selectMatch(m: SearchableMorph | null) {
     setMatched(m);
-    setGenusId("");
+    if (m) {
+      // A search hit already in the wiki (e.g. "Walt Disney" -> Acropora)
+      // pre-fills the hierarchy to its own type/genus instead of leaving
+      // "Any type" selected.
+      setCategorySlug(m.categorySlug);
+      setGenusId(m.genusId);
+    } else {
+      setGenusId("");
+    }
   }
 
   function resetForPhoto() {
     setQuery("");
     setMatched(null);
+    setCategorySlug(null);
     setGenusId("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -138,8 +153,7 @@ export function QuickPostPhoto({
 
   if (!userId) {
     return (
-      <section className="quick-post card">
-        <h2 style={{ marginTop: 0 }}>Clear your camera roll</h2>
+      <section className="quick-post">
         <p className="muted">
           <a href="/login">Log in</a> to quickly post your tank photos, one at a time.
         </p>
@@ -148,8 +162,7 @@ export function QuickPostPhoto({
   }
 
   return (
-    <section className="quick-post card">
-      <h2 style={{ marginTop: 0 }}>Clear your camera roll</h2>
+    <section className="quick-post">
       <p className="muted" style={{ marginTop: 0 }}>
         Pick a photo, type the coral&apos;s name, hit post — then straight on to the next one.
       </p>
@@ -163,6 +176,22 @@ export function QuickPostPhoto({
           type="file"
           accept="image/jpeg,image/png,image/webp"
           required
+        />
+
+        <label>Type / genus, if you know it (optional — narrows the search below)</label>
+        <CategoryGenusPicker
+          categories={categories}
+          genusOptions={genusOptions}
+          categorySlug={categorySlug}
+          genusId={genusId}
+          onCategoryChange={(slug) => {
+            setCategorySlug(slug);
+            selectMatch(null);
+          }}
+          onGenusChange={(id) => {
+            setGenusId(id);
+            if (matched) setMatched(null);
+          }}
         />
 
         <label htmlFor="quick-post-name">Coral name</label>
@@ -193,19 +222,6 @@ export function QuickPostPhoto({
 
         {showGenusTag ? (
           <>
-            <label htmlFor="quick-post-genus">Tag a genus (optional)</label>
-            <select
-              id="quick-post-genus"
-              value={genusId}
-              onChange={(e) => setGenusId(e.target.value)}
-            >
-              <option value="">Not sure — send to /identify for the community</option>
-              {genera.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
             {genusId ? (
               <p className="muted quick-post-hint">
                 No exact match — this will be submitted as a new coral for review, tagged
@@ -275,5 +291,71 @@ export function QuickPostPhoto({
         </div>
       ) : null}
     </section>
+  );
+}
+
+// The landing page's entry point for the card above — a plain link styled
+// like its hero-actions siblings ("Identify it in 60 seconds →", "Browse the
+// wiki") rather than a permanent card taking up hero real estate. Clicking it
+// pops the full quick-post card open as an overlay layer instead, closable
+// the same way the photo lightbox / characteristics popups already work
+// (Escape key, click-outside, focused close button) — see
+// components/coral-identify-funnel.tsx's PhotoLightbox for the same pattern.
+export function QuickPostPhotoLauncher({
+  morphs,
+  categories,
+  genusOptions,
+}: {
+  morphs: SearchableMorph[];
+  categories: CategoryOption[];
+  genusOptions: GenusOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    closeRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  return (
+    <>
+      <button type="button" className="btn-secondary-link quick-post-launcher" onClick={() => setOpen(true)}>
+        Clear your camera roll →
+      </button>
+      {open ? (
+        <div className="modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="modal-panel modal-panel-wide"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id={titleId} style={{ margin: 0 }}>
+                Clear your camera roll
+              </h2>
+              <button
+                type="button"
+                ref={closeRef}
+                className="modal-close"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <QuickPostPhotoCard morphs={morphs} categories={categories} genusOptions={genusOptions} />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

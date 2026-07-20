@@ -29,18 +29,28 @@ export function HeaderSearch() {
         .order("name");
       const { data: generaRows } = await supabase
         .from("taxon_nodes")
-        .select("id, name, slug")
+        .select("id, name, slug, parent_id")
         .eq("rank_code", "genus");
+      const { data: categoryRows } = await supabase
+        .from("taxon_nodes")
+        .select("id, slug, name")
+        .eq("rank_code", "category")
+        .eq("is_visible", true);
+      const categoryById = new Map((categoryRows ?? []).map((c) => [c.id, c]));
       const generaById = new Map((generaRows ?? []).map((g) => [g.id, g]));
       setMorphs(
         (morphRows ?? []).map((m) => {
           const genus = m.parent_id ? generaById.get(m.parent_id) : undefined;
+          const category = genus?.parent_id ? categoryById.get(genus.parent_id) : undefined;
           return {
             id: m.id,
             name: m.name,
             slug: m.slug,
+            genusId: genus?.id ?? "",
             genusName: genus?.name ?? "",
             genusSlug: genus?.slug ?? "",
+            categorySlug: category?.slug ?? null,
+            categoryName: category?.name ?? null,
           };
         }),
       );

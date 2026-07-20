@@ -858,34 +858,72 @@ export type SearchableMorph = {
   id: string;
   name: string;
   slug: string;
+  genusId: string;
   genusName: string;
   genusSlug: string;
+  categorySlug: string | null;
+  categoryName: string | null;
 };
 
 // The whole 37-coral list, fetched once and filtered client-side (type-to-
 // filter) — no need for server-side search infrastructure at this scale.
+// Carries each morph's genus AND category (SPS/LPS/Mushroom/etc) so any
+// search UI built on this list can pre-filter/group by the same hierarchy
+// the wiki itself uses, instead of dumping every genus in the registry on
+// the user at once — see the hierarchy picker in
+// components/category-genus-picker.tsx.
 export async function getAllMorphsForSearch(): Promise<SearchableMorph[]> {
   const supabase = createPublicClient();
-  const { data: morphs } = await supabase
-    .from("taxon_nodes")
-    .select("id, name, slug, parent_id")
-    .eq("rank_code", "morph")
-    .order("name");
-  const { data: genera } = await supabase
-    .from("taxon_nodes")
-    .select("id, name, slug")
-    .eq("rank_code", "genus");
+  const [{ data: morphs }, { data: genera }, { data: categories }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug, parent_id")
+      .eq("rank_code", "morph")
+      .order("name"),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug, parent_id")
+      .eq("rank_code", "genus"),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "category")
+      .eq("is_visible", true),
+  ]);
+  const categoryById = new Map((categories ?? []).map((c) => [c.id, c]));
   const generaById = new Map((genera ?? []).map((g) => [g.id, g]));
   return (morphs ?? []).map((m) => {
     const genus = m.parent_id ? generaById.get(m.parent_id) : undefined;
+    const category = genus?.parent_id ? categoryById.get(genus.parent_id) : undefined;
     return {
       id: m.id,
       name: m.name,
       slug: m.slug,
+      genusId: genus?.id ?? "",
       genusName: genus?.name ?? "",
       genusSlug: genus?.slug ?? "",
+      categorySlug: category?.slug ?? null,
+      categoryName: category?.name ?? null,
     };
   });
+}
+
+export type CategoryOption = { slug: string; name: string };
+
+// The same six visible categories the wiki index and identify funnel use, in
+// the same display order — the first rung of the "category -> genus" picker
+// used anywhere a flat genus dropdown would otherwise bombard the user with
+// every genus in the registry (propose-identification-form, quick-post-photo).
+export async function getCategoryOptions(): Promise<CategoryOption[]> {
+  const supabase = createPublicClient();
+  const { data } = await supabase
+    .from("taxon_nodes")
+    .select("slug, name")
+    .eq("rank_code", "category")
+    .eq("is_visible", true);
+  return (data ?? [])
+    .slice()
+    .sort((a, b) => CATEGORY_ORDER.indexOf(a.slug) - CATEGORY_ORDER.indexOf(b.slug));
 }
 
 // Maps an exact, ordered hex-stop signature (e.g. "#77BB41,#E23B3B") to
@@ -1161,19 +1199,29 @@ export async function getPendingMorphsForGenus(genusId: string): Promise<Pending
   return [...byName.values()];
 }
 
-export type GenusOption = { id: string; name: string; slug: string; isUnknownBucket: boolean };
+export type GenusOption = {
+  id: string;
+  name: string;
+  slug: string;
+  isUnknownBucket: boolean;
+  categorySlug: string | null;
+  categoryName: string | null;
+};
 
 // Genus choices for "I only know the genus" / "no idea at all" proposals —
 // every visible genus, PLUS the hidden "Genus unknown" placeholder
 // (sql/supabase/15_unknown_genus_placeholder.sql), which getGenera()
 // deliberately excludes from the public wiki grid but which this specific
-// context needs to offer as "not sure at all."
+// context needs to offer as "not sure at all." Each option carries its
+// category (SPS/LPS/Mushroom/etc) so callers can drive a "category first,
+// then genus" cascading picker instead of listing every genus in the
+// registry flat.
 export async function getGenusOptionsForIdentify(): Promise<GenusOption[]> {
   const supabase = createPublicClient();
-  const [visible, unknown] = await Promise.all([
+  const [visible, unknown, categories] = await Promise.all([
     supabase
       .from("taxon_nodes")
-      .select("id, name, slug")
+      .select("id, name, slug, parent_id")
       .eq("rank_code", "genus")
       .eq("is_visible", true)
       .order("name"),
@@ -1183,19 +1231,32 @@ export async function getGenusOptionsForIdentify(): Promise<GenusOption[]> {
       .eq("rank_code", "genus")
       .eq("slug", "genus-unknown")
       .maybeSingle(),
+    supabase
+      .from("taxon_nodes")
+      .select("id, name, slug")
+      .eq("rank_code", "category")
+      .eq("is_visible", true),
   ]);
-  const options: GenusOption[] = (visible.data ?? []).map((g) => ({
-    id: g.id,
-    name: g.name,
-    slug: g.slug,
-    isUnknownBucket: false,
-  }));
+  const categoryById = new Map((categories.data ?? []).map((c) => [c.id, c]));
+  const options: GenusOption[] = (visible.data ?? []).map((g) => {
+    const category = g.parent_id ? categoryById.get(g.parent_id) : undefined;
+    return {
+      id: g.id,
+      name: g.name,
+      slug: g.slug,
+      isUnknownBucket: false,
+      categorySlug: category?.slug ?? null,
+      categoryName: category?.name ?? null,
+    };
+  });
   if (unknown.data) {
     options.push({
       id: unknown.data.id,
       name: "Not sure at all — genus unknown",
       slug: unknown.data.slug,
       isUnknownBucket: true,
+      categorySlug: null,
+      categoryName: null,
     });
   }
   return options;

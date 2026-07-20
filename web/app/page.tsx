@@ -1,6 +1,20 @@
-import { getAllMorphsForSearch, getFeaturedMorphs, getGenera, getMorphBySlug } from "@/lib/wiki";
-import { CareDifficultyPill, ElementColorKey } from "@/components/coral-ui";
-import { QuickPostPhoto } from "@/components/quick-post-photo";
+import {
+  getAllMorphsForSearch,
+  getCategoryOptions,
+  getFeaturedMorphs,
+  getGenera,
+  getGenusOptionsForIdentify,
+  getMorphBySlug,
+} from "@/lib/wiki";
+import { ElementColorKey } from "@/components/coral-ui";
+import { QuickPostPhotoLauncher } from "@/components/quick-post-photo";
+import { FeaturedScroll } from "@/components/featured-scroll";
+
+// The showcase strip auto-scrolls through up to this many recent photos —
+// see FeaturedScroll (components/featured-scroll.tsx) — instead of the old
+// fixed 4-up grid, which spilled a 5th/6th card onto an awkward half-empty
+// second row at common viewport widths.
+const FEATURED_LIMIT = 20;
 
 // The spotlight coral for the "old way vs. registry way" contrast below —
 // a real, well-documented morph, not a fabricated example. Falls back
@@ -9,11 +23,13 @@ import { QuickPostPhoto } from "@/components/quick-post-photo";
 const DIFFERENTIATOR_MORPH_SLUG = "walt-disney-acropora";
 
 export default async function Home() {
-  const [genera, featured, spotlight, morphs] = await Promise.all([
+  const [genera, featured, spotlight, morphs, categories, genusOptions] = await Promise.all([
     getGenera(),
-    getFeaturedMorphs(4),
+    getFeaturedMorphs(FEATURED_LIMIT),
     getMorphBySlug(DIFFERENTIATOR_MORPH_SLUG),
     getAllMorphsForSearch(),
+    getCategoryOptions(),
+    getGenusOptionsForIdentify(),
   ]);
 
   const totalMorphs = genera.reduce((sum, g) => sum + g.morph_count, 0);
@@ -40,6 +56,7 @@ export default async function Home() {
             <a className="btn-secondary-link" href="/wiki">
               Browse the wiki
             </a>
+            <QuickPostPhotoLauncher morphs={morphs} categories={categories} genusOptions={genusOptions} />
           </div>
         </div>
         {heroMorph ? (
@@ -58,8 +75,6 @@ export default async function Home() {
           </a>
         ) : null}
       </section>
-
-      <QuickPostPhoto morphs={morphs} genera={genera} />
 
       <section className="differentiator">
         <div className="differentiator-old">
@@ -99,25 +114,7 @@ export default async function Home() {
           </p>
         </div>
         {featured.length > 0 ? (
-          <div className="featured-strip">
-            {featured.map((m) => (
-              <a
-                key={m.id}
-                className="featured-card"
-                href={`/coral/${m.genusSlug}/${m.slug}`}
-              >
-                <div className="featured-photo">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.heroUrl} alt={`${m.name} — community photo`} />
-                </div>
-                <div className="featured-card-meta">
-                  <span className="name">{m.name}</span>
-                  <span className="muted">{m.genusName}</span>
-                  <CareDifficultyPill code={m.care_difficulty_code} />
-                </div>
-              </a>
-            ))}
-          </div>
+          <FeaturedScroll morphs={featured} />
         ) : (
           <p className="muted">
             No community photos yet —{" "}

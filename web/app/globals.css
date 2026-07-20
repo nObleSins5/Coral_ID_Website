@@ -2209,13 +2209,56 @@ td {
   margin: 0;
 }
 
-.featured-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
+/* Slow auto-scrolling showcase strip (landing page) — the list is rendered
+   twice back-to-back and the track animates exactly one copy's width to the
+   left, on an infinite loop, so it reads as a seamless single row instead of
+   spilling extra cards onto a second line. Paused on hover/focus so a photo
+   can actually be read or clicked. */
+.featured-scroll {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 3%,
+    black 97%,
+    transparent
+  );
+  mask-image: linear-gradient(to right, transparent, black 3%, black 97%, transparent);
+}
+.featured-scroll-track {
+  display: flex;
+  width: max-content;
+  animation: featured-scroll-x var(--featured-scroll-duration, 60s) linear infinite;
+}
+.featured-scroll:hover .featured-scroll-track,
+.featured-scroll:focus-within .featured-scroll-track {
+  animation-play-state: paused;
+}
+.featured-scroll-set {
+  display: flex;
   gap: 1rem;
+  padding-right: 1rem;
+}
+@keyframes featured-scroll-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .featured-scroll-track {
+    animation: none;
+  }
+  .featured-scroll {
+    overflow-x: auto;
+  }
 }
 .featured-card {
   display: block;
+  flex: 0 0 240px;
+  width: 240px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2496,6 +2539,18 @@ td {
   cursor: pointer;
 }
 .modal-close:hover { color: var(--accent-text); }
+.modal-panel-wide {
+  max-width: 560px;
+}
+
+/* The "Clear your camera roll" hero-actions trigger — a plain button styled
+   to match its btn-secondary-link siblings exactly (no visual difference
+   from "Browse the wiki" until clicked). */
+.quick-post-launcher {
+  font: inherit;
+  background: none;
+  cursor: pointer;
+}
 
 /* Tank status block (/tank/[id]) — a quiet status LINE under the tank
    subtitle, not a card/widget. Silence (no chips) is the all-clear signal;

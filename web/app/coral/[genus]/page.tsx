@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import {
   getAllGenusSlugs,
   getAllMorphsForSearch,
-  getGenera,
+  getCategoryOptions,
   getGenusBySlug,
   getGenusOnlyQueue,
   getGenusOptionsForIdentify,
@@ -49,12 +49,12 @@ export default async function GenusPage({
   const genus = await getGenusBySlug(genusSlug);
   if (!genus) notFound();
 
-  const [morphs, genusOnlyQueue, allMorphs, allGenera, genusOptions, pendingMorphs] =
+  const [morphs, genusOnlyQueue, allMorphs, categories, genusOptions, pendingMorphs] =
     await Promise.all([
       getMorphsForGenus(genus.id),
       getGenusOnlyQueue(genus.id),
       getAllMorphsForSearch(),
-      getGenera(),
+      getCategoryOptions(),
       getGenusOptionsForIdentify(),
       getPendingMorphsForGenus(genus.id),
     ]);
@@ -149,7 +149,7 @@ export default async function GenusPage({
       <IdentifyQueue
         initialQueue={genusOnlyQueue}
         morphs={genusMorphs}
-        genera={allGenera}
+        categories={categories}
         genusOptions={genusOptions}
         hideUpload
         emptyMessage={`No photos are sitting at the ${genus.name} level right now.`}

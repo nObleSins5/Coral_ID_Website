@@ -30,7 +30,8 @@ export default function RootLayout({
           </a>
           <HeaderSearch />
           <nav>
-            <a href="/identify">Identify</a>
+            <a href="/identify">Self Identification</a>
+            <a href="/community">Community identification</a>
             <a href="/wiki">Wiki</a>
             <a href="/dashboard">Dashboard</a>
             <AuthNavLink />
