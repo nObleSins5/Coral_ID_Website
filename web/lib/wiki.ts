@@ -363,8 +363,8 @@ export async function getHeroPhotoUrlsForTaxa(
 // genus (e.g. Acropora's card uses its single best photo out of all 11
 // morphs' photos combined, not one photo per morph). Batched across every
 // genus on the wiki index in a fixed number of queries, not one call per
-// genus — getGenusShowcasePhotos (the identify funnel's per-genus popup
-// fetcher) intentionally isn't reused here for that reason.
+// genus — same batching principle getIdentifyShowcaseData now uses for its
+// per-genus/per-category popup photos.
 export async function getGenusHeroPhotos(genusIds: string[]): Promise<Map<string, string>> {
   const heroUrlByGenus = new Map<string, string>();
   if (genusIds.length === 0) return heroUrlByGenus;
@@ -721,106 +721,6 @@ export async function getFunnelCategories(): Promise<FunnelCategory[]> {
   }));
 }
 
-// Up to `limit` real hero photos (most-voted per morph, same rule as
-// getHeroPhotoUrlsForTaxa elsewhere) across every morph in a category — the
-// identify funnel's "type" popup photo carousel. Order follows the morph
-// query's own order, not a true cross-taxon vote ranking (the live dataset
-// is too small today for that distinction to matter); PhotoCarousel pads any
-// remaining slots with illustrative art, never fake photography.
-export async function getCategoryShowcasePhotos(
-  categorySlug: string,
-  limit = 5,
-): Promise<{ url: string; alt: string }[]> {
-  const supabase = createPublicClient();
-  const { data: category } = await supabase
-    .from("taxon_nodes")
-    .select("id")
-    .eq("rank_code", "category")
-    .eq("slug", categorySlug)
-    .maybeSingle();
-  if (!category) return [];
-
-  const { data: genera } = await supabase
-    .from("taxon_nodes")
-    .select("id")
-    .eq("rank_code", "genus")
-    .eq("parent_id", category.id);
-  const genusIds = (genera ?? []).map((g) => g.id);
-  if (genusIds.length === 0) return [];
-
-  const { data: morphs } = await supabase
-    .from("taxon_nodes")
-    .select("id, name")
-    .eq("rank_code", "morph")
-    .in("parent_id", genusIds);
-  const morphRows = morphs ?? [];
-  if (morphRows.length === 0) return [];
-
-  const heroUrls = await getHeroPhotoUrlsForTaxa(morphRows.map((m) => m.id));
-  const photos: { url: string; alt: string }[] = [];
-  for (const m of morphRows) {
-    const url = heroUrls.get(m.id);
-    if (url) photos.push({ url, alt: `${m.name} — reference photo` });
-    if (photos.length >= limit) break;
-  }
-  return photos;
-}
-
-// Same idea as getCategoryShowcasePhotos, scoped to one genus — the funnel's
-// "genus" popup. Real photos are rare today (only Acropora/Zoanthus/Briareum
-// have any live); the caller falls back to the category's showcase when this
-// returns fewer than needed.
-export async function getGenusShowcasePhotos(
-  genusSlug: string,
-  limit = 5,
-): Promise<{ url: string; alt: string }[]> {
-  const genus = await getGenusBySlug(genusSlug);
-  if (!genus) return [];
-  const morphs = await getMorphsForGenus(genus.id);
-  const heroUrls = await getHeroPhotoUrlsForTaxa(morphs.map((m) => m.id));
-  const photos: { url: string; alt: string }[] = [];
-  for (const m of morphs) {
-    const url = heroUrls.get(m.id);
-    if (url) photos.push({ url, alt: `${m.name} — reference photo` });
-    if (photos.length >= limit) break;
-  }
-  return photos;
-}
-
-// A real coral in the registry that documents the given pattern, for the
-// funnel's pattern-recognition popup — links straight to its wiki page
-// instead of only showing a generic swatch example.
-export async function getPatternExampleCoral(
-  patternCode: string,
-): Promise<{ name: string; genusSlug: string; slug: string; hexes: string[] } | null> {
-  const supabase = createPublicClient();
-  const { data: ranges } = await supabase
-    .from("color_ranges")
-    .select("taxon_node_id, color_stops(hex, ordinal)")
-    .eq("color_pattern_code", patternCode)
-    .limit(1);
-  const row = ranges?.[0];
-  if (!row?.taxon_node_id) return null;
-
-  const { data: morph } = await supabase
-    .from("taxon_nodes")
-    .select("id, name, slug, parent_id")
-    .eq("id", row.taxon_node_id)
-    .maybeSingle();
-  if (!morph?.parent_id) return null;
-  const { data: genus } = await supabase
-    .from("taxon_nodes")
-    .select("slug")
-    .eq("id", morph.parent_id)
-    .maybeSingle();
-  if (!genus) return null;
-
-  const hexes = (row.color_stops as { hex: string; ordinal: number }[])
-    .sort((a, b) => a.ordinal - b.ordinal)
-    .map((s) => s.hex);
-  return { name: morph.name, genusSlug: genus.slug, slug: morph.slug, hexes };
-}
-
 const PATTERN_CODES = ["spotted", "mottled", "banded", "tipped", "ringed", "rainbow"];
 
 export type IdentifyShowcaseData = {
@@ -829,25 +729,135 @@ export type IdentifyShowcaseData = {
   patternExamples: Record<string, { name: string; genusSlug: string; slug: string; hexes: string[] } | null>;
 };
 
-// All the funnel's popup photo/example data, fetched once server-side and
-// passed down as props — same "all data arrives as props, scoring runs
-// client-side" posture the funnel already uses for corals/categories, kept
-// here rather than adding client-side server actions/loading states to every
-// popup for a still-small dataset.
-export async function getIdentifyShowcaseData(categories: FunnelCategory[]): Promise<IdentifyShowcaseData> {
+// All the funnel's popup photo/example data (category photo carousels, genus
+// photo carousels, one real example coral per pattern), fetched once
+// server-side and passed down as props — same "all data arrives as props,
+// scoring runs client-side" posture the funnel already uses for
+// corals/categories.
+//
+// Deliberately batched into a FIXED small number of Supabase round-trips
+// regardless of how many categories/genera/patterns exist. The original
+// shape called a separate query chain per category, per genus, and per
+// pattern code (~3-4 round trips each) — fine at 27 genera, but
+// 35_expand_genera.sql brought that to 62, turning one /identify page
+// render into 350+ concurrent Supabase requests and reliably failing the
+// Vercel build ("Error occurred prerendering page /identify" — the fan-out
+// was exhausting Supabase's connection/rate limits during `next build`,
+// every time, not a fluke). See docs/PROGRESS.md.
+export async function getIdentifyShowcaseData(
+  categories: FunnelCategory[],
+  limit = 5,
+): Promise<IdentifyShowcaseData> {
+  const supabase = createPublicClient();
+
+  const categorySlugs = categories.map((c) => c.slug);
   const genusSlugs = categories.flatMap((c) => c.genera.map((g) => g.slug));
 
-  const [categoryEntries, genusEntries, patternEntries] = await Promise.all([
-    Promise.all(categories.map(async (c) => [c.slug, await getCategoryShowcasePhotos(c.slug)] as const)),
-    Promise.all(genusSlugs.map(async (slug) => [slug, await getGenusShowcasePhotos(slug)] as const)),
-    Promise.all(PATTERN_CODES.map(async (code) => [code, await getPatternExampleCoral(code)] as const)),
+  const [{ data: categoryRows }, { data: genusRows }, { data: morphRows }] = await Promise.all([
+    supabase
+      .from("taxon_nodes")
+      .select("id, slug")
+      .eq("rank_code", "category")
+      .in("slug", categorySlugs),
+    supabase
+      .from("taxon_nodes")
+      .select("id, slug, parent_id")
+      .eq("rank_code", "genus")
+      .in("slug", genusSlugs),
+    supabase.from("taxon_nodes").select("id, name, parent_id").eq("rank_code", "morph"),
   ]);
 
-  return {
-    categoryPhotos: Object.fromEntries(categoryEntries),
-    genusPhotos: Object.fromEntries(genusEntries),
-    patternExamples: Object.fromEntries(patternEntries),
-  };
+  const categoryIdBySlug = new Map((categoryRows ?? []).map((c) => [c.slug, c.id]));
+  const genusIdBySlug = new Map((genusRows ?? []).map((g) => [g.slug, g.id]));
+
+  const morphsByGenusId = new Map<string, { id: string; name: string }[]>();
+  for (const m of morphRows ?? []) {
+    if (!m.parent_id) continue;
+    const list = morphsByGenusId.get(m.parent_id) ?? [];
+    list.push({ id: m.id, name: m.name });
+    morphsByGenusId.set(m.parent_id, list);
+  }
+
+  // One batched hero-photo lookup across every morph that could possibly be
+  // needed below, instead of one lookup per category/genus.
+  const heroUrls = await getHeroPhotoUrlsForTaxa((morphRows ?? []).map((m) => m.id));
+
+  function topPhotos(morphs: { id: string; name: string }[]): { url: string; alt: string }[] {
+    const photos: { url: string; alt: string }[] = [];
+    for (const m of morphs) {
+      const url = heroUrls.get(m.id);
+      if (url) photos.push({ url, alt: `${m.name} — reference photo` });
+      if (photos.length >= limit) break;
+    }
+    return photos;
+  }
+
+  const categoryPhotos: IdentifyShowcaseData["categoryPhotos"] = {};
+  for (const slug of categorySlugs) {
+    const categoryId = categoryIdBySlug.get(slug);
+    const morphsInCategory = (genusRows ?? [])
+      .filter((g) => g.parent_id === categoryId)
+      .flatMap((g) => morphsByGenusId.get(g.id) ?? []);
+    categoryPhotos[slug] = topPhotos(morphsInCategory);
+  }
+
+  const genusPhotos: IdentifyShowcaseData["genusPhotos"] = {};
+  for (const slug of genusSlugs) {
+    const genusId = genusIdBySlug.get(slug);
+    genusPhotos[slug] = topPhotos(genusId ? (morphsByGenusId.get(genusId) ?? []) : []);
+  }
+
+  // Pattern examples: one query across every pattern code (instead of one
+  // per code), keeping the first taxon hit per code, then one batched
+  // taxon_nodes lookup for those morphs and their genera.
+  type PatternRange = { taxon_node_id: string; color_pattern_code: string; color_stops: { hex: string; ordinal: number }[] };
+  const { data: patternRanges } = await supabase
+    .from("color_ranges")
+    .select("taxon_node_id, color_pattern_code, color_stops(hex, ordinal)")
+    .in("color_pattern_code", PATTERN_CODES);
+
+  const firstRangeByPattern = new Map<string, PatternRange>();
+  for (const r of (patternRanges ?? []) as unknown as PatternRange[]) {
+    if (!r.taxon_node_id || firstRangeByPattern.has(r.color_pattern_code)) continue;
+    firstRangeByPattern.set(r.color_pattern_code, r);
+  }
+
+  const patternMorphIds = [...new Set([...firstRangeByPattern.values()].map((r) => r.taxon_node_id))];
+  const { data: patternMorphs } =
+    patternMorphIds.length > 0
+      ? await supabase
+          .from("taxon_nodes")
+          .select("id, name, slug, parent_id")
+          .in("id", patternMorphIds)
+      : { data: [] as { id: string; name: string; slug: string; parent_id: string | null }[] };
+  const patternMorphById = new Map((patternMorphs ?? []).map((m) => [m.id, m]));
+
+  const patternGenusIds = [
+    ...new Set((patternMorphs ?? []).map((m) => m.parent_id).filter((x): x is string => !!x)),
+  ];
+  const { data: patternGenera } =
+    patternGenusIds.length > 0
+      ? await supabase.from("taxon_nodes").select("id, slug").in("id", patternGenusIds)
+      : { data: [] as { id: string; slug: string }[] };
+  const patternGenusSlugById = new Map((patternGenera ?? []).map((g) => [g.id, g.slug]));
+
+  const patternExamples: IdentifyShowcaseData["patternExamples"] = {};
+  for (const code of PATTERN_CODES) {
+    const range = firstRangeByPattern.get(code);
+    const morph = range ? patternMorphById.get(range.taxon_node_id) : undefined;
+    const genusSlug = morph?.parent_id ? patternGenusSlugById.get(morph.parent_id) : undefined;
+    patternExamples[code] =
+      morph && genusSlug
+        ? {
+            name: morph.name,
+            genusSlug,
+            slug: morph.slug,
+            hexes: [...range!.color_stops].sort((a, b) => a.ordinal - b.ordinal).map((s) => s.hex),
+          }
+        : null;
+  }
+
+  return { categoryPhotos, genusPhotos, patternExamples };
 }
 
 // ---------------------------------------------------------------------------
