@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-import { uploadSceneView } from "@/app/tank/scene-actions";
+import { uploadImageDirect } from "@/lib/photo-upload-client";
+import { attachSceneView } from "@/app/tank/scene-actions";
 import type { Facing } from "@/lib/scene";
 
 const FACING_LABEL: Record<Facing, string> = {
@@ -13,9 +14,14 @@ const FACING_LABEL: Record<Facing, string> = {
 
 // One facing's upload/replace control — the tank page renders one of these
 // per facing (front + side required, top optional per
-// docs/tank-scale-model-brief.md §3). Replacing an existing photo clears its
-// calibration server-side (uploadSceneView), so the hint below warns before
-// the user overwrites a photo they already spent time marking up.
+// docs/tank-scale-model-brief.md §3). Two steps, not one form submit:
+// 1) uploadImageDirect puts the file straight into Supabase Storage from the
+//    browser (converting HEIC/HEIF along the way) — see
+//    lib/photo-upload-client.ts for why this can't be a plain Server Action
+//    file upload. 2) attachSceneView, a lightweight server action, just
+//    records the resulting URL. Replacing an existing photo clears its
+//    calibration server-side, so the hint below warns before the user
+//    overwrites a photo they already spent time marking up.
 export function ScenePhotoUpload({
   sceneId,
   facing,
@@ -26,39 +32,56 @@ export function ScenePhotoUpload({
   hasExisting: boolean;
 }) {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [isSaving, startTransition] = useTransition();
 
-  function handleSubmit(formData: FormData) {
+  async function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setError(null);
+    setUploading(true);
+    const uploaded = await uploadImageDirect(file);
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
+
+    if ("error" in uploaded) {
+      setError(uploaded.error);
+      return;
+    }
+
     startTransition(async () => {
-      const result = await uploadSceneView(formData);
+      const fd = new FormData();
+      fd.set("scene_id", sceneId);
+      fd.set("facing", facing);
+      fd.set("image_url", uploaded.publicUrl);
+      const result = await attachSceneView(fd);
       if (result?.error) setError(result.error);
       else router.refresh();
     });
   }
 
+  const busy = uploading || isSaving;
+
   return (
-    <form className="scene-photo-upload" action={handleSubmit}>
-      <input type="hidden" name="scene_id" value={sceneId} />
-      <input type="hidden" name="facing" value={facing} />
+    <div className="scene-photo-upload">
       <label htmlFor={`scene-photo-${facing}`}>{FACING_LABEL[facing]}</label>
       <input
+        ref={inputRef}
         id={`scene-photo-${facing}`}
-        name="photo"
         type="file"
-        accept="image/jpeg,image/png,image/webp"
-        required
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        disabled={busy}
+        onChange={handleFileChange}
       />
-      <button type="submit" disabled={pending}>
-        {pending ? "Uploading…" : hasExisting ? "Replace photo" : "Upload"}
-      </button>
+      {busy ? <span className="muted">{uploading ? "Converting/uploading…" : "Saving…"}</span> : null}
       {hasExisting ? (
         <p className="muted scene-photo-upload-hint">
           Replacing clears this photo&apos;s calibration — you&apos;ll need to re-mark it.
         </p>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
-    </form>
+    </div>
   );
 }

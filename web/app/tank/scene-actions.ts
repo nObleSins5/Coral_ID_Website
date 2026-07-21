@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { clampToScene, inchesToMm, isValidCalibration, type SceneViewCalibration } from "@/lib/scene";
-import { uploadPhotoFile } from "@/lib/photo-upload";
 
 // Places or moves a specimen within a calibrated tank_scene. A move is a
 // single upsert on (scene_id, specimen_id), same "no separate unplace step"
@@ -213,15 +212,18 @@ export async function createTankScene(
   return {};
 }
 
-// Uploads (or replaces) one facing's photo for a scene. Reuses the same
-// coral-photos storage bucket and uploadPhotoFile helper as every other photo
-// upload in the app (docs/tank-scale-model-brief.md §8 open question,
-// resolved) — despite the column's name, scene_views.image_path stores the
-// full public URL, same convention as coral_photos.url, not a bare storage
-// key. Replacing an existing photo clears its calibration: previously marked
+// Records a scene photo the BROWSER already uploaded directly to Supabase
+// Storage (lib/photo-upload-client.ts's uploadImageDirect) — this action
+// never touches file bytes, only the resulting public URL, precisely so a
+// large tank photo never has to pass through a Server Action's request body
+// (and therefore never hits Vercel's serverless function payload ceiling,
+// which sits under Next.js and next.config.ts's bodySizeLimit can't raise).
+// Despite the column's name, scene_views.image_path stores the full public
+// URL, same convention as coral_photos.url, not a bare storage key.
+// Replacing an existing photo clears its calibration: previously marked
 // pixel positions describe a different image and would silently misplace
 // every pin if left in place.
-export async function uploadSceneView(
+export async function attachSceneView(
   formData: FormData,
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
@@ -232,8 +234,9 @@ export async function uploadSceneView(
 
   const sceneId = String(formData.get("scene_id") ?? "");
   const facing = String(formData.get("facing") ?? "");
-  if (!sceneId || !["front", "side", "top"].includes(facing)) {
-    return { error: "Missing scene or facing." };
+  const imageUrl = String(formData.get("image_url") ?? "");
+  if (!sceneId || !["front", "side", "top"].includes(facing) || !imageUrl) {
+    return { error: "Missing scene, facing, or photo." };
   }
 
   // RLS (tank_scenes_owner_all) already scopes this to scenes the caller
@@ -245,14 +248,11 @@ export async function uploadSceneView(
     .maybeSingle();
   if (!scene) return { error: "Scene not found." };
 
-  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
-  if ("error" in uploaded) return uploaded;
-
   const { error } = await supabase.from("scene_views").upsert(
     {
       scene_id: sceneId,
       facing,
-      image_path: uploaded.publicUrl,
+      image_path: imageUrl,
       calibration: null,
       updated_at: new Date().toISOString(),
     },
