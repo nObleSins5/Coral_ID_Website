@@ -143,6 +143,8 @@ export function QuickAddSpecimen({
   presetSlotId,
   onDone,
   onCancel,
+  onCreated,
+  forceOpen,
 }: {
   tankId: string;
   emptySlots: Slot[];
@@ -159,9 +161,18 @@ export function QuickAddSpecimen({
   // panel to close/step back, since this component has no "collapsed" state
   // of its own in that context.
   onCancel?: () => void;
+  // Fired with the new specimen's id right after a successful add, alongside
+  // (not instead of) onDone/succeed — lets an embedding panel chain a
+  // further step of its own, e.g. MapTilePanel (components/map-tile-panel.tsx)
+  // placing a coral_map_pins row for it. Grid-only callers simply omit this.
+  onCreated?: (specimenId: string) => void;
+  // Skips the collapsed "+ Add a coral" button the same way presetSlotId
+  // does, but WITHOUT submitting a grid_slot_id — for embeddings (the map
+  // panel) that have their own placement target that isn't a grid slot.
+  forceOpen?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(!!presetSlotId);
+  const [open, setOpen] = useState(!!presetSlotId || !!forceOpen);
   const [query, setQuery] = useState("");
   const [matched, setMatched] = useState<SearchableMorph | null>(null);
   const [mode, setMode] = useState<"search" | "local" | "unidentified">("search");
@@ -177,7 +188,7 @@ export function QuickAddSpecimen({
   }, [query, matched, mode, morphs]);
 
   function reset() {
-    if (presetSlotId) {
+    if (presetSlotId || forceOpen) {
       onCancel?.();
       return;
     }
@@ -202,7 +213,10 @@ export function QuickAddSpecimen({
     startTransition(async () => {
       const result = await quickAddExisting(formData);
       if (result?.error) setError(result.error);
-      else succeed();
+      else {
+        if (result.specimenId) onCreated?.(result.specimenId);
+        succeed();
+      }
     });
   }
 
@@ -213,7 +227,10 @@ export function QuickAddSpecimen({
     startTransition(async () => {
       const result = await quickAddLocal(formData);
       if (result?.error) setError(result.error);
-      else succeed();
+      else {
+        if (result.specimenId) onCreated?.(result.specimenId);
+        succeed();
+      }
     });
   }
 
@@ -224,7 +241,10 @@ export function QuickAddSpecimen({
     startTransition(async () => {
       const result = await quickAddUnidentified(formData);
       if (result?.error) setError(result.error);
-      else succeed();
+      else {
+        if (result.specimenId) onCreated?.(result.specimenId);
+        succeed();
+      }
     });
   }
 

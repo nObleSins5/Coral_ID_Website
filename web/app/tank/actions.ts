@@ -267,7 +267,7 @@ export async function recoverGridSlots(formData: FormData): Promise<{ error?: st
 // uploading from the morph page itself) and/or places straight into a slot.
 export async function quickAddExisting(
   formData: FormData,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; specimenId?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -354,7 +354,7 @@ export async function quickAddExisting(
   }
 
   revalidatePath(`/tank/${tankId}`);
-  return {};
+  return { specimenId: specimen.id };
 }
 
 // "Just label this slot" — a private, local-only specimen: no taxon match,
@@ -365,7 +365,7 @@ export async function quickAddExisting(
 // which reuses this same photo rather than requiring a re-upload.
 export async function quickAddLocal(
   formData: FormData,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; specimenId?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -430,7 +430,7 @@ export async function quickAddLocal(
   }
 
   revalidatePath(`/tank/${tankId}`);
-  return {};
+  return { specimenId: specimen.id };
 }
 
 // "Propose as a new coral for the wiki" — kicks off the community
@@ -441,7 +441,7 @@ export async function quickAddLocal(
 // there's nothing to vote on otherwise.
 export async function quickAddUnidentified(
   formData: FormData,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; specimenId?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -522,5 +522,5 @@ export async function quickAddUnidentified(
 
   revalidatePath(`/tank/${tankId}`);
   revalidatePath("/identify");
-  return {};
+  return { specimenId: specimen.id };
 }

@@ -7,10 +7,13 @@ import { ResetGridButton } from "@/components/reset-grid-button";
 import { TankGridInteractive } from "@/components/tank-grid-interactive";
 import { TankPublishToggle } from "@/components/tank-publish-toggle";
 import { TankBadgeToggle } from "@/components/tank-badge-toggle";
+import { TankMapSettingsToggle } from "@/components/tank-map-settings-toggle";
+import { TankMapCanvasLoader } from "@/components/tank-map-canvas-loader";
 import { TankStatusBlock } from "@/components/tank-status-block";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 import { getTankStatus } from "@/lib/tank-callouts";
+import type { UnpinnedOption } from "@/components/map-tile-panel";
 
 type Tank = {
   id: string;
@@ -22,6 +25,7 @@ type Tank = {
   grid_rows: number | null;
   is_public: boolean;
   badge_enabled: boolean;
+  map_enabled: boolean;
 };
 type GridSlot = {
   id: string;
@@ -55,7 +59,9 @@ export default async function TankPage({
 
   const { data: tank } = await supabase
     .from("tanks")
-    .select("id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public, badge_enabled")
+    .select(
+      "id, name, tank_type, volume, tier_count, grid_columns, grid_rows, is_public, badge_enabled, map_enabled",
+    )
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -171,6 +177,72 @@ export default async function TankPage({
     representativePhotoId: s.representative_photo_id,
   }));
 
+  // Photo-tile map data (36_tank_map.sql) — only fetched/rendered when the
+  // tank has opted in, same "opt-in enrichment, coarse grid untouched"
+  // relationship the badge has to is_public (32_tank_badge.sql).
+  let mapTiles: import("@/lib/tank-map").MapTile[] = [];
+  let mapPins: import("@/lib/tank-map").MapPin[] = [];
+  let unpinnedOptions: UnpinnedOption[] = [];
+  if (tankRow.map_enabled) {
+    const { data: tiles } = await supabase
+      .from("tank_map_tiles")
+      .select(
+        "id, storage_path, pos_x, pos_y, width, height, rotation, z_index, crop_x, crop_y, crop_width, crop_height",
+      )
+      .eq("tank_id", id);
+    mapTiles = (tiles ?? []).map((t) => ({
+      id: t.id,
+      storagePath: t.storage_path,
+      publicUrl: supabase.storage.from("coral-photos").getPublicUrl(t.storage_path).data.publicUrl,
+      posX: Number(t.pos_x),
+      posY: Number(t.pos_y),
+      width: Number(t.width),
+      height: Number(t.height),
+      rotation: Number(t.rotation),
+      zIndex: t.z_index,
+      cropX: Number(t.crop_x),
+      cropY: Number(t.crop_y),
+      cropWidth: t.crop_width != null ? Number(t.crop_width) : null,
+      cropHeight: t.crop_height != null ? Number(t.crop_height) : null,
+    }));
+
+    const tileIds = mapTiles.map((t) => t.id);
+    const { data: pins } =
+      tileIds.length > 0
+        ? await supabase
+            .from("coral_map_pins")
+            .select(
+              "id, coral_id, tile_id, pos_x, pos_y, specimens ( name, representative_photo_id, taxon_nodes ( name ) )",
+            )
+            .in("tile_id", tileIds)
+        : { data: [] as unknown[] };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pinRows = (pins ?? []) as any[];
+    mapPins = pinRows.map((p) => ({
+      id: p.id,
+      coralId: p.coral_id,
+      tileId: p.tile_id,
+      posX: Number(p.pos_x),
+      posY: Number(p.pos_y),
+      label: p.specimens?.name ?? null,
+      taxonName: p.specimens?.taxon_nodes?.name ?? null,
+      representativePhotoUrl: p.specimens?.representative_photo_id
+        ? photoUrlById.get(p.specimens.representative_photo_id) ?? null
+        : null,
+    }));
+
+    const pinnedCoralIds = new Set(mapPins.map((p) => p.coralId));
+    unpinnedOptions = specimenList
+      .filter((s) => !pinnedCoralIds.has(s.id))
+      .map((s) => ({
+        specimenId: s.id,
+        label: s.name || s.taxon_nodes?.name || "Unnamed coral",
+        taxonId: s.taxon_node_id,
+        taxonName: s.taxon_nodes?.name ?? null,
+        representativePhotoId: s.representative_photo_id,
+      }));
+  }
+
   return (
     <div>
       <p className="breadcrumb">
@@ -189,6 +261,7 @@ export default async function TankPage({
       ) : null}
 
       <TankBadgeToggle tankId={tankRow.id} badgeEnabled={tankRow.badge_enabled} />
+      <TankMapSettingsToggle tankId={tankRow.id} mapEnabled={tankRow.map_enabled} />
 
       {hasGrid ? (
         onboardingDone ? (
@@ -258,6 +331,20 @@ export default async function TankPage({
           )}
         </>
       )}
+
+      {tankRow.map_enabled ? (
+        <>
+          <h2>Photo-tile map</h2>
+          <TankMapCanvasLoader
+            tankId={tankRow.id}
+            tiles={mapTiles}
+            pins={mapPins}
+            unpinned={unpinnedOptions}
+            morphs={allMorphs}
+            genera={allGenera}
+          />
+        </>
+      ) : null}
     </div>
   );
 }
