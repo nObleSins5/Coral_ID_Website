@@ -4,7 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // (upload-to-a-known-coral) and app/identify/actions.ts (upload-unidentified).
 
 export const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-export const MAX_BYTES = 8 * 1024 * 1024;
+// 20MB, not the original 8MB — the tank scene model (scene-actions.ts's
+// uploadSceneView) needs meaningfully higher-resolution photos than a coral
+// macro shot: the feature's payoff is digitally zooming into a rock outcrop
+// later, so resolution is load-bearing here, not just nice-to-have. Applies
+// to every photo-upload flow that shares this helper, not just scenes.
+export const MAX_BYTES = 20 * 1024 * 1024;
 
 export type ParameterSnapshot = {
   parameter_reading_id: string | null;
