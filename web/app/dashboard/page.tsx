@@ -99,23 +99,38 @@ export default async function Dashboard() {
     .eq("id", user.id)
     .maybeSingle();
 
+  // Explicitly scoped to the caller, not left to RLS alone: tanks_public_read
+  // (32_tank_badge.sql) legitimately lets ANY authenticated user SELECT a
+  // tank with is_public or badge_enabled set (that's what powers /showcase
+  // and /badge), so an unfiltered query here would pull in other users'
+  // public/badge-enabled tanks onto this personal "Your tanks" dashboard.
   const { data: tanks } = await supabase
     .from("tanks")
     .select("id, name, tank_type, volume, grid_columns, grid_rows")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
-  // Recent readings per tank (RLS scopes to the caller's tanks). Fetched,
-  // not deleted, beyond the 5 rows shown in the log — parameter_readings is
-  // append-only (see schema comment) and the graph modal below needs up to
-  // GRAPH_POINTS_MAX history per parameter, which is more than the visible
-  // log ever shows.
-  const { data: readings } = await supabase
-    .from("parameter_readings")
-    .select(
-      "id, tank_id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
-    )
-    .order("measured_at", { ascending: false })
-    .limit(1000);
+  const tankList = (tanks ?? []) as Tank[];
+  const tankIds = tankList.map((t) => t.id);
+
+  // Recent readings per tank, restricted to the caller's own tanks (see the
+  // tanks query above for why — the public-read RLS policy on
+  // parameter_readings has the same is_public/badge_enabled carve-out).
+  // Fetched, not deleted, beyond the 5 rows shown in the log —
+  // parameter_readings is append-only (see schema comment) and the graph
+  // modal below needs up to GRAPH_POINTS_MAX history per parameter, which is
+  // more than the visible log ever shows.
+  const { data: readings } =
+    tankIds.length > 0
+      ? await supabase
+          .from("parameter_readings")
+          .select(
+            "id, tank_id, measured_at, alkalinity_dkh, calcium_ppm, magnesium_ppm, nitrate_ppm, phosphate_ppm",
+          )
+          .in("tank_id", tankIds)
+          .order("measured_at", { ascending: false })
+          .limit(1000)
+      : { data: [] as Reading[] };
 
   const readingsByTank = new Map<string, Reading[]>();
   for (const r of (readings ?? []) as Reading[]) {
@@ -124,22 +139,27 @@ export default async function Dashboard() {
     else readingsByTank.set(r.tank_id, [r]);
   }
 
-  const tankList = (tanks ?? []) as Tank[];
-
   // Grid occupancy, equipment summary, and callout counts — the data that
   // turns each card into a doorway instead of a self-contained widget (see
-  // docs/onboard-first-coral-journey-brief.md). Same RLS-scoped,
-  // no-explicit-tank-filter pattern as the readings query above.
+  // docs/onboard-first-coral-journey-brief.md). Same explicit tank_id scoping
+  // as the readings query above, for the same reason.
   const [{ data: gridSlots }, { data: occupancySpecimens }, { data: equipmentRows }, tankStatuses] =
-    await Promise.all([
-      supabase.from("grid_slots").select("id, tank_id"),
-      supabase.from("specimens").select("tank_id, grid_slot_id").is("deleted_at", null),
-      supabase
-        .from("equipment")
-        .select("tank_id, equipment_type_code, brand, model")
-        .is("removed_on", null),
-      Promise.all(tankList.map((t) => getTankStatus(supabase, t.id))),
-    ]);
+    tankIds.length > 0
+      ? await Promise.all([
+          supabase.from("grid_slots").select("id, tank_id").in("tank_id", tankIds),
+          supabase
+            .from("specimens")
+            .select("tank_id, grid_slot_id")
+            .in("tank_id", tankIds)
+            .is("deleted_at", null),
+          supabase
+            .from("equipment")
+            .select("tank_id, equipment_type_code, brand, model")
+            .in("tank_id", tankIds)
+            .is("removed_on", null),
+          Promise.all(tankList.map((t) => getTankStatus(supabase, t.id))),
+        ])
+      : [{ data: [] }, { data: [] }, { data: [] }, []];
 
   const slotCountByTank = new Map<string, number>();
   for (const s of gridSlots ?? []) {
