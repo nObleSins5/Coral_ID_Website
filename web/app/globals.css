@@ -150,24 +150,67 @@ a:hover {
     margin-left: 0;
   }
 }
-/* The nav's one auth-dependent item (AuthNavLink) is a form+button when
-   signed in, not an <a> — styled to read identically to its sibling links.
-   Spacing comes from nav's own `gap` now, not a per-item margin. */
-.nav-signout-form {
-  display: inline;
+/* Account dropdown (components/account-menu.tsx) — the nav's one
+   auth-dependent item once logged in, replacing a bare "Sign out" link. */
+.account-menu {
+  position: relative;
 }
-.nav-signout-form button {
-  background: none;
-  border: none;
+.account-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
-  margin: 0;
-  color: var(--accent-text);
-  font-size: inherit;
-  font-weight: 400;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent);
   cursor: pointer;
 }
-.nav-signout-form button:hover {
-  text-decoration: underline;
+.account-avatar {
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.account-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 20;
+  padding: 0.3rem 0;
+}
+.account-menu-username {
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.account-menu-dropdown a,
+.account-menu-signout {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+.account-menu-dropdown a:hover,
+.account-menu-signout:hover {
+  background: var(--bg);
+  text-decoration: none;
 }
 
 .container {

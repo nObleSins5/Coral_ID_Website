@@ -100,6 +100,76 @@ export async function resetGrid(formData: FormData): Promise<{ error?: string }>
   return {};
 }
 
+// Posts a whole-tank photo (not tied to any one coral — see
+// sql/supabase/36_tank_photos.sql for why this is a separate table from
+// coral_photos). Reuses the same upload helper and storage bucket as every
+// other photo path in the app.
+export async function uploadTankPhoto(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const caption = String(formData.get("caption") ?? "").trim() || null;
+
+  const tank = await getOwnedTank(supabase, tankId, user.id);
+  if (!tank) return { error: "Tank not found." };
+
+  const uploaded = await uploadPhotoFile(supabase, user.id, formData.get("photo"));
+  if ("error" in uploaded) return uploaded;
+
+  const { error: insertError } = await supabase.from("tank_photos").insert({
+    tank_id: tankId,
+    uploader_user_id: user.id,
+    storage_provider: "supabase",
+    storage_key: uploaded.path,
+    url: uploaded.publicUrl,
+    mime: uploaded.mime,
+    bytes: uploaded.bytes,
+    caption,
+  });
+  if (insertError) {
+    await supabase.storage.from("coral-photos").remove([uploaded.path]);
+    return { error: insertError.message };
+  }
+
+  revalidatePath(`/tank/${tankId}`);
+  revalidatePath(`/showcase/${tankId}`);
+  return {};
+}
+
+// Owner-only delete (also covered by tank_photos_owner_all RLS, but this
+// removes the storage object too, which RLS alone can't do).
+export async function deleteTankPhoto(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const photoId = String(formData.get("photo_id") ?? "");
+  const tankId = String(formData.get("tank_id") ?? "");
+
+  const { data: photo } = await supabase
+    .from("tank_photos")
+    .select("id, storage_key, tank_id, tanks!inner(user_id)")
+    .eq("id", photoId)
+    .eq("tanks.user_id", user.id)
+    .maybeSingle();
+  if (!photo) return { error: "Photo not found." };
+
+  const { error } = await supabase.from("tank_photos").delete().eq("id", photoId);
+  if (error) return { error: error.message };
+
+  await supabase.storage.from("coral-photos").remove([photo.storage_key]);
+
+  revalidatePath(`/tank/${tankId}`);
+  revalidatePath(`/showcase/${tankId}`);
+  return {};
+}
+
 // Publishes/unpublishes a read-only showcase of this tank's grid at
 // /showcase/[id] (sql/supabase/28_public_tank_showcase.sql) — business-tier
 // only, matching the existing account_type_code gate on affiliate_links

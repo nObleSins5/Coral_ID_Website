@@ -30,8 +30,15 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Require a session for the dashboard.
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  // Require a session for the dashboard, account settings, and the
+  // post-recovery-link password form (verifyOtp in app/auth/confirm
+  // establishes that session before redirecting here).
+  if (
+    !user &&
+    (request.nextUrl.pathname.startsWith("/dashboard") ||
+      request.nextUrl.pathname.startsWith("/account") ||
+      request.nextUrl.pathname.startsWith("/update-password"))
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

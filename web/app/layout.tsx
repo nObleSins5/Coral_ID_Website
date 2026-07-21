@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
-import { AuthNavLink } from "@/components/auth-nav-link";
+import { AccountMenu } from "@/components/account-menu";
 import { HeaderSearch } from "@/components/header-search";
 import "./globals.css";
 
@@ -34,7 +34,7 @@ export default function RootLayout({
             <a href="/community">Community ID</a>
             <a href="/wiki">Wiki</a>
             <a href="/dashboard">Dashboard</a>
-            <AuthNavLink />
+            <AccountMenu />
           </nav>
         </header>
         <main className="container">{children}</main>

@@ -4,6 +4,7 @@ import { TankGridView } from "@/components/tank-grid-view";
 import { columnLabel } from "@/lib/grid";
 import { getUsernamesFor } from "@/lib/wiki";
 import { getBadgeData, PARAM_META, type ParamKey } from "@/lib/tank-callouts";
+import { TankPhotoGallery, type TankPhoto } from "@/components/tank-photo-gallery";
 
 // Public, read-only tank page — gated by EITHER tanks.is_public (a business
 // account's full grid, published via TankPublishToggle) OR
@@ -111,6 +112,13 @@ export default async function TankShowcasePage({
   const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
 
   const ownerNames = await getUsernamesFor([tankRow.user_id]);
+
+  const { data: tankPhotos } = await supabase
+    .from("tank_photos")
+    .select("id, url, caption, uploader_user_id")
+    .eq("tank_id", id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
 
   function taxonHref(s: Specimen) {
     const taxon = s.taxon_nodes;
@@ -231,6 +239,13 @@ export default async function TankShowcasePage({
         Tap any coral above for its full wiki page — community photos, care difficulty, and
         recommended parameters.
       </p>
+
+      {tankPhotos && tankPhotos.length > 0 ? (
+        <>
+          <h2>Tank photos</h2>
+          <TankPhotoGallery tankId={id} photos={tankPhotos as TankPhoto[]} isOwner={false} />
+        </>
+      ) : null}
     </div>
   );
 }

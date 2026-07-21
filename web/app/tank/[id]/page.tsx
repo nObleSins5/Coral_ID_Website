@@ -8,6 +8,7 @@ import { TankGridInteractive } from "@/components/tank-grid-interactive";
 import { TankPublishToggle } from "@/components/tank-publish-toggle";
 import { TankBadgeToggle } from "@/components/tank-badge-toggle";
 import { TankStatusBlock } from "@/components/tank-status-block";
+import { TankPhotoGallery, type TankPhoto } from "@/components/tank-photo-gallery";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { getAllMorphsForSearch, getGenera } from "@/lib/wiki";
 import { getTankStatus } from "@/lib/tank-callouts";
@@ -109,10 +110,16 @@ export default async function TankPage({
       : { data: [] as { id: string; url: string }[] };
   const photoUrlById = new Map((photos ?? []).map((p) => [p.id, p.url]));
 
-  const [allMorphs, allGenera, tankStatus] = await Promise.all([
+  const [allMorphs, allGenera, tankStatus, { data: tankPhotos }] = await Promise.all([
     getAllMorphsForSearch(),
     getGenera(),
     getTankStatus(supabase, id),
+    supabase
+      .from("tank_photos")
+      .select("id, url, caption, uploader_user_id")
+      .eq("tank_id", id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
   ]);
 
   const specimenBySlot = new Map(
@@ -189,6 +196,13 @@ export default async function TankPage({
       ) : null}
 
       <TankBadgeToggle tankId={tankRow.id} badgeEnabled={tankRow.badge_enabled} />
+
+      <h2>Tank photos</h2>
+      <TankPhotoGallery
+        tankId={tankRow.id}
+        photos={(tankPhotos as TankPhoto[]) ?? []}
+        isOwner
+      />
 
       {hasGrid ? (
         onboardingDone ? (
