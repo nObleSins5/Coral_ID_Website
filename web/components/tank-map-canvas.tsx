@@ -12,14 +12,21 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Stage, Layer } from "react-konva";
+import { Stage, Layer, Transformer } from "react-konva";
 import type Konva from "konva";
-import { deleteMapTile, placeMapPin, removeMapPin, updateMapTile } from "@/app/tank/map-actions";
+import {
+  deleteMapTile,
+  groupTiles,
+  placeMapPin,
+  removeMapPin,
+  ungroupTiles,
+  updateMapTile,
+} from "@/app/tank/map-actions";
 import { MapTile } from "@/components/map-tile";
 import { TileUploadPanel } from "@/components/tile-upload-panel";
 import { TileCropModal } from "@/components/tile-crop-modal";
 import { MapTilePanel, type UnpinnedOption } from "@/components/map-tile-panel";
-import type { MapPin, MapTile as MapTileData } from "@/lib/tank-map";
+import { MAP_COLORS, type MapPin, type MapTile as MapTileData } from "@/lib/tank-map";
 import type { SearchableMorph } from "@/lib/wiki";
 
 type Genus = { id: string; name: string };
@@ -84,7 +91,18 @@ export function TankMapCanvas({
   // wherever the owner left it, full stop.
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
+  // The active multi-select — built by shift-clicking tiles, or auto-filled
+  // to a whole saved group's members on a plain click of any one of them
+  // (see handleTileSelect). soloEditTileId overrides this: double-clicking
+  // a tile "enters" it for individual editing even if it's part of a group,
+  // per the owner's spec ("click once = group, double-click = individual
+  // tile"). tileNodesRef mirrors every mounted tile's live Konva node so
+  // the shared groupTransformerRef and the group-drag math below can reach
+  // any selected tile directly, without going through React state/re-render.
+  const [selectedTileIds, setSelectedTileIds] = useState<string[]>([]);
+  const [soloEditTileId, setSoloEditTileId] = useState<string | null>(null);
+  const tileNodesRef = useRef<Map<string, Konva.Group>>(new Map());
+  const groupTransformerRef = useRef<Konva.Transformer>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [croppingTileId, setCroppingTileId] = useState<string | null>(null);
   const [pinPanelTarget, setPinPanelTarget] = useState<{
@@ -108,10 +126,45 @@ export function TankMapCanvas({
   }, [pins]);
 
   const sortedTiles = useMemo(() => [...tiles].sort((a, b) => a.zIndex - b.zIndex), [tiles]);
-  const selectedTile = tiles.find((t) => t.id === selectedTileId) ?? null;
   const croppingTile = tiles.find((t) => t.id === croppingTileId) ?? null;
 
-  function persistTransform(
+  // soloEditTileId (double-click) always wins over the ad-hoc/group
+  // multi-select — see the type comment above selectedTileIds.
+  const activeSelectionIds = soloEditTileId ? [soloEditTileId] : selectedTileIds;
+  const isGroupSelection = activeSelectionIds.length > 1;
+  const soloTile = activeSelectionIds.length === 1 ? tiles.find((t) => t.id === activeSelectionIds[0]) ?? null : null;
+
+  // The active selection is exactly one already-saved group (not a partial
+  // subset, not an ad-hoc mix of ungrouped tiles) — this is what "Ungroup"
+  // requires, and what disqualifies "Group" (nothing new to lock together).
+  const savedGroupId = (() => {
+    if (soloEditTileId || selectedTileIds.length < 2) return null;
+    const selected = tiles.filter((t) => selectedTileIds.includes(t.id));
+    if (selected.length !== selectedTileIds.length) return null;
+    const gid = selected[0].tileGroupId;
+    if (!gid || !selected.every((t) => t.tileGroupId === gid)) return null;
+    const allMembers = tiles.filter((t) => t.tileGroupId === gid);
+    return allMembers.length === selected.length ? gid : null;
+  })();
+  const canGroup = !soloEditTileId && selectedTileIds.length >= 2 && !savedGroupId;
+  const canUngroup = savedGroupId != null;
+
+  // Keeps the shared Transformer attached to exactly the currently-selected
+  // tiles' live Konva nodes. A single node behaves exactly like the old
+  // per-tile Transformer did; 2+ nodes get Konva's native multi-node
+  // transform (each node ends up with its own correctly baked
+  // position/scale/rotation, orbiting the group's shared bounding box) —
+  // see handleSoloOrMemberTransformEnd below for why that means no extra
+  // "combined bounding box" math is needed here at all.
+  useEffect(() => {
+    const transformer = groupTransformerRef.current;
+    if (!transformer) return;
+    const nodes = activeSelectionIds.map((id) => tileNodesRef.current.get(id)).filter((n): n is Konva.Group => !!n);
+    transformer.nodes(nodes);
+    transformer.getLayer()?.batchDraw();
+  }, [activeSelectionIds, tiles]);
+
+  function persistTransformAsync(
     tileId: string,
     transform: { posX: number; posY: number; width: number; height: number; rotation: number },
   ) {
@@ -122,20 +175,79 @@ export function TankMapCanvas({
     formData.set("width", String(transform.width));
     formData.set("height", String(transform.height));
     formData.set("rotation", String(transform.rotation));
-    updateMapTile(formData).then((result) => {
+    return updateMapTile(formData);
+  }
+
+  // Solo drag/resize/rotate end, AND each individual group member's
+  // resize/rotate end (Konva's multi-node Transformer still fires its own
+  // transformend on every node it transforms, already carrying that node's
+  // correct final baked state — see map-tile.tsx's handleTransformEnd) —
+  // one tile, one persist call, either way.
+  function persistTransform(
+    tileId: string,
+    transform: { posX: number; posY: number; width: number; height: number; rotation: number },
+  ) {
+    persistTransformAsync(tileId, transform).then((result) => {
+      if (result?.error) setTileError(result.error);
+      else router.refresh();
+    });
+  }
+
+  // Plain dragging (no resize/rotate) is NOT covered by the Transformer —
+  // only the one tile actually grabbed moves on its own, so when it's part
+  // of a multi-tile selection we mirror its delta onto every sibling node
+  // directly (bypassing React state for a smooth live drag), then persist
+  // all of them together at the end.
+  function handleGroupDragMove(delta: { x: number; y: number }) {
+    for (const id of activeSelectionIds) {
+      const node = tileNodesRef.current.get(id);
+      const tile = tiles.find((t) => t.id === id);
+      if (!node || !tile) continue;
+      node.position({ x: tile.posX + delta.x, y: tile.posY + delta.y });
+    }
+    stageRef.current?.batchDraw();
+  }
+
+  function handleGroupDragEnd(delta: { x: number; y: number }) {
+    const updates = activeSelectionIds
+      .map((id) => tiles.find((t) => t.id === id))
+      .filter((t): t is MapTileData => !!t)
+      .map((t) => ({ tileId: t.id, posX: t.posX + delta.x, posY: t.posY + delta.y, width: t.width, height: t.height, rotation: t.rotation }));
+    setTilePending(true);
+    Promise.all(updates.map((u) => persistTransformAsync(u.tileId, u))).then((results) => {
+      setTilePending(false);
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) setTileError(failed.error);
+      router.refresh();
+    });
+  }
+
+  function handleGroup() {
+    setTilePending(true);
+    groupTiles(formDataWith({ tile_ids: selectedTileIds.join(",") })).then((result) => {
+      setTilePending(false);
+      if (result?.error) setTileError(result.error);
+      else router.refresh();
+    });
+  }
+
+  function handleUngroup() {
+    setTilePending(true);
+    ungroupTiles(formDataWith({ tile_ids: selectedTileIds.join(",") })).then((result) => {
+      setTilePending(false);
       if (result?.error) setTileError(result.error);
       else router.refresh();
     });
   }
 
   function reorderSelected(direction: "front" | "back") {
-    if (!selectedTile) return;
+    if (!soloTile) return;
     const zIndex =
       direction === "front"
         ? Math.max(0, ...tiles.map((t) => t.zIndex)) + 1
         : Math.min(0, ...tiles.map((t) => t.zIndex)) - 1;
     const formData = new FormData();
-    formData.set("tile_id", selectedTile.id);
+    formData.set("tile_id", soloTile.id);
     formData.set("z_index", String(zIndex));
     setTilePending(true);
     updateMapTile(formData).then((result) => {
@@ -146,14 +258,15 @@ export function TankMapCanvas({
   }
 
   function deleteSelected() {
-    if (!selectedTile) return;
+    if (!soloTile) return;
     if (!window.confirm("Delete this tile? Any coral pins on it will be removed too.")) return;
-    const tileId = selectedTile.id;
+    const tileId = soloTile.id;
     setTilePending(true);
     deleteMapTile(formDataWith({ tile_id: tileId })).then((result) => {
       setTilePending(false);
       if (result?.error) setTileError(result.error);
-      setSelectedTileId(null);
+      setSelectedTileIds([]);
+      setSoloEditTileId(null);
       router.refresh();
     });
   }
@@ -203,10 +316,11 @@ export function TankMapCanvas({
 
   // Click on genuinely empty canvas (no shape hit at all) deselects — a
   // click that lands on a tile is handled by that MapTile itself, which
-  // calls handleTileEmptyClick below (it's the only place that knows the
-  // tile's real natural image size, needed to convert the click into
-  // crop-pixel space correctly; see map-tile.tsx's handleClick). A click on
-  // a pin never reaches here either way — CoralPin cancels bubbling.
+  // calls handleTileSelect/handleTileEmptyClick below (it's the only place
+  // that knows the tile's real natural image size, needed to convert the
+  // click into crop-pixel space correctly; see map-tile.tsx's handleClick).
+  // A click on a pin never reaches here either way — CoralPin cancels
+  // bubbling.
   function handleStageClick() {
     const stage = stageRef.current;
     if (!stage) return;
@@ -214,13 +328,36 @@ export function TankMapCanvas({
     if (!pointer) return;
     const shape = stage.getIntersection(pointer);
     if (!shape) {
-      setSelectedTileId(null);
+      setSelectedTileIds([]);
+      setSoloEditTileId(null);
       setSelectedPinId(null);
     }
   }
 
+  // Plain click replaces the selection: a grouped tile pulls in its whole
+  // group (spec: "a single click selects the whole group"); an ungrouped
+  // tile selects just itself. Shift-click instead toggles just that one
+  // tile into/out of the selection, for building an ad-hoc multi-select to
+  // hand to "Group" — it never expands to that tile's existing group, and
+  // it skips the "add a coral here" flow below (that's a placement gesture,
+  // not a selection one).
+  function handleTileSelect(tile: MapTileData, opts: { shiftKey: boolean }) {
+    setSoloEditTileId(null);
+    if (opts.shiftKey) {
+      setSelectedTileIds((prev) => (prev.includes(tile.id) ? prev.filter((id) => id !== tile.id) : [...prev, tile.id]));
+      setPinPanelTarget(null);
+      return;
+    }
+    setSelectedTileIds(tile.tileGroupId ? tiles.filter((t) => t.tileGroupId === tile.tileGroupId).map((t) => t.id) : [tile.id]);
+  }
+
+  function handleTileDoubleClick(tileId: string) {
+    setSoloEditTileId(tileId);
+    setSelectedTileIds([tileId]);
+    setPinPanelTarget(null);
+  }
+
   function handleTileEmptyClick(tileId: string, point: { x: number; y: number }) {
-    setSelectedTileId(tileId);
     setPinPanelTarget({ tileId, point });
   }
 
@@ -277,9 +414,9 @@ export function TankMapCanvas({
           cascadeOffset={uploadCascade}
           onUploaded={() => setUploadCascade((n) => n + 1)}
         />
-        {selectedTile ? (
+        {soloTile ? (
           <>
-            <button type="button" className="btn-secondary" onClick={() => setCroppingTileId(selectedTile.id)}>
+            <button type="button" className="btn-secondary" onClick={() => setCroppingTileId(soloTile.id)}>
               Crop
             </button>
             <button type="button" className="btn-secondary" disabled={tilePending} onClick={() => reorderSelected("front")}>
@@ -292,6 +429,16 @@ export function TankMapCanvas({
               Delete tile
             </button>
           </>
+        ) : null}
+        {canGroup ? (
+          <button type="button" className="btn-secondary" disabled={tilePending} onClick={handleGroup}>
+            Group
+          </button>
+        ) : null}
+        {canUngroup ? (
+          <button type="button" className="btn-secondary" disabled={tilePending} onClick={handleUngroup}>
+            Ungroup
+          </button>
         ) : null}
       </div>
       {tileError ? <p className="error">{tileError}</p> : null}
@@ -319,19 +466,33 @@ export function TankMapCanvas({
                 key={tile.id}
                 tile={tile}
                 pins={pinsByTile.get(tile.id) ?? []}
-                selected={tile.id === selectedTileId}
+                selected={activeSelectionIds.includes(tile.id)}
+                isGroupSelection={isGroupSelection && activeSelectionIds.includes(tile.id)}
                 selectedPinId={selectedPinId}
-                onSelect={() => {
-                  setSelectedTileId(tile.id);
-                  setPinPanelTarget(null);
-                }}
+                onSelect={(opts) => handleTileSelect(tile, opts)}
+                onDoubleClick={() => handleTileDoubleClick(tile.id)}
                 onEmptyClick={(point) => handleTileEmptyClick(tile.id, point)}
-                onTransformEnd={(t) => persistTransform(tile.id, t)}
+                onDragEnd={(t) => persistTransform(tile.id, t)}
+                onGroupDragMove={handleGroupDragMove}
+                onGroupDragEnd={handleGroupDragEnd}
                 onSelectPin={setSelectedPinId}
                 onOpenPin={(pinId) => router.push(`/specimen/${pins.find((p) => p.id === pinId)?.coralId}`)}
                 onMovePin={(pinId, point) => handleMovePin(tile.id, pinId, point)}
+                onNodeRef={(node) => {
+                  if (node) tileNodesRef.current.set(tile.id, node);
+                  else tileNodesRef.current.delete(tile.id);
+                }}
               />
             ))}
+            <Transformer
+              ref={groupTransformerRef}
+              rotateEnabled
+              flipEnabled={false}
+              enabledAnchors={["top-left", "top-right", "bottom-left", "bottom-right"]}
+              anchorSize={16}
+              anchorCornerRadius={8}
+              borderStroke={MAP_COLORS.accent}
+            />
           </Layer>
         </Stage>
       </div>

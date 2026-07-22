@@ -171,6 +171,74 @@ export async function deleteMapTile(formData: FormData): Promise<{ error?: strin
   return {};
 }
 
+// Locks a set of tiles together (37_tank_map_tile_groups.sql) — assigns a
+// freshly generated tile_group_id to every tile in tileIds, all in one
+// tank (multi-tank grouping makes no sense; the caller only ever offers
+// tiles from the tank currently open, this just double-checks it). Any
+// tile already in a different group is silently moved into the new one —
+// the UI only offers "Group" for a multi-selection that isn't already one
+// uniform group, so this shouldn't normally fire on already-grouped tiles.
+export async function groupTiles(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tileIds = String(formData.get("tile_ids") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (tileIds.length < 2) return { error: "Select at least two tiles to group." };
+
+  const { data: rows } = await supabase
+    .from("tank_map_tiles")
+    .select("id, tank_id, tanks!inner(user_id)")
+    .in("id", tileIds)
+    .eq("tanks.user_id", user.id);
+  if (!rows || rows.length !== tileIds.length) return { error: "Tile not found." };
+  const tankId = rows[0].tank_id;
+  if (rows.some((r) => r.tank_id !== tankId)) return { error: "Tiles must be in the same tank." };
+
+  const groupId = crypto.randomUUID();
+  const { error } = await supabase.from("tank_map_tiles").update({ tile_group_id: groupId }).in("id", tileIds);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
+// Splits a group back into independent tiles — clears tile_group_id on
+// every member. Takes the group's tiles (not just a group id) so it can
+// ownership-check the same way every other action here does.
+export async function ungroupTiles(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tileIds = String(formData.get("tile_ids") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (tileIds.length === 0) return { error: "No tiles to ungroup." };
+
+  const { data: rows } = await supabase
+    .from("tank_map_tiles")
+    .select("id, tank_id, tanks!inner(user_id)")
+    .in("id", tileIds)
+    .eq("tanks.user_id", user.id);
+  if (!rows || rows.length !== tileIds.length) return { error: "Tile not found." };
+  const tankId = rows[0].tank_id;
+
+  const { error } = await supabase.from("tank_map_tiles").update({ tile_group_id: null }).in("id", tileIds);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/tank/${tankId}`);
+  return {};
+}
+
 // Tags a coral to a point on a tile (relative to the tile's crop, per
 // coral_map_pins.pos_x/pos_y — see 36_tank_map.sql). One pin per coral for
 // MVP (uq_coral_map_pins_coral): re-tagging is done by dragging/upserting

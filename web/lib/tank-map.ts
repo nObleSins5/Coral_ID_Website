@@ -30,6 +30,9 @@ export type MapTile = {
   cropY: number;
   cropWidth: number | null;
   cropHeight: number | null;
+  // Tiles sharing a tileGroupId are locked together (PowerPoint-style
+  // group) — see 37_tank_map_tile_groups.sql. null = not in a group.
+  tileGroupId: string | null;
 };
 
 export type MapPin = {

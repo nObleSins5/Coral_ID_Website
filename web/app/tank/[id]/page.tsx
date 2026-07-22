@@ -187,7 +187,7 @@ export default async function TankPage({
     const { data: tiles } = await supabase
       .from("tank_map_tiles")
       .select(
-        "id, storage_path, pos_x, pos_y, width, height, rotation, z_index, crop_x, crop_y, crop_width, crop_height",
+        "id, storage_path, pos_x, pos_y, width, height, rotation, z_index, crop_x, crop_y, crop_width, crop_height, tile_group_id",
       )
       .eq("tank_id", id);
     mapTiles = (tiles ?? []).map((t) => ({
@@ -204,6 +204,7 @@ export default async function TankPage({
       cropY: Number(t.crop_y),
       cropWidth: t.crop_width != null ? Number(t.crop_width) : null,
       cropHeight: t.crop_height != null ? Number(t.crop_height) : null,
+      tileGroupId: t.tile_group_id,
     }));
 
     const tileIds = mapTiles.map((t) => t.id);
