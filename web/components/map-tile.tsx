@@ -154,12 +154,24 @@ export function MapTile({
     onDragEnd({ posX: node.x(), posY: node.y(), width: tile.width, height: tile.height, rotation: tile.rotation });
   }
 
-  // Solo resize/rotate only — group transforms are read off every member
-  // node directly by the parent's shared Transformer, never through here.
+  // Konva fires transformend on the shared Transformer FIRST, then on every
+  // node it's attached to (in that order — see Konva's Transformer source).
+  // For a group (2+ nodes), the parent's onTransformEnd already read every
+  // member's scale/position and persisted the whole batch in one shot by
+  // the time this per-node handler runs — persisting again here would fire
+  // one more redundant updateMapTile + router.refresh() per member tile,
+  // which is exactly what was producing the multi-refresh lag/flicker on
+  // a group resize. Just reset this node's scale so it doesn't compound
+  // into the next gesture, and stop.
   function handleTransformEnd() {
     const node = groupRef.current;
     if (!node) return;
     clearNodeCache();
+    if (isGroupSelection) {
+      node.scaleX(1);
+      node.scaleY(1);
+      return;
+    }
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     const newWidth = Math.max(20, tile.width * scaleX);

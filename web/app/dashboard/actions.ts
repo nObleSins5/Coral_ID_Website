@@ -84,6 +84,42 @@ export async function logParameters(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+// Deletes a tank. grid_slots/parameter_readings/equipment/tank_map_tiles
+// etc. all cascade off tanks(id) ON DELETE CASCADE, but specimens.tank_id
+// (and coral_photos.tank_id) deliberately do NOT — a coral's identification
+// history and community photos are meant to outlive a tank's own record.
+// Rather than choosing on the owner's behalf whether to orphan or drag
+// those along, this refuses to delete a tank that still has corals in it
+// and asks the owner to move/remove them first — same
+// safety-over-convenience stance as the grid reset warning on /tank/[id]
+// ("moves every coral out of its slot, so it's not something to do
+// casually").
+export async function deleteTank(formData: FormData): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "You must be logged in." };
+
+  const tankId = String(formData.get("tank_id") ?? "");
+  const { data: tank } = await supabase.from("tanks").select("id").eq("id", tankId).eq("user_id", user.id).maybeSingle();
+  if (!tank) return { error: "Tank not found." };
+
+  const { count } = await supabase
+    .from("specimens")
+    .select("id", { count: "exact", head: true })
+    .eq("tank_id", tankId);
+  if (count) {
+    return { error: `This tank still has ${count} coral${count === 1 ? "" : "s"} in it — move or remove them first.` };
+  }
+
+  const { error } = await supabase.from("tanks").delete().eq("id", tankId).eq("user_id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  return {};
+}
+
 // Removes one entry from the current user's wishlist. RLS (want_list_owner_all)
 // already restricts deletes to the caller's own rows.
 export async function removeFromWishlist(formData: FormData) {

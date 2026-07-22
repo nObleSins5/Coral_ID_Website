@@ -44,4 +44,7 @@ export type MapPin = {
   label: string | null;
   taxonName: string | null;
   representativePhotoUrl: string | null;
+  // specimens.acquired_on (YYYY-MM-DD) — the date the owner said this coral
+  // was added, shown on the map as an "Age: " line. null if never set.
+  acquiredOn: string | null;
 };

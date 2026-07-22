@@ -222,6 +222,39 @@ export function TankMapCanvas({
     });
   }
 
+  // Konva's Transformer fires its OWN transformend (before it fires on each
+  // attached node — see map-tile.tsx's handleTransformEnd) whenever a
+  // resize/rotate anchor is released, whether 1 or many nodes are
+  // attached. For 2+ nodes this is the ONE place that reads every member's
+  // resulting scale/position and persists the whole group in a single
+  // batched call + refresh — each node firing its own redundant persist
+  // afterward is exactly what was producing a cascade of network
+  // round-trips (and the resulting lag/flicker) on a group resize. For a
+  // solo tile (1 node), that node's own handler in map-tile.tsx already
+  // does the persist, so this is a no-op here.
+  function handleGroupTransformEnd() {
+    const transformer = groupTransformerRef.current;
+    if (!transformer) return;
+    const nodes = transformer.nodes() as Konva.Group[];
+    if (nodes.length < 2) return;
+    const updates = nodes.map((node) => {
+      const id = node.id();
+      const tile = tiles.find((t) => t.id === id);
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      const newWidth = Math.max(20, (tile?.width ?? node.width()) * scaleX);
+      const newHeight = Math.max(20, (tile?.height ?? node.height()) * scaleY);
+      return { tileId: id, posX: node.x(), posY: node.y(), width: newWidth, height: newHeight, rotation: node.rotation() };
+    });
+    setTilePending(true);
+    Promise.all(updates.map((u) => persistTransformAsync(u.tileId, u))).then((results) => {
+      setTilePending(false);
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) setTileError(failed.error);
+      router.refresh();
+    });
+  }
+
   function handleGroup() {
     setTilePending(true);
     groupTiles(formDataWith({ tile_ids: selectedTileIds.join(",") })).then((result) => {
@@ -369,7 +402,10 @@ export function TankMapCanvas({
     if (!pointer) return;
     const oldScale = scale;
     const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const newScale = clamp(oldScale * (1 + direction * 0.08), MIN_SCALE, MAX_SCALE);
+    // 0.08/tick made a single trackpad gesture (which fires many small wheel
+    // events in a row) blow past a fine target zoom level almost instantly.
+    // 0.02 gives roughly a 4x finer step for the same gesture.
+    const newScale = clamp(oldScale * (1 + direction * 0.02), MIN_SCALE, MAX_SCALE);
     const mousePointTo = {
       x: (pointer.x - stagePos.x) / oldScale,
       y: (pointer.y - stagePos.y) / oldScale,
@@ -492,6 +528,7 @@ export function TankMapCanvas({
               anchorSize={16}
               anchorCornerRadius={8}
               borderStroke={MAP_COLORS.accent}
+              onTransformEnd={handleGroupTransformEnd}
             />
           </Layer>
         </Stage>

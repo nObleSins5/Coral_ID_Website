@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createTank, logParameters, removeFromWishlist } from "./actions";
 import { ParameterGraphButton, type GraphPoint } from "@/components/parameter-graph-button";
 import { CalloutSummaryToggle } from "@/components/callout-summary-toggle";
+import { DeleteTankButton } from "@/components/delete-tank-button";
 import { getTankStatus } from "@/lib/tank-callouts";
 
 type Tank = {
@@ -253,6 +254,7 @@ export default async function Dashboard() {
                   callouts={statusByTank.get(tank.id)?.callouts ?? []}
                   husbandryHref={`/tank/${tank.id}/husbandry`}
                 />
+                <DeleteTankButton tankId={tank.id} tankName={tank.name} />
               </div>
               <p className="muted tank-card-meta">
                 {tank.tank_type ? `${tank.tank_type} · ` : ""}

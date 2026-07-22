@@ -213,7 +213,7 @@ export default async function TankPage({
         ? await supabase
             .from("coral_map_pins")
             .select(
-              "id, coral_id, tile_id, pos_x, pos_y, specimens ( name, representative_photo_id, taxon_nodes ( name ) )",
+              "id, coral_id, tile_id, pos_x, pos_y, specimens ( name, representative_photo_id, acquired_on, taxon_nodes ( name ) )",
             )
             .in("tile_id", tileIds)
         : { data: [] as unknown[] };
@@ -230,6 +230,7 @@ export default async function TankPage({
       representativePhotoUrl: p.specimens?.representative_photo_id
         ? photoUrlById.get(p.specimens.representative_photo_id) ?? null
         : null,
+      acquiredOn: p.specimens?.acquired_on ?? null,
     }));
 
     const pinnedCoralIds = new Set(mapPins.map((p) => p.coralId));
