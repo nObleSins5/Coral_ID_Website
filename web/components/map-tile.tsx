@@ -73,6 +73,20 @@ export function MapTile({
   const groupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
 
+  // Tiles keep their full original photo resolution (only the on-canvas
+  // display width/height is scaled down at upload time, see
+  // tile-upload-panel.tsx's DEFAULT_TILE_MAX_DIMENSION). Left uncached,
+  // Konva has to rescale that full-res source image on every single
+  // drag/transform frame, which is what made dragging/resizing feel laggy.
+  // Caching rasterizes the group to a bitmap for the duration of the
+  // gesture so Konva just blits pixels instead of rescaling the source.
+  function cacheNode() {
+    groupRef.current?.cache();
+  }
+  function clearNodeCache() {
+    groupRef.current?.clearCache();
+  }
+
   const naturalWidth = image?.naturalWidth ?? tile.width;
   const naturalHeight = image?.naturalHeight ?? tile.height;
   const cropWidth = tile.cropWidth ?? naturalWidth;
@@ -88,6 +102,7 @@ export function MapTile({
   function handleTransformEnd() {
     const node = groupRef.current;
     if (!node) return;
+    clearNodeCache();
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     const newWidth = Math.max(20, tile.width * scaleX);
@@ -140,7 +155,9 @@ export function MapTile({
         draggable
         onClick={handleClick}
         onTap={handleClick}
+        onDragStart={cacheNode}
         onDragEnd={handleTransformEnd}
+        onTransformStart={cacheNode}
         onTransformEnd={handleTransformEnd}
       >
         {image ? (

@@ -79,6 +79,38 @@ export function TankMapCanvas({
 
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const hasFitToContentRef = useRef(false);
+
+  // Tiles get dragged wherever the owner wants over time and can end up far
+  // from the canvas origin. Starting every mount at a hardcoded {0,0} pan
+  // means the view can land on empty space with no tiles in sight. Fit the
+  // initial pan/scale to the tiles' actual bounding box instead, once, the
+  // first time tiles are available and we know the stage's real width.
+  useEffect(() => {
+    if (hasFitToContentRef.current || tiles.length === 0 || stageWidth === 0) return;
+    hasFitToContentRef.current = true;
+    const minX = Math.min(...tiles.map((t) => t.posX));
+    const minY = Math.min(...tiles.map((t) => t.posY));
+    const maxX = Math.max(...tiles.map((t) => t.posX + t.width));
+    const maxY = Math.max(...tiles.map((t) => t.posY + t.height));
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    const padding = 40;
+    const fitScale = clamp(
+      Math.min(
+        (stageWidth - padding * 2) / contentWidth,
+        (STAGE_HEIGHT - padding * 2) / contentHeight,
+        1,
+      ),
+      MIN_SCALE,
+      MAX_SCALE,
+    );
+    setScale(fitScale);
+    setStagePos({
+      x: (stageWidth - contentWidth * fitScale) / 2 - minX * fitScale,
+      y: (STAGE_HEIGHT - contentHeight * fitScale) / 2 - minY * fitScale,
+    });
+  }, [tiles, stageWidth]);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [croppingTileId, setCroppingTileId] = useState<string | null>(null);
