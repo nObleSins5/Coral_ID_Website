@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Stage, Layer } from "react-konva";
 import type Konva from "konva";
-import { deleteMapTile, removeMapPin, updateMapTile } from "@/app/tank/map-actions";
+import { deleteMapTile, placeMapPin, removeMapPin, updateMapTile } from "@/app/tank/map-actions";
 import { MapTile } from "@/components/map-tile";
 import { TileUploadPanel } from "@/components/tile-upload-panel";
 import { TileCropModal } from "@/components/tile-crop-modal";
@@ -77,40 +77,13 @@ export function TankMapCanvas({
     return () => observer.disconnect();
   }, []);
 
+  // Deliberately no auto-fit/auto-center of any kind: pan/scale only ever
+  // change from the owner's own wheel/drag/pinch gestures below. An earlier
+  // attempt at fitting the view to the tiles' bounding box on mount still
+  // read as "it recenters on me" in practice, so the view now stays exactly
+  // wherever the owner left it, full stop.
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const hasFitToContentRef = useRef(false);
-
-  // Tiles get dragged wherever the owner wants over time and can end up far
-  // from the canvas origin. Starting every mount at a hardcoded {0,0} pan
-  // means the view can land on empty space with no tiles in sight. Fit the
-  // initial pan/scale to the tiles' actual bounding box instead, once, the
-  // first time tiles are available and we know the stage's real width.
-  useEffect(() => {
-    if (hasFitToContentRef.current || tiles.length === 0 || stageWidth === 0) return;
-    hasFitToContentRef.current = true;
-    const minX = Math.min(...tiles.map((t) => t.posX));
-    const minY = Math.min(...tiles.map((t) => t.posY));
-    const maxX = Math.max(...tiles.map((t) => t.posX + t.width));
-    const maxY = Math.max(...tiles.map((t) => t.posY + t.height));
-    const contentWidth = maxX - minX;
-    const contentHeight = maxY - minY;
-    const padding = 40;
-    const fitScale = clamp(
-      Math.min(
-        (stageWidth - padding * 2) / contentWidth,
-        (STAGE_HEIGHT - padding * 2) / contentHeight,
-        1,
-      ),
-      MIN_SCALE,
-      MAX_SCALE,
-    );
-    setScale(fitScale);
-    setStagePos({
-      x: (stageWidth - contentWidth * fitScale) / 2 - minX * fitScale,
-      y: (STAGE_HEIGHT - contentHeight * fitScale) / 2 - minY * fitScale,
-    });
-  }, [tiles, stageWidth]);
   const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
   const [selectedPinId, setSelectedPinId] = useState<string | null>(null);
   const [croppingTileId, setCroppingTileId] = useState<string | null>(null);
@@ -209,6 +182,23 @@ export function TankMapCanvas({
   function handleRemovePin(coralId: string) {
     setSelectedPinId(null);
     removeMapPin(formDataWith({ coral_id: coralId })).then(() => router.refresh());
+  }
+
+  // Repositioning an existing pin re-uses placeMapPin: it upserts on
+  // coral_id (see map-actions.ts), so calling it again with the same tile
+  // and a new pos_x/pos_y just moves the existing row instead of adding one.
+  function handleMovePin(tileId: string, pinId: string, point: { x: number; y: number }) {
+    const pin = pins.find((p) => p.id === pinId);
+    if (!pin) return;
+    const formData = new FormData();
+    formData.set("coral_id", pin.coralId);
+    formData.set("tile_id", tileId);
+    formData.set("pos_x", String(point.x));
+    formData.set("pos_y", String(point.y));
+    placeMapPin(formData).then((result) => {
+      if (result?.error) setTileError(result.error);
+      else router.refresh();
+    });
   }
 
   // Click on genuinely empty canvas (no shape hit at all) deselects — a
@@ -339,6 +329,7 @@ export function TankMapCanvas({
                 onTransformEnd={(t) => persistTransform(tile.id, t)}
                 onSelectPin={setSelectedPinId}
                 onOpenPin={(pinId) => router.push(`/specimen/${pins.find((p) => p.id === pinId)?.coralId}`)}
+                onMovePin={(pinId, point) => handleMovePin(tile.id, pinId, point)}
               />
             ))}
           </Layer>

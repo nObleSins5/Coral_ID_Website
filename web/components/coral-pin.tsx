@@ -19,6 +19,7 @@ export function CoralPin({
   selected,
   onSelect,
   onOpen,
+  onMove,
 }: {
   pin: MapPin;
   x: number;
@@ -28,10 +29,24 @@ export function CoralPin({
   selected: boolean;
   onSelect: () => void;
   onOpen: () => void;
+  // Fired at the end of a pin drag with the new position in the SAME space
+  // as x/y above (the tile's display space, pre counter-scale) — the caller
+  // converts to crop-pixel space and persists it, same as initial placement.
+  onMove: (pos: { x: number; y: number }) => void;
 }) {
   function handleTap(e: Konva.KonvaEventObject<Event>) {
     e.cancelBubble = true;
     onSelect();
+  }
+
+  function handleDragStart(e: Konva.KonvaEventObject<DragEvent>) {
+    e.cancelBubble = true;
+    onSelect();
+  }
+
+  function handleDragEnd(e: Konva.KonvaEventObject<DragEvent>) {
+    e.cancelBubble = true;
+    onMove({ x: e.target.x(), y: e.target.y() });
   }
 
   return (
@@ -40,10 +55,13 @@ export function CoralPin({
       y={y}
       scaleX={counterScaleX}
       scaleY={counterScaleY}
+      draggable
       onTap={handleTap}
       onClick={handleTap}
       onDblTap={onOpen}
       onDblClick={onOpen}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       {/* Konva's hitFunc is a Shape-level API, not available on Group — a
           bigger-than-visible, fully transparent Circle is the standard way

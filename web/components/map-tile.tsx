@@ -48,6 +48,7 @@ export function MapTile({
   onTransformEnd,
   onSelectPin,
   onOpenPin,
+  onMovePin,
 }: {
   tile: MapTileData;
   pins: MapPin[];
@@ -68,6 +69,9 @@ export function MapTile({
   }) => void;
   onSelectPin: (pinId: string) => void;
   onOpenPin: (pinId: string) => void;
+  // Fired at the end of a pin drag with its new position already converted
+  // to crop-pixel space, same convention as onEmptyClick above.
+  onMovePin: (pinId: string, point: { x: number; y: number }) => void;
 }) {
   const [image] = useHTMLImage(tile.publicUrl);
   const groupRef = useRef<Konva.Group>(null);
@@ -183,6 +187,7 @@ export function MapTile({
             selected={pin.id === selectedPinId}
             onSelect={() => onSelectPin(pin.id)}
             onOpen={() => onOpenPin(pin.id)}
+            onMove={(pos) => onMovePin(pin.id, { x: pos.x / displayScaleX, y: pos.y / displayScaleY })}
           />
         ))}
       </Group>
